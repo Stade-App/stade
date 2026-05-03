@@ -21,18 +21,20 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -56,6 +58,14 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
     var pastedLink by remember { mutableStateOf("") }
     var status by remember { mutableStateOf<String?>(null) }
     val scroll = rememberScrollState()
+
+    // Otomatik status mesajı temizle
+    LaunchedEffect(status) {
+        if (status != null) {
+            delay(3000)
+            status = null
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -122,8 +132,9 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                         singleLine = true
                     )
                     Spacer(Modifier.height(12.dp))
-                    OutlinedButton(
+                    FilledTonalButton(
                         enabled = pastedLink.isNotBlank() && alias.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
                         onClick = {
                             scope.launch {
                                 try {

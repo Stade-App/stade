@@ -1,7 +1,8 @@
 package app.stade.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -104,6 +106,7 @@ private fun EmptyContacts(modifier: Modifier) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ContactRow(
     contact: Contact,
@@ -115,12 +118,15 @@ private fun ContactRow(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth()
-            .clickable { onClick() }
-            .padding(16.dp),
+            .combinedClickable(
+                onClick = { onClick() },
+                onLongClick = { onLongPress() }
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Avatar(contact.nickname)
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(contact.nickname, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
@@ -136,6 +142,7 @@ private fun ContactRow(
                     )
                 )
             }
+            Spacer(Modifier.height(4.dp))
             Text(
                 lastMessage ?: "Henüz mesaj yok",
                 style = MaterialTheme.typography.bodySmall,
@@ -144,8 +151,9 @@ private fun ContactRow(
             )
         }
         if (unread > 0) {
+            Spacer(Modifier.width(12.dp))
             Box(
-                Modifier.size(24.dp).clip(CircleShape)
+                Modifier.size(28.dp).clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {

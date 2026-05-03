@@ -14,10 +14,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -79,7 +79,9 @@ fun SettingsScreen(
             }
             Spacer(Modifier.height(16.dp))
             if (!confirmLogout) {
-                OutlinedButton(onClick = { confirmLogout = true }) { Text("Oturumu kapat") }
+                FilledTonalButton(onClick = { confirmLogout = true }, modifier = Modifier.fillMaxWidth()) { 
+                    Text("Oturumu kapat") 
+                }
             } else {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -87,11 +89,15 @@ fun SettingsScreen(
                             "Bu cihazda oturumu kapatmak istediğinden emin misin? Veriler korunur.",
                             textAlign = TextAlign.Start
                         )
-                        Spacer(Modifier.height(8.dp))
-                        Row {
-                            TextButton(onClick = { confirmLogout = false }) { Text("Vazgeç") }
+                        Spacer(Modifier.height(12.dp))
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            TextButton(onClick = { confirmLogout = false }, modifier = Modifier.weight(1f)) { 
+                                Text("Vazgeç") 
+                            }
                             Spacer(Modifier.width(8.dp))
-                            Button(onClick = onLogout) { Text("Çıkış") }
+                            Button(onClick = onLogout, modifier = Modifier.weight(1f)) { 
+                                Text("Çıkış") 
+                            }
                         }
                     }
                 }

@@ -1,5 +1,7 @@
 package app.stade.ui
 
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -7,6 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
 import app.stade.ui.screens.AddContactScreen
@@ -31,6 +35,7 @@ sealed interface Screen {
     data object AddContact : Screen
 }
 
+@Suppress("UnusedBoxWithConstraintsScope")
 @Composable
 fun StadeApp(container: AppContainer) {
     val scope = rememberCoroutineScope()
@@ -48,62 +53,90 @@ fun StadeApp(container: AppContainer) {
             }
         }
 
-        when (val s = screen) {
-            Screen.Lock -> LockScreen(
-                container = container,
-                onUnlocked = {
-                    unlocked = true
-                    screen = Screen.Onboarding
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val isWideScreen = maxWidth >= 600.dp
+            // Geniş ekranda Lock/Onboarding dışı her şey iki panelde açılır
+            val showTwoPanel = isWideScreen && unlocked && identity != null &&
+                screen != Screen.Lock && screen != Screen.Onboarding
+
+            PlatformBackHandler(
+                enabled = !showTwoPanel &&
+                    screen !is Screen.Lock &&
+                    screen !is Screen.Onboarding &&
+                    screen !is Screen.Contacts
+            ) {
+                when (screen) {
+                    is Screen.Chat    -> screen = Screen.Contacts
+                    is Screen.Verify  -> screen = Screen.Contacts
+                    Screen.Settings   -> screen = Screen.Contacts
+                    Screen.Transports -> screen = Screen.Settings
+                    Screen.AddContact -> screen = Screen.Contacts
+                    else -> {}
                 }
-            )
-            Screen.Onboarding -> OnboardingScreen(
-                container = container,
-                onReady = {
-                    identity = it
-                    screen = Screen.Contacts
-                }
-            )
-            Screen.Contacts -> ContactsScreen(
-                container = container,
-                owner = identity!!,
-                onOpenChat = { screen = Screen.Chat(it) },
-                onOpenSettings = { screen = Screen.Settings },
-                onAddContact = { screen = Screen.AddContact },
-                onLongPressVerify = { screen = Screen.Verify(it) }
-            )
-            is Screen.Chat -> ChatScreen(
-                container = container,
-                owner = identity!!,
-                contactId = s.contactId,
-                onBack = { screen = Screen.Contacts },
-                onVerify = { screen = Screen.Verify(s.contactId) }
-            )
-            is Screen.Verify -> VerifyContactScreen(
-                container = container,
-                owner = identity!!,
-                contactId = s.contactId,
-                onBack = { screen = Screen.Contacts }
-            )
-            Screen.Settings -> SettingsScreen(
-                container = container,
-                owner = identity!!,
-                onBack = { screen = Screen.Contacts },
-                onOpenTransports = { screen = Screen.Transports },
-                onLogout = {
-                    scope.launch { container.connections.stop() }
-                    identity = null
-                    screen = Screen.Onboarding
-                }
-            )
-            Screen.Transports -> TransportsScreen(
-                container = container,
-                onBack = { screen = Screen.Settings }
-            )
-            Screen.AddContact -> AddContactScreen(
-                container = container,
-                owner = identity!!,
-                onBack = { screen = Screen.Contacts }
-            )
+            }
+
+            when {
+                screen == Screen.Lock -> LockScreen(
+                    container = container,
+                    onUnlocked = { unlocked = true; screen = Screen.Onboarding }
+                )
+                screen == Screen.Onboarding -> OnboardingScreen(
+                    container = container,
+                    onReady = { identity = it; screen = Screen.Contacts }
+                )
+                // ── Geniş ekran: her şey iki panelde açılır ──────────
+                showTwoPanel -> TwoPanelLayout(
+                    container = container,
+                    owner = identity!!,
+                    onLogout = {
+                        scope.launch { container.connections.stop() }
+                        identity = null
+                        screen = Screen.Onboarding
+                    }
+                )
+                // ── Dar ekran: tek panel akışı ────────────────────────
+                screen == Screen.Settings -> SettingsScreen(
+                    container = container,
+                    owner = identity!!,
+                    onBack = { screen = Screen.Contacts },
+                    onOpenTransports = { screen = Screen.Transports },
+                    onLogout = {
+                        scope.launch { container.connections.stop() }
+                        identity = null
+                        screen = Screen.Onboarding
+                    }
+                )
+                screen == Screen.Transports -> TransportsScreen(
+                    container = container,
+                    onBack = { screen = Screen.Settings }
+                )
+                screen == Screen.AddContact -> AddContactScreen(
+                    container = container,
+                    owner = identity!!,
+                    onBack = { screen = Screen.Contacts }
+                )
+                screen is Screen.Verify -> VerifyContactScreen(
+                    container = container,
+                    owner = identity!!,
+                    contactId = (screen as Screen.Verify).contactId,
+                    onBack = { screen = Screen.Contacts }
+                )
+                screen is Screen.Chat -> ChatScreen(
+                    container = container,
+                    owner = identity!!,
+                    contactId = (screen as Screen.Chat).contactId,
+                    onBack = { screen = Screen.Contacts },
+                    onVerify = { screen = Screen.Verify((screen as Screen.Chat).contactId) }
+                )
+                else -> ContactsScreen(
+                    container = container,
+                    owner = identity!!,
+                    onOpenChat = { screen = Screen.Chat(it) },
+                    onOpenSettings = { screen = Screen.Settings },
+                    onAddContact = { screen = Screen.AddContact },
+                    onLongPressVerify = { screen = Screen.Verify(it) }
+                )
+            }
         }
     }
 }
