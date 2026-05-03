@@ -1,0 +1,103 @@
+package app.stade.ui.screens
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import app.stade.AppContainer
+import app.stade.transport.TransportType
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
+    var configs by remember { mutableStateOf(container.transportSettings.all()) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Taşıma katmanları") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(configs, key = { it.type.name }) { cfg ->
+                val plugin = container.transports.get(cfg.type)
+                val info by (plugin?.info?.collectAsState(initial = null) ?: remember { mutableStateOf(null) })
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(label(cfg.type), style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    when {
+                                        info == null -> "kayıtlı değil"
+                                        info!!.running -> "çalışıyor · ${info!!.message}"
+                                        info!!.available -> "hazır"
+                                        else -> "uygun değil · ${info!!.message}"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = cfg.enabled,
+                                onCheckedChange = {
+                                    container.transportSettings.setEnabled(cfg.type, it)
+                                    configs = container.transportSettings.all()
+                                }
+                            )
+                        }
+                        plugin?.selfAddress()?.let {
+                            Spacer(Modifier.height(8.dp))
+                            Text("Adres: $it", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun label(type: TransportType): String = when (type) {
+    TransportType.LAN -> "LAN (Wi-Fi)"
+    TransportType.TOR -> "Tor (Onion)"
+    TransportType.BLUETOOTH -> "Bluetooth"
+    TransportType.REMOVABLE -> "Çıkarılabilir medya"
+}

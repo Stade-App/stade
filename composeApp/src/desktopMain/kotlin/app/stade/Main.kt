@@ -1,0 +1,46 @@
+package app.stade
+
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.remember
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
+import app.stade.crypto.Encoding
+import app.stade.db.DriverFactory
+import app.stade.db.StadeDb
+import app.stade.transport.LanTransport
+import app.stade.transport.TorTransport
+import app.stade.ui.StadeApp
+import java.security.SecureRandom
+
+fun main() = application {
+    val container = remember {
+        AppContainer(DriverFactory()) { db ->
+            val nodeId = deriveNodeId(db)
+            listOf(
+                LanTransport(nodeId = nodeId),
+                TorTransport()
+            )
+        }
+    }
+    val state = rememberWindowState(size = DpSize(420.dp, 760.dp))
+    Window(
+        onCloseRequest = ::exitApplication,
+        state = state,
+        title = "Stade"
+    ) {
+        Surface { StadeApp(container) }
+    }
+}
+
+private fun deriveNodeId(db: StadeDb): String {
+    val key = "node.id"
+    val existing = db.stadeDbQueries.getKv(key).executeAsOneOrNull()
+    if (existing != null) return Encoding.toHex(existing)
+    val rnd = ByteArray(16)
+    SecureRandom().nextBytes(rnd)
+    db.stadeDbQueries.putKv(key, rnd)
+    return Encoding.toHex(rnd)
+}

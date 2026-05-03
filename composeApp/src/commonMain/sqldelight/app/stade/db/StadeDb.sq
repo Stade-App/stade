@@ -1,0 +1,173 @@
+CREATE TABLE LocalIdentity (
+    id TEXT NOT NULL PRIMARY KEY,
+    nickname TEXT NOT NULL,
+    publicKey BLOB NOT NULL,
+    privateKey BLOB NOT NULL,
+    handshakePublicKey BLOB NOT NULL,
+    handshakePrivateKey BLOB NOT NULL,
+    createdAt INTEGER NOT NULL
+);
+
+CREATE TABLE Contact (
+    id TEXT NOT NULL PRIMARY KEY,
+    ownerId TEXT NOT NULL,
+    nickname TEXT NOT NULL,
+    publicKey BLOB NOT NULL,
+    handshakePublicKey BLOB NOT NULL,
+    rootKey BLOB NOT NULL,
+    ratchetState BLOB,
+    isAlice INTEGER NOT NULL DEFAULT 0,
+    verified INTEGER NOT NULL DEFAULT 0,
+    lastSeen INTEGER NOT NULL DEFAULT 0,
+    createdAt INTEGER NOT NULL,
+    FOREIGN KEY(ownerId) REFERENCES LocalIdentity(id)
+);
+
+CREATE TABLE PendingContact (
+    id TEXT NOT NULL PRIMARY KEY,
+    ownerId TEXT NOT NULL,
+    alias TEXT NOT NULL,
+    inviteLink TEXT NOT NULL,
+    state TEXT NOT NULL,
+    createdAt INTEGER NOT NULL
+);
+
+CREATE TABLE Message (
+    id TEXT NOT NULL PRIMARY KEY,
+    contactId TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    body TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    delivered INTEGER NOT NULL DEFAULT 0,
+    read INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(contactId) REFERENCES Contact(id)
+);
+
+CREATE INDEX idxMessageContact ON Message(contactId, timestamp);
+
+CREATE TABLE Outbox (
+    id TEXT NOT NULL PRIMARY KEY,
+    contactId TEXT NOT NULL,
+    messageId TEXT NOT NULL,
+    payload BLOB NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    createdAt INTEGER NOT NULL
+);
+
+CREATE INDEX idxOutboxContact ON Outbox(contactId);
+
+CREATE TABLE TransportSetting (
+    type TEXT NOT NULL PRIMARY KEY,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    config TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE KeyValue (
+    key TEXT NOT NULL PRIMARY KEY,
+    value BLOB NOT NULL
+);
+
+selectAllIdentities:
+SELECT * FROM LocalIdentity;
+
+selectIdentity:
+SELECT * FROM LocalIdentity WHERE id = ?;
+
+insertIdentity:
+INSERT INTO LocalIdentity(id, nickname, publicKey, privateKey, handshakePublicKey, handshakePrivateKey, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+selectContacts:
+SELECT * FROM Contact WHERE ownerId = ? ORDER BY nickname;
+
+selectAllContacts:
+SELECT * FROM Contact;
+
+selectContact:
+SELECT * FROM Contact WHERE id = ?;
+
+selectContactByPublicKey:
+SELECT * FROM Contact WHERE publicKey = ?;
+
+insertContact:
+INSERT INTO Contact(id, ownerId, nickname, publicKey, handshakePublicKey, rootKey, ratchetState, isAlice, verified, lastSeen, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+setContactVerified:
+UPDATE Contact SET verified = 1 WHERE id = ?;
+
+setContactRatchet:
+UPDATE Contact SET ratchetState = ? WHERE id = ?;
+
+setContactSeen:
+UPDATE Contact SET lastSeen = ? WHERE id = ?;
+
+renameContact:
+UPDATE Contact SET nickname = ? WHERE id = ?;
+
+deleteContact:
+DELETE FROM Contact WHERE id = ?;
+
+insertPending:
+INSERT INTO PendingContact(id, ownerId, alias, inviteLink, state, createdAt) VALUES (?, ?, ?, ?, ?, ?);
+
+selectPending:
+SELECT * FROM PendingContact WHERE ownerId = ?;
+
+deletePending:
+DELETE FROM PendingContact WHERE id = ?;
+
+insertMessage:
+INSERT INTO Message(id, contactId, direction, body, timestamp, delivered, read) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+selectMessages:
+SELECT * FROM Message WHERE contactId = ? ORDER BY timestamp ASC;
+
+selectLastMessage:
+SELECT * FROM Message WHERE contactId = ? ORDER BY timestamp DESC LIMIT 1;
+
+markDelivered:
+UPDATE Message SET delivered = 1 WHERE id = ?;
+
+markRead:
+UPDATE Message SET read = 1 WHERE contactId = ?;
+
+countUnread:
+SELECT COUNT(*) FROM Message WHERE contactId = ? AND read = 0 AND direction = 'IN';
+
+messageExists:
+SELECT COUNT(*) FROM Message WHERE id = ?;
+
+enqueueOutbox:
+INSERT INTO Outbox(id, contactId, messageId, payload, attempts, createdAt) VALUES (?, ?, ?, ?, ?, ?);
+
+selectOutbox:
+SELECT * FROM Outbox WHERE contactId = ? ORDER BY createdAt ASC;
+
+selectAllOutbox:
+SELECT * FROM Outbox ORDER BY createdAt ASC;
+
+bumpOutbox:
+UPDATE Outbox SET attempts = attempts + 1 WHERE id = ?;
+
+deleteOutbox:
+DELETE FROM Outbox WHERE id = ?;
+
+deleteOutboxForMessage:
+DELETE FROM Outbox WHERE messageId = ?;
+
+upsertTransport:
+INSERT OR REPLACE INTO TransportSetting(type, enabled, config) VALUES (?, ?, ?);
+
+selectTransports:
+SELECT * FROM TransportSetting;
+
+selectTransport:
+SELECT * FROM TransportSetting WHERE type = ?;
+
+putKv:
+INSERT OR REPLACE INTO KeyValue(key, value) VALUES (?, ?);
+
+getKv:
+SELECT value FROM KeyValue WHERE key = ?;
+
+deleteKv:
+DELETE FROM KeyValue WHERE key = ?;
