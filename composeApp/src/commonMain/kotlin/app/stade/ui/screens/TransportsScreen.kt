@@ -12,11 +12,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -88,10 +90,67 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                             Spacer(Modifier.height(8.dp))
                             Text("Adres: $it", style = MaterialTheme.typography.bodySmall)
                         }
+                        if (cfg.type == TransportType.TOR) {
+                            Spacer(Modifier.height(12.dp))
+                            TorConfigEditor(
+                                initial = cfg.config,
+                                onSave = { newCfg ->
+                                    container.transportSettings.setConfig(TransportType.TOR, newCfg)
+                                    configs = container.transportSettings.all()
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
+    val initialMap = remember(initial) {
+        initial.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && '=' in it }
+            .associate { it.substringBefore('=').trim() to it.substringAfter('=').trim() }
+    }
+    var onion by remember(initial) { mutableStateOf(initialMap["onion"] ?: "") }
+    var port by remember(initial) { mutableStateOf(initialMap["port"] ?: "5901") }
+
+    Column {
+        Text(
+            "Hidden Service (isteğe bağlı). torrc'de 'HiddenServicePort <port> 127.0.0.1:<port>' satırı kurun ve üretilen .onion adresini girin.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = onion,
+            onValueChange = { onion = it.trim() },
+            label = { Text(".onion adresi") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = port,
+            onValueChange = { port = it.filter { c -> c.isDigit() }.take(5) },
+            label = { Text("Port") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = {
+                val cfg = buildString {
+                    if (onion.isNotBlank()) append("onion=").append(onion).append('\n')
+                    if (port.isNotBlank()) append("port=").append(port).append('\n')
+                    append("listenHost=127.0.0.1\n")
+                }
+                onSave(cfg)
+            }
+        ) { Text("Kaydet (Tor'u yeniden başlat)") }
     }
 }
 

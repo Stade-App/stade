@@ -49,7 +49,9 @@ import kotlinx.coroutines.launch
 fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
-    val invite = remember(owner.id) { container.handshake.createInvite(owner) }
+    val invite = remember(owner.id) {
+        container.handshake.createInvite(owner, container.connections.selfAddresses())
+    }
     var alias by remember { mutableStateOf("") }
     var pastedLink by remember { mutableStateOf("") }
     var status by remember { mutableStateOf<String?>(null) }
@@ -146,7 +148,8 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                         peerSigningKey = parsed.signingPublicKey,
                                         peerHandshakeKey = parsed.handshakePublicKey,
                                         rootKey = rootKey,
-                                        isAlice = isAlice
+                                        isAlice = isAlice,
+                                        addresses = parsed.addresses
                                     )
                                     status = "Kişi eklendi ✓"
                                     pastedLink = ""

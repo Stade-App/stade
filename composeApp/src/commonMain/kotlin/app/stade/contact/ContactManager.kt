@@ -35,18 +35,25 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         peerSigningKey: ByteArray,
         peerHandshakeKey: ByteArray,
         rootKey: ByteArray,
-        isAlice: Boolean
+        isAlice: Boolean,
+        addresses: List<String> = emptyList()
     ): Contact = withContext(Dispatchers.Default) {
         val id = Encoding.toHex(crypto.hash(peerSigningKey)).substring(0, 32)
         val now = Clock.System.now().toEpochMilliseconds()
+        val addrJoined = addresses.filter { it.isNotBlank() }.joinToString("\n")
         db.stadeDbQueries.insertContact(
             id, owner.id, nickname, peerSigningKey, peerHandshakeKey,
-            rootKey, null, if (isAlice) 1 else 0, 0, 0L, now
+            rootKey, null, if (isAlice) 1 else 0, 0, 0L, now, addrJoined
         )
         Contact(
             id, owner.id, nickname, peerSigningKey, peerHandshakeKey, rootKey,
-            null, isAlice, false, 0L, now
+            null, isAlice, false, 0L, now, addrJoined.split("\n").filter { it.isNotBlank() }
         )
+    }
+
+    fun setAddresses(contactId: String, addresses: List<String>) {
+        val joined = addresses.filter { it.isNotBlank() }.distinct().joinToString("\n")
+        db.stadeDbQueries.setContactAddresses(joined, contactId)
     }
 
     fun saveRatchet(contactId: String, snapshot: ByteArray) {
@@ -81,6 +88,7 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
             isAlice = isAlice == 1L,
             verified = verified == 1L,
             lastSeen = lastSeen,
-            createdAt = createdAt
+            createdAt = createdAt,
+            addresses = addresses.split("\n").filter { it.isNotBlank() }
         )
 }

@@ -14,7 +14,8 @@ data class Contact(
     val isAlice: Boolean,
     val verified: Boolean,
     val lastSeen: Long,
-    val createdAt: Long
+    val createdAt: Long,
+    val addresses: List<String> = emptyList()
 ) {
     override fun equals(other: Any?): Boolean = other is Contact && other.id == id
     override fun hashCode(): Int = id.hashCode()

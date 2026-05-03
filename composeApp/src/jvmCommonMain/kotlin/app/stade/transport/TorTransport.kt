@@ -2,6 +2,7 @@ package app.stade.transport
 
 import java.net.InetSocketAddress
 import io.ktor.network.selector.SelectorManager
+import io.ktor.network.sockets.ServerSocket
 import io.ktor.network.sockets.aSocket
 import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
@@ -10,30 +11,76 @@ import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+/**
+ * SOCKS5 üzerinden Tor'a outbound bağlantı + isteğe bağlı inbound Hidden Service desteği.
+ *
+ * Inbound config formatı (TransportSetting.config alanında):
+ *   onion=abcd...xyz.onion
+ *   port=5901          # Hem onion'un public portu hem de local listen portu
+ *   listenHost=127.0.0.1
+ *
+ * Kullanıcı torrc'sinde şu satırları ekler:
+ *   HiddenServiceDir /var/lib/tor/stade/
+ *   HiddenServicePort 5901 127.0.0.1:5901
+ * Sonra üretilen `hostname` dosyasındaki onion adresini "Tor adresi" alanına yapıştırır.
+ */
 class TorTransport(
     private val socksHost: String = "127.0.0.1",
-    private val socksPort: Int = 9050
+    private val socksPort: Int = 9050,
+    private val configProvider: () -> String = { "" }
 ) : BaseTransport(TransportType.TOR, "Tor") {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val selector = SelectorManager(Dispatchers.IO)
     private val mutex = Mutex()
+    @Volatile private var inboundOnion: String? = null
+    @Volatile private var inboundPort: Int = 0
+    @Volatile private var inboundServer: ServerSocket? = null
 
     override suspend fun start(handler: suspend (Connection) -> Unit) = mutex.withLock {
-        val available = checkSocks()
+        val socksOk = checkSocks()
+        // Inbound listener (varsa).
+        val cfg = parseConfig(configProvider())
+        inboundOnion = cfg["onion"]?.takeIf { it.isNotBlank() }
+        inboundPort = cfg["port"]?.toIntOrNull() ?: 0
+        val listenHost = cfg["listenHost"] ?: "127.0.0.1"
+
+        var listening = false
+        if (inboundPort > 0) {
+            runCatching {
+                val s = aSocket(selector).tcp().bind(hostname = listenHost, port = inboundPort)
+                inboundServer = s
+                scope.launch { runAccept(s, handler) }
+                listening = true
+            }.onFailure {
+                // Liman tutulamadıysa selfAddress'i bildirme.
+                inboundOnion = null
+                inboundPort = 0
+            }
+        }
+
+        val msg = buildString {
+            if (socksOk) append("SOCKS5 ✓") else append("SOCKS5 yok")
+            if (listening) append(" · onion :$inboundPort")
+        }
         state.value = TransportInfo(
             type, "Tor",
-            available = available,
-            running = available,
-            message = if (available) "$socksHost:$socksPort" else "SOCKS5 yok"
+            available = socksOk,
+            running = socksOk,
+            message = msg
         )
     }
 
     override suspend fun stop() = mutex.withLock {
+        runCatching { inboundServer?.close() }
+        inboundServer = null
         state.value = state.value.copy(running = false)
     }
 
@@ -80,7 +127,29 @@ class TorTransport(
         }.getOrNull()
     }
 
-    override fun selfAddress(): String? = null
+    override fun selfAddress(): String? {
+        val o = inboundOnion ?: return null
+        return if (inboundPort > 0) "tor://$o:$inboundPort" else null
+    }
+
+    private suspend fun runAccept(server: ServerSocket, handler: suspend (Connection) -> Unit) {
+        while (scope.isActive) {
+            val socket = runCatching { server.accept() }.getOrNull() ?: break
+            scope.launch {
+                val conn = TcpConnection(socket, "tor://inbound")
+                handler(conn)
+            }
+        }
+    }
+
+    private fun parseConfig(raw: String): Map<String, String> {
+        if (raw.isBlank()) return emptyMap()
+        return raw.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && '=' in it }
+            .map { it.substringBefore('=').trim() to it.substringAfter('=').trim() }
+            .toMap()
+    }
 
     private suspend fun checkSocks(): Boolean = withContext(Dispatchers.IO) {
         runCatching {

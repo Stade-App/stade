@@ -10,6 +10,8 @@ import app.stade.db.StadeDb
 import app.stade.transport.BluetoothTransport
 import app.stade.transport.LanTransport
 import app.stade.transport.TorTransport
+import app.stade.transport.TransportSettings
+import app.stade.transport.TransportType
 
 class StadeApplication : Application() {
     lateinit var container: AppContainer
@@ -21,9 +23,10 @@ class StadeApplication : Application() {
         val driver = DriverFactory(this)
         container = AppContainer(driver) { db ->
             val nodeId = deriveNodeId(db)
+            val settings = TransportSettings(db)
             listOf(
                 LanTransport(nodeId = nodeId),
-                TorTransport(),
+                TorTransport(configProvider = { settings.get(TransportType.TOR).config }),
                 BluetoothTransport { bluetoothAdapter() }
             )
         }

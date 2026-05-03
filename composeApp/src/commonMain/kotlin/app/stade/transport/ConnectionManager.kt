@@ -1,6 +1,7 @@
 package app.stade.transport
 
 import app.stade.contact.ContactManager
+import app.stade.contact.Contact
 import app.stade.identity.LocalIdentity
 import app.stade.sync.SyncEngine
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +25,11 @@ class ConnectionManager(
     private var ownerRef: LocalIdentity? = null
     private val tasks = mutableListOf<Job>()
     private val backoff = mutableMapOf<String, Long>()
+
+    /** Bu cihazın eriştiğimiz tüm taşıma katmanlarındaki dış adresleri (örn. lan://ip:port, tor://onion:port). */
+    fun selfAddresses(): List<String> =
+        registry.all().mapNotNull { runCatching { it.selfAddress() }.getOrNull() }
+            .filter { it.isNotBlank() }
 
     suspend fun start(owner: LocalIdentity) = mutex.withLock {
         if (ownerRef?.id == owner.id) return@withLock
@@ -58,10 +64,9 @@ class ConnectionManager(
             val now = nowMs()
             for (contact in contacts.all().filter { it.ownerId == owner.id }) {
                 if (sync.isConnected(contact.id)) continue
-                if ((backoff[contact.id] ?: 0L) > now) continue
-                val attempted = tryDial(owner, contact.id)
+                val attempted = tryDial(owner, contact, now)
                 if (attempted && !sync.isConnected(contact.id)) {
-                    // Backoff: 10s sonra tekrar dene.
+                    // Bu kişi için 10s sonra tekrar dene.
                     backoff[contact.id] = now + 10_000L
                 }
             }
@@ -69,18 +74,45 @@ class ConnectionManager(
         }
     }
 
-    private suspend fun tryDial(owner: LocalIdentity, contactId: String): Boolean {
+    private suspend fun tryDial(owner: LocalIdentity, contact: Contact, now: Long): Boolean {
         var attempted = false
-        for (plugin in registry.all()) {
-            val discoverable = plugin as? DiscoverableTransport ?: continue
-            for (addr in discoverable.discoveredPeers()) {
-                if (sync.isConnected(contactId)) return attempted
-                val conn = runCatching { plugin.connect(addr) }.getOrNull() ?: continue
-                attempted = true
-                scope.launch { sync.handleConnection(owner, conn) }
+        // 1) Kişi üzerinde kayıtlı adresleri (lan://, tor://) doğrudan deneyelim — internet üzerinden ulaşmanın tek yolu.
+        for (addr in contact.addresses) {
+            if (sync.isConnected(contact.id)) return attempted
+            val key = "${contact.id}|$addr"
+            if ((backoff[key] ?: 0L) > now) continue
+            val plugin = pluginForAddress(addr) ?: continue
+            attempted = true
+            val conn = runCatching { plugin.connect(addr) }.getOrNull()
+            if (conn == null) {
+                backoff[key] = now + 30_000L
+                continue
+            }
+            scope.launch { sync.handleConnection(owner, conn) }
+            return attempted
+        }
+        // 2) Aynı LAN'daysak UDP keşfi ile bulunan tüm peer'leri dene.
+        if ((backoff[contact.id] ?: 0L) <= now) {
+            for (plugin in registry.all()) {
+                val discoverable = plugin as? DiscoverableTransport ?: continue
+                for (addr in discoverable.discoveredPeers()) {
+                    if (sync.isConnected(contact.id)) return attempted
+                    val conn = runCatching { plugin.connect(addr) }.getOrNull() ?: continue
+                    attempted = true
+                    scope.launch { sync.handleConnection(owner, conn) }
+                }
             }
         }
         return attempted
+    }
+
+    private fun pluginForAddress(address: String): TransportPlugin? {
+        val type = when {
+            address.startsWith("tor://") -> TransportType.TOR
+            address.startsWith("lan://") -> TransportType.LAN
+            else -> return null
+        }
+        return registry.get(type)
     }
 
     private fun nowMs(): Long = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()

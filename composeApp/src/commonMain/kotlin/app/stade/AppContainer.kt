@@ -39,6 +39,8 @@ class AppContainer(
         transportFactory(db).forEach { reg.register(it) }
     }
     val transportSettings = TransportSettings(db)
-    val connections = ConnectionManager(transports, contacts, sync)
+    val connections = ConnectionManager(transports, contacts, sync).also {
+        sync.selfAddressesProvider = { it.selfAddresses() }
+    }
     val secrets = SecretStore(db, crypto)
 }

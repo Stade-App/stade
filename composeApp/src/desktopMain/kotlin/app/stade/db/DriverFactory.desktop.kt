@@ -12,7 +12,12 @@ actual class DriverFactory {
         val dbFile = File(dir, "stade.db")
         val fresh = !dbFile.exists()
         val driver = JdbcSqliteDriver("jdbc:sqlite:${dbFile.absolutePath}", Properties())
-        if (fresh) StadeDb.Schema.create(driver)
+        if (fresh) {
+            StadeDb.Schema.create(driver)
+        } else {
+            // Mevcut DB için en azından kritik kolonları idempotent olarak ekle.
+            runCatching { driver.execute(null, "ALTER TABLE Contact ADD COLUMN addresses TEXT NOT NULL DEFAULT ''", 0) }
+        }
         return driver
     }
 }

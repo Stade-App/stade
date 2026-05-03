@@ -111,6 +111,7 @@ sqldelight {
     databases {
         create("StadeDb") {
             packageName.set("app.stade.db")
+            deriveSchemaFromMigrations.set(false)
         }
     }
 }

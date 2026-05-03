@@ -48,6 +48,8 @@ class SyncEngine(
     private val sessionsLock = Mutex()
     private val _connected = MutableStateFlow<Set<String>>(emptySet())
     val connectedContacts: StateFlow<Set<String>> = _connected.asStateFlow()
+    /** ConnectionManager kurulduğunda set edilir. Kendi reachable adreslerimizi peer'e yollamak için. */
+    @Volatile var selfAddressesProvider: () -> List<String> = { emptyList() }
 
     sealed interface SyncEvent {
         data class ContactConnected(val contactId: String, val isNew: Boolean) : SyncEvent
@@ -106,7 +108,8 @@ class SyncEngine(
             signingPublicKey = owner.publicSigningKey,
             nonce = ourNonce,
             handshakePublicKey = owner.publicHandshakeKey,
-            nickname = owner.nickname
+            nickname = owner.nickname,
+            addresses = runCatching { selfAddressesProvider() }.getOrDefault(emptyList())
         )
         runCatching {
             connection.send(FrameCodec.encode(SyncRecord(RecordType.HELLO, json.encodeToString(HelloPayload.serializer(), ourHello).encodeToByteArray())))
@@ -152,6 +155,13 @@ class SyncEngine(
         val existing = contacts.findByPublicKey(peerHello.signingPublicKey)
         if (existing != null) {
             if (existing.ownerId != owner.id) return null
+            // Peer'in adres setini güncelle (her bağlantıda taze adresleri öğrenelim).
+            if (peerHello.addresses.isNotEmpty()) {
+                val merged = (existing.addresses + peerHello.addresses).distinct()
+                if (merged != existing.addresses) {
+                    runCatching { contacts.setAddresses(existing.id, merged) }
+                }
+            }
             return existing to false
         }
 
@@ -163,7 +173,8 @@ class SyncEngine(
             ownerId = peerHello.ownerId,
             nickname = peerHello.nickname.ifBlank { "Bilinmeyen" },
             signingPublicKey = peerHello.signingPublicKey,
-            handshakePublicKey = peerHello.handshakePublicKey
+            handshakePublicKey = peerHello.handshakePublicKey,
+            addresses = peerHello.addresses
         )
         val rootKey = runCatching { handshakeService.deriveRootKey(owner, invite) }.getOrNull() ?: return null
         val isAlice = handshakeService.isAlice(owner, invite)
@@ -175,7 +186,8 @@ class SyncEngine(
                 peerSigningKey = peerHello.signingPublicKey,
                 peerHandshakeKey = peerHello.handshakePublicKey,
                 rootKey = rootKey,
-                isAlice = isAlice
+                isAlice = isAlice,
+                addresses = peerHello.addresses
             )
         }.getOrNull() ?: contacts.findByPublicKey(peerHello.signingPublicKey) ?: return null
         return newContact to true

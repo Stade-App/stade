@@ -12,6 +12,8 @@ import app.stade.db.DriverFactory
 import app.stade.db.StadeDb
 import app.stade.transport.LanTransport
 import app.stade.transport.TorTransport
+import app.stade.transport.TransportSettings
+import app.stade.transport.TransportType
 import app.stade.ui.StadeApp
 import java.security.SecureRandom
 
@@ -19,9 +21,10 @@ fun main() = application {
     val container = remember {
         AppContainer(DriverFactory()) { db ->
             val nodeId = deriveNodeId(db)
+            val settings = TransportSettings(db)
             listOf(
                 LanTransport(nodeId = nodeId),
-                TorTransport()
+                TorTransport(configProvider = { settings.get(TransportType.TOR).config })
             )
         }
     }

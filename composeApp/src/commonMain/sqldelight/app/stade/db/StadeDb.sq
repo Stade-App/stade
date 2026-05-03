@@ -20,6 +20,7 @@ CREATE TABLE Contact (
     verified INTEGER NOT NULL DEFAULT 0,
     lastSeen INTEGER NOT NULL DEFAULT 0,
     createdAt INTEGER NOT NULL,
+    addresses TEXT NOT NULL DEFAULT '',
     FOREIGN KEY(ownerId) REFERENCES LocalIdentity(id)
 );
 
@@ -89,7 +90,7 @@ selectContactByPublicKey:
 SELECT * FROM Contact WHERE publicKey = ?;
 
 insertContact:
-INSERT INTO Contact(id, ownerId, nickname, publicKey, handshakePublicKey, rootKey, ratchetState, isAlice, verified, lastSeen, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO Contact(id, ownerId, nickname, publicKey, handshakePublicKey, rootKey, ratchetState, isAlice, verified, lastSeen, createdAt, addresses) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 setContactVerified:
 UPDATE Contact SET verified = 1 WHERE id = ?;
@@ -99,6 +100,9 @@ UPDATE Contact SET ratchetState = ? WHERE id = ?;
 
 setContactSeen:
 UPDATE Contact SET lastSeen = ? WHERE id = ?;
+
+setContactAddresses:
+UPDATE Contact SET addresses = ? WHERE id = ?;
 
 renameContact:
 UPDATE Contact SET nickname = ? WHERE id = ?;

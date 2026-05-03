@@ -8,33 +8,39 @@ data class InvitePayload(
     val ownerId: String,
     val nickname: String,
     val signingPublicKey: ByteArray,
-    val handshakePublicKey: ByteArray
+    val handshakePublicKey: ByteArray,
+    val addresses: List<String> = emptyList()
 )
 
 class HandshakeService(private val crypto: CryptoApi) {
 
-    fun createInvite(owner: LocalIdentity): String {
+    fun createInvite(owner: LocalIdentity, addresses: List<String> = emptyList()): String {
         val sigPub = Encoding.toBase32(owner.publicSigningKey)
         val hsPub = Encoding.toBase32(owner.publicHandshakeKey)
         val nick = urlEncode(owner.nickname)
-        return "stade://contact?o=${owner.id}&n=$nick&s=$sigPub&h=$hsPub"
+        val addrParams = addresses.filter { it.isNotBlank() }
+            .joinToString("") { "&a=${urlEncode(it)}" }
+        return "stade://contact?o=${owner.id}&n=$nick&s=$sigPub&h=$hsPub$addrParams"
     }
 
     fun parseInvite(link: String): InvitePayload? {
         if (!link.startsWith("stade://contact?")) return null
         return runCatching {
-            val params = link.substringAfter('?').split('&').mapNotNull {
+            val pairs = link.substringAfter('?').split('&').mapNotNull {
                 val parts = it.split('=', limit = 2)
                 if (parts.size == 2) parts[0] to parts[1] else null
-            }.toMap()
+            }
+            val params = pairs.toMap()
             val o = params["o"] ?: return null
             val n = urlDecode(params["n"] ?: return null)
             val s = params["s"] ?: return null
             val h = params["h"] ?: return null
+            val addrs = pairs.filter { it.first == "a" }.map { urlDecode(it.second) }
             InvitePayload(
                 o, n,
                 Encoding.fromBase32(s),
-                Encoding.fromBase32(h)
+                Encoding.fromBase32(h),
+                addrs
             )
         }.getOrNull()
     }

@@ -22,7 +22,8 @@ data class HelloPayload(
     val signingPublicKey: ByteArray,
     val nonce: ByteArray,
     val handshakePublicKey: ByteArray = ByteArray(0),
-    val nickname: String = ""
+    val nickname: String = "",
+    val addresses: List<String> = emptyList()
 )
 
 @Serializable
