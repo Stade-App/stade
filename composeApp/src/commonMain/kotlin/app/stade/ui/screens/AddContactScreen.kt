@@ -59,7 +59,6 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
     var status by remember { mutableStateOf<String?>(null) }
     val scroll = rememberScrollState()
 
-    // Otomatik status mesajı temizle
     LaunchedEffect(status) {
         if (status != null) {
             delay(3000)

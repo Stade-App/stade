@@ -34,7 +34,6 @@ class LanTransport(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val selector = SelectorManager(Dispatchers.IO)
     private var server: ServerSocket? = null
-    /** Bind sırasında esas dinlenen port (fallback denenmişse tcpPort'tan farklı olabilir). */
     @Volatile private var actualPort: Int = tcpPort
     private val discovery = DiscoveryService(nodeId, discoveryPort, tcpPort)
     private val mutex = Mutex()
@@ -42,10 +41,6 @@ class LanTransport(
     override suspend fun start(handler: suspend (Connection) -> Unit) = mutex.withLock {
         if (state.value.running) return@withLock
         val lanIps = allLocalIpv4()
-        // Port 5901 başka bir uygulama tarafından (eski Stade instance, VNC, vs.)
-        // tutuluyor olabilir. 5901..5910 arası fallback dene; ama davet linkleri
-        // bu yeni portu içerecek (selfAddresses() actualPort'u kullanır), bu yüzden
-        // güvenli. Karşı taraf yeni davet linkimizi alıp adresi günceller.
         var lastErr: Throwable? = null
         for (candidate in tcpPort..(tcpPort + 9)) {
             try {
@@ -96,7 +91,6 @@ class LanTransport(
         return "lan://$ip:$actualPort"
     }
 
-    /** Tüm aktif arabirimlerin site-local IPv4 adreslerini lan:// olarak döndürür. */
     override fun selfAddresses(): List<String> =
         allLocalIpv4().map { "lan://$it:$actualPort" }
 
@@ -114,7 +108,6 @@ class LanTransport(
 
     private fun primaryIpv4(): String? = allLocalIpv4().firstOrNull()
 
-    /** Tüm aktif (loopback olmayan) arabirimlerdeki site-local IPv4 adresleri. */
     private fun allLocalIpv4(): List<String> = runCatching {
         val out = mutableListOf<String>()
         val ifs = NetworkInterface.getNetworkInterfaces()
@@ -123,7 +116,7 @@ class LanTransport(
             for (addr in ni.inetAddresses) {
                 val host = addr.hostAddress ?: continue
                 if (addr.isLoopbackAddress) continue
-                if (host.contains(":")) continue          // IPv6 değil
+                if (host.contains(":")) continue
                 if (!addr.isSiteLocalAddress &&
                     !host.startsWith("10.") &&
                     !host.startsWith("172.") &&
@@ -142,7 +135,6 @@ internal class TcpConnection : Connection {
     private val writeMutex = Mutex()
     override val remoteAddress: String
 
-    /** Yeni socket: kendi read/write channel'larını aç. */
     constructor(socket: Socket, remoteAddress: String) {
         this.socket = socket
         this.reader = socket.openReadChannel()
@@ -150,7 +142,6 @@ internal class TcpConnection : Connection {
         this.remoteAddress = remoteAddress
     }
 
-    /** Mevcut channel'lara sahip socket: SOCKS5 sonrası gibi. Tekrar openReadChannel ÇAĞRILMAZ. */
     constructor(socket: Socket, reader: ByteReadChannel, writer: ByteWriteChannel, remoteAddress: String) {
         this.socket = socket
         this.reader = reader

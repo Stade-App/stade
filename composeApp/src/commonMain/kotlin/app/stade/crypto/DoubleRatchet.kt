@@ -40,17 +40,6 @@ class DoubleRatchet(private val crypto: CryptoApi) {
         }
     }
 
-    /**
-     * Simetrik başlangıç — her iki taraf da hem send hem recv chain'i ROOT'tan
-     * "a2b" ve "b2a" etiketleriyle türetir. Bu sayede taraflar arasında
-     * "kim önce göndermeli" zorunluluğu yok; ikisi de bağımsız olarak ilk mesajı
-     * yollayabilir.
-     *
-     * İlk mesajların header'ında own identity DH pub'ı gider. Karşı tarafın
-     * dhRecvPub'ı da peer identity DH pub'ı olarak set edildiği için DH ratchet
-     * tetiklenmez — sadece kdfChain ile chain ilerletilir. İlk DH ratchet,
-     * taraflardan biri yeni bir ephemeral üretip header'da yolladığında olur.
-     */
     fun initSymmetric(
         rootSeed: ByteArray,
         ownDh: KeyPair,

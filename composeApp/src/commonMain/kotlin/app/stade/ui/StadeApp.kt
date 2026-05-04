@@ -55,7 +55,6 @@ fun StadeApp(container: AppContainer) {
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isWideScreen = maxWidth >= 600.dp
-            // Geniş ekranda Lock/Onboarding dışı her şey iki panelde açılır
             val showTwoPanel = isWideScreen && unlocked && identity != null &&
                 screen != Screen.Lock && screen != Screen.Onboarding
 
@@ -84,7 +83,6 @@ fun StadeApp(container: AppContainer) {
                     container = container,
                     onReady = { identity = it; screen = Screen.Contacts }
                 )
-                // ── Geniş ekran: her şey iki panelde açılır ──────────
                 showTwoPanel -> TwoPanelLayout(
                     container = container,
                     owner = identity!!,
@@ -94,7 +92,6 @@ fun StadeApp(container: AppContainer) {
                         screen = Screen.Onboarding
                     }
                 )
-                // ── Dar ekran: tek panel akışı ────────────────────────
                 screen == Screen.Settings -> SettingsScreen(
                     container = container,
                     owner = identity!!,

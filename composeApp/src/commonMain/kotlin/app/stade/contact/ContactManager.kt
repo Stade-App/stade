@@ -76,11 +76,6 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.deleteContact(contactId)
     }
 
-    /**
-     * Kişiyi ve bağlı tüm verileri (mesajlar, outbox kuyruğundaki bekleyen kayıtlar,
-     * ratchet state) atomik olarak siler. Bu sayede bayat şifrelenmiş outbox payload'ları
-     * temizlenir; karşı taraf da kendi tarafında aynı şeyi yapınca ratchet state senkron başlar.
-     */
     fun purge(contactId: String) {
         db.stadeDbQueries.transaction {
             db.stadeDbQueries.deleteOutboxForContact(contactId)

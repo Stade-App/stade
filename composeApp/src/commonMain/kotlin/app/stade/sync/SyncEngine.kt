@@ -48,7 +48,6 @@ class SyncEngine(
     private val sessionsLock = Mutex()
     private val _connected = MutableStateFlow<Set<String>>(emptySet())
     val connectedContacts: StateFlow<Set<String>> = _connected.asStateFlow()
-    /** ConnectionManager kurulduğunda set edilir. Kendi reachable adreslerimizi peer'e yollamak için. */
     @Volatile var selfAddressesProvider: () -> List<String> = { emptyList() }
 
     sealed interface SyncEvent {
@@ -64,8 +63,6 @@ class SyncEngine(
         val sealed = try {
             ratchet.seal(owner, contact, body.encodeToByteArray())
         } catch (e: Throwable) {
-            // Daha önce ChatService.send buradaki istisnayı runCatching ile sessizce yutuyordu.
-            // Artık event olarak yayınla; UI snackbar'da göstersin ki kullanıcı sebebi görsün.
             _events.tryEmit(SyncEvent.SendFailed(contact.id, e.message ?: e::class.simpleName ?: "bilinmeyen hata"))
             return
         }
@@ -84,7 +81,6 @@ class SyncEngine(
             }
             val (contact, isNew) = handshakeOutcome
             contacts.markSeen(contact.id, Clock.System.now().toEpochMilliseconds())
-            // Tek aktif bağlantı per kişi: eski oturumu iptal et.
             val session = sessionsLock.withLock {
                 sessions[contact.id]?.let { existing ->
                     runCatching { existing.cancel() }
@@ -109,7 +105,6 @@ class SyncEngine(
         _connected.value = sessions.keys.toSet()
     }
 
-    /** Returns (contact, isNew) on success, null on failure. */
     private suspend fun handshake(owner: LocalIdentity, connection: Connection): Pair<Contact, Boolean>? {
         val ourNonce = crypto.randomBytes(32)
         val ourHello = HelloPayload(
@@ -125,7 +120,6 @@ class SyncEngine(
             connection.send(FrameCodec.encode(SyncRecord(RecordType.HELLO, json.encodeToString(HelloPayload.serializer(), ourHello).encodeToByteArray())))
         }.getOrElse { return null }
 
-        // Tor onion bağlantılarında her RTT 5-10sn olabildiği için cömert davran.
         val helloFrame = withTimeoutOrNull(45_000) { connection.receive() } ?: return null
         val helloRecord = FrameCodec.decode(helloFrame) ?: return null
         if (helloRecord.type != RecordType.HELLO) return null
@@ -165,11 +159,9 @@ class SyncEngine(
             return null
         }
 
-        // Kişi bilinmiyorsa ve peer geçerli bir handshake pubkey sundu ise: otomatik ekle.
         val existing = contacts.findByPublicKey(peerHello.signingPublicKey)
         if (existing != null) {
             if (existing.ownerId != owner.id) return null
-            // Peer'in adres setini güncelle (her bağlantıda taze adresleri öğrenelim).
             if (peerHello.addresses.isNotEmpty()) {
                 val merged = (existing.addresses + peerHello.addresses).distinct()
                 if (merged != existing.addresses) {
@@ -213,9 +205,6 @@ class SyncEngine(
         private val contact: Contact,
         @Volatile private var connection: Connection
     ) {
-        // replay = 1 sayesinde, abone olmadan önce yapılan tryEmit() çağrıları kaybolmaz.
-        // Bu, Tor handshake 30-60sn sürerken kuyruğa atılan mesajların ilk session
-        // başladığında drain edilmesini garanti eder.
         private val outboxSignal = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
         private var rootJob: Job? = null
 
@@ -238,16 +227,13 @@ class SyncEngine(
         }
 
         private suspend fun runSender(scope: CoroutineScope) {
-            // İlk kuyruğu drain et (session başlamadan önce queueOutgoing edilmiş olabilir).
             if (!drainOutbox(scope)) return
-            // Sonra notifyOutbox çağrılarını dinle.
             outboxSignal.collect {
                 if (!scope.isActive) return@collect
                 if (!drainOutbox(scope)) return@collect
             }
         }
 
-        /** Outbox'ta bekleyen tüm öğeleri sırayla gönderir. false dönerse bağlantı koptu. */
         private suspend fun drainOutbox(scope: CoroutineScope): Boolean {
             val pending = runCatching { outbox.pending(contact.id) }.getOrNull() ?: return true
             for (item in pending) {
@@ -292,9 +278,6 @@ class SyncEngine(
                     }.getOrNull() ?: return
                     val plain = ratchet.open(owner, contact, payload.ratchetFrame)
                     if (plain == null) {
-                        // Şifre çözülemedi — büyük ihtimalle taraflar arasında ratchet state
-                        // senkronizasyonu bozulmuş (kişi yeniden eklendi, eski outbox vs.).
-                        // Kullanıcıya bildir; ACK GÖNDERME (sender retry'a tabi tutsun).
                         _events.tryEmit(SyncEvent.DecryptFailed(contact.id))
                         return
                     }
@@ -323,10 +306,6 @@ class SyncEngine(
 
     fun isConnected(contactId: String): Boolean = _connected.value.contains(contactId)
 
-    /**
-     * Kişiye ait aktif oturumu kapatır ve ratchet state'ini unutur.
-     * Kişiyi DB'den silmeden önce çağrılmalı.
-     */
     suspend fun forgetContact(contactId: String) {
         sessionsLock.withLock {
             sessions.remove(contactId)?.let { runCatching { it.cancel() } }

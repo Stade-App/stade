@@ -26,9 +26,6 @@ class RatchetSessions(
         val state = if (saved != null) {
             val snap = json.decodeFromString(RatchetSnapshot.serializer(), saved.decodeToString())
             val loaded = RatchetSerializer.fromSnapshot(snap)
-            // Eski/bozuk state savunması: initBob'tan kalan sendChain=null veya
-            // dhRecvPub=null gibi yarım state'ler varsa, simetrik init ile sıfırdan başlat.
-            // (DB taşıması yerine self-healing — kullanıcı kişiyi silmeden de düzelir.)
             if (loaded.sendChainKey == null || loaded.recvChainKey == null || loaded.dhRecvPub == null) {
                 ratchet.initSymmetric(
                     rootSeed = contact.rootKey,
@@ -38,10 +35,6 @@ class RatchetSessions(
                 )
             } else loaded
         } else {
-            // Simetrik init: her iki taraf da hem sendChain hem recvChain ile başlar.
-            // Bob (isAlice=false) tarafı da artık ilk mesajı yollayabilir; eskiden
-            // initBob sendChain=null bırakıyor ve "send chain not initialized"
-            // exception'ı sessizce yutuluyordu (mesaj outbox'a hiç eklenmiyordu).
             ratchet.initSymmetric(
                 rootSeed = contact.rootKey,
                 ownDh = KeyPair(owner.publicHandshakeKey, owner.privateHandshakeKey),
@@ -61,14 +54,8 @@ class RatchetSessions(
 
     suspend fun seal(owner: LocalIdentity, contact: Contact, plaintext: ByteArray): ByteArray =
         lockFor(contact.id).withLock {
-            // Kişinin DB durumu güncellenmiş olabilir; en taze ratchetState'i çek.
             val fresh = contacts.get(contact.id) ?: contact
             val state = loadOrInit(owner, fresh)
-            // ÖNEMLİ: AD olarak SİMETRİK bir değer kullan. Lokal contact.id, karşı tarafta
-            // farklıdır (her tarafın id'si peer'in imza anahtarının hash'i — yani yer
-            // değiştirmiş). Asimetrik AD → AEAD doğrulaması her zaman başarısız.
-            // Çözüm: tarafların imza anahtarlarını sıralı birleştirip hash'le; iki tarafta
-            // da aynı çıkar.
             val ad = symmetricAd(owner.publicSigningKey, fresh.publicSigningKey)
             val out = ratchet.encrypt(state, plaintext, ad)
             persist(contact.id, state)
@@ -85,7 +72,6 @@ class RatchetSessions(
             out
         }
 
-    /** İki taraf için aynı çıkacak AD: signing key'leri lex sıralayıp hash'le. */
     private fun symmetricAd(a: ByteArray, b: ByteArray): ByteArray {
         val cmp = compareLex(a, b)
         val concat = if (cmp <= 0) a + b else b + a

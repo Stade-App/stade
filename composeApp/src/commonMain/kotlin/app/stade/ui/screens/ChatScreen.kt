@@ -70,9 +70,9 @@ fun ChatScreen(
     container: AppContainer,
     owner: LocalIdentity,
     contactId: String,
-    onBack: (() -> Unit)?,   // null = iki panelde back butonu gizlenir
+    onBack: (() -> Unit)?,
     onVerify: () -> Unit,
-    onContactDeleted: (() -> Unit)? = null   // silme sonrası ekran değişimi (iki panelde de tetiklenir)
+    onContactDeleted: (() -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
     val contact = remember(contactId) { container.contacts.get(contactId) }
@@ -86,7 +86,6 @@ fun ChatScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
 
-    // SyncEngine olaylarını dinle: handshake hataları snackbar'da görünsün.
     LaunchedEffect(contactId) {
         container.sync.events.collect { ev ->
             when (ev) {
@@ -105,11 +104,9 @@ fun ChatScreen(
         }
     }
 
-    // Yeni mesaj geldiğinde de okundu işaretle.
     LaunchedEffect(contactId, messages.size) {
         container.messages.markRead(contactId)
     }
-    // Yeni mesaj gelince hep en alta kaydır (animasyonsuz = daha güvenilir)
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.scrollToItem(messages.lastIndex)
@@ -205,15 +202,12 @@ fun ChatScreen(
             )
         }
     ) { padding ->
-        // imePadding: klavye açıldığında TopAppBar sabit kalır,
-        // sadece içerik alanı küçülür
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .imePadding()
         ) {
-            // Tanılama kartı: bağlı değilse neden olabilir, kullanıcı görsün.
             if (!isOnline && contact != null) {
                 var refreshLink by remember { mutableStateOf("") }
                 var refreshStatus by remember { mutableStateOf<String?>(null) }
@@ -348,7 +342,6 @@ fun ChatScreen(
                 items(messages, key = { it.id }) { Bubble(it) }
             }
 
-            // Material 3 chat input bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

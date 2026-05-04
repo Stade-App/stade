@@ -78,7 +78,6 @@ fun TwoPanelLayout(
 
     Row(modifier = Modifier.fillMaxSize()) {
 
-        // ── Sol panel (sabit 300 dp) ──────────────────────────
         Surface(
             modifier = Modifier.width(300.dp).fillMaxHeight(),
             tonalElevation = 2.dp
@@ -156,7 +155,6 @@ fun TwoPanelLayout(
 
         VerticalDivider()
 
-        // ── Sağ panel ─────────────────────────────────────────
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             when (val rp = right) {
                 is PanelRight.Empty -> Box(
@@ -185,7 +183,7 @@ fun TwoPanelLayout(
                     container = container,
                     owner = owner,
                     contactId = rp.contactId,
-                    onBack = null,    // İki panelde geri butonu yok
+                    onBack = null,
                     onVerify = { right = PanelRight.Verify(rp.contactId) },
                     onContactDeleted = { right = PanelRight.Empty }
                 )

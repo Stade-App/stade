@@ -91,7 +91,6 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                             Spacer(Modifier.height(8.dp))
                             Text("Adres: $it", style = MaterialTheme.typography.bodySmall)
                         }
-                        // Bütün local adresler (filtre için bunlar kullanılır)
                         val allAddrs = plugin?.let { runCatching { it.selfAddresses() }.getOrDefault(emptyList()) } ?: emptyList()
                         if (allAddrs.size > 1) {
                             Text(

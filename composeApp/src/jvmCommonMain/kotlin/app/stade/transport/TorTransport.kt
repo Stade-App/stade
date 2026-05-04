@@ -19,22 +19,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * SOCKS5 üzerinden Tor'a outbound bağlantı + isteğe bağlı inbound Hidden Service desteği.
- *
- * Inbound config formatı (TransportSetting.config alanında):
- *   onion=abcd...xyz.onion
- *   port=5901          # Onion'un public (VIRTPORT) portu — davet linkinde görünen port
- *   listenPort=5901    # (opsiyonel) Yerel TCP dinleyici portu. Boşsa `port` ile aynıdır.
- *                      # PC'de 5901 sıkça VNC tarafından tutulduğu için farklı bir
- *                      # yerel port (ör. 5921) verilebilir.
- *   listenHost=127.0.0.1
- *
- * Kullanıcı torrc'sinde şu satırları ekler:
- *   HiddenServiceDir /var/lib/tor/stade/
- *   HiddenServicePort <port> 127.0.0.1:<listenPort>
- * Sonra üretilen `hostname` dosyasındaki onion adresini "Tor adresi" alanına yapıştırır.
- */
 class TorTransport(
     private val socksHost: String = "127.0.0.1",
     private val socksPort: Int = 9050,
@@ -50,7 +34,6 @@ class TorTransport(
 
     override suspend fun start(handler: suspend (Connection) -> Unit) = mutex.withLock {
         val socksOk = checkSocks()
-        // Inbound listener (varsa).
         val cfg = parseConfig(configProvider())
         inboundOnion = cfg["onion"]?.takeIf { it.isNotBlank() }
         val publicPort = cfg["port"]?.toIntOrNull() ?: 0
@@ -67,7 +50,6 @@ class TorTransport(
                 scope.launch { runAccept(s, handler) }
                 listening = true
             }.onFailure { err ->
-                // Liman tutulamadıysa selfAddress'i bildirme — yanlış adres dağıtmayalım.
                 inboundOnion = null
                 inboundPort = 0
                 val raw = err.message ?: err::class.simpleName ?: "bind hatası"
@@ -107,10 +89,6 @@ class TorTransport(
         val parts = onion.split(":", limit = 2)
         val host = parts[0]
         val port = parts.getOrNull(1)?.toIntOrNull() ?: 80
-        // Tor üzerinden onion bağlantısı; descriptor henüz publish edilmediyse 60-90sn sürebilir.
-        // withTimeoutOrNull yalnızca timeout durumunda null döner; protokol hataları
-        // exception olarak yukarı (ConnectionManager'ın runCatching'ine) gider ve
-        // tanı kartında gerçek SOCKS5 yanıt kodu gösterilir.
         return withTimeoutOrNull(90_000) {
             var socket: io.ktor.network.sockets.Socket? = null
             try {
@@ -152,11 +130,8 @@ class TorTransport(
                     else -> 0
                 }
                 if (rest > 0) reader.readFully(ByteArray(rest))
-                // ÖNEMLİ: SOCKS5 anlaşması için açtığımız reader/writer'ı TcpConnection'a
-                // aynen ver. Aksi halde TcpConnection kendi içinde openReadChannel() çağırır
-                // ve Ktor "reading channel has already been set" hatası fırlatır.
                 val ok = TcpConnection(socket, reader, writer, "tor://$host:$port")
-                socket = null  // ownership transferred
+                socket = null
                 ok
             } finally {
                 socket?.let { runCatching { it.close() } }

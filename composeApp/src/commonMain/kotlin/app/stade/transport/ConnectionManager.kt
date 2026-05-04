@@ -18,7 +18,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Bir adrese yapılan son deneme sonucu. */
 data class DialAttempt(
     val address: String,
     val timestamp: Long,
@@ -38,10 +37,8 @@ class ConnectionManager(
     private var ownerRef: LocalIdentity? = null
     private val tasks = mutableListOf<Job>()
     private val backoff = mutableMapOf<String, Long>()
-    /** Şu anda bağlantı kurma/handshake aşamasında olan kişi id'leri. Paralel dial'ı engeller. */
     private val dialing = mutableSetOf<String>()
 
-    /** contactId -> (address -> son deneme). UI tanı kartında gösterilir. */
     private val _diagnostics = MutableStateFlow<Map<String, Map<String, DialAttempt>>>(emptyMap())
     val diagnostics: StateFlow<Map<String, Map<String, DialAttempt>>> = _diagnostics.asStateFlow()
 
@@ -52,7 +49,6 @@ class ConnectionManager(
         _diagnostics.value = cur + (contactId to perAddr)
     }
 
-    /** Bu cihazın eriştiğimiz tüm taşıma katmanlarındaki TÜM dış adresleri (örn. her ağ arabirimi için lan://ip:port, tor://onion:port). */
     fun selfAddresses(): List<String> =
         registry.all().flatMap { runCatching { it.selfAddresses() }.getOrDefault(emptyList()) }
             .filter { it.isNotBlank() }
@@ -60,7 +56,6 @@ class ConnectionManager(
 
     suspend fun start(owner: LocalIdentity) = mutex.withLock {
         if (ownerRef?.id == owner.id) return@withLock
-        // Owner değişti ya da ilk başlatma: önce temiz başla.
         if (ownerRef != null) stopInternal()
         ownerRef = owner
         if (!scope.isActive) scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -92,10 +87,9 @@ class ConnectionManager(
             val now = nowMs()
             for (contact in contacts.all().filter { it.ownerId == owner.id }) {
                 if (sync.isConnected(contact.id)) continue
-                if (contact.id in dialing) continue  // bu kişi için handshake zaten devam ediyor
+                if (contact.id in dialing) continue
                 val attempted = tryDial(owner, contact, now)
                 if (attempted && !sync.isConnected(contact.id)) {
-                    // Bu kişi için 10s sonra tekrar dene.
                     backoff[contact.id] = now + 10_000L
                 }
             }
@@ -105,10 +99,7 @@ class ConnectionManager(
 
     private suspend fun tryDial(owner: LocalIdentity, contact: Contact, now: Long): Boolean {
         var attempted = false
-        // Kendi reachable adreslerimizi (lan://kendi-ip, tor://kendi-onion) hesapla — bu adreslere
-        // dial yaparsak kendimize bağlanır, handshake başarısız olur.
         val selfSet = runCatching { selfAddresses().toSet() }.getOrDefault(emptySet())
-        // 1) Kişi üzerinde kayıtlı adresleri (lan://, tor://) doğrudan deneyelim — internet üzerinden ulaşmanın tek yolu.
         for (addr in contact.addresses) {
             if (sync.isConnected(contact.id)) return attempted
             if (addr in selfSet) {
@@ -135,7 +126,6 @@ class ConnectionManager(
                 continue
             }
             recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, "handshake yapılıyor…"))
-            // Handshake bitene (veya bağlantı kopana) kadar dialing setinde kalsın.
             scope.launch {
                 try {
                     val before = sync.isConnected(contact.id)
@@ -144,7 +134,6 @@ class ConnectionManager(
                     if (after) {
                         recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_OK, "bağlandı ✓"))
                     } else if (before) {
-                        // zaten bağlıydı, bu deneme reddedildi
                         recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, "zaten bağlı"))
                     } else {
                         recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, "handshake başarısız"))
@@ -156,7 +145,6 @@ class ConnectionManager(
             }
             return attempted
         }
-        // 2) Aynı LAN'daysak UDP keşfi ile bulunan tüm peer'leri dene.
         if ((backoff[contact.id] ?: 0L) <= now) {
             for (plugin in registry.all()) {
                 val discoverable = plugin as? DiscoverableTransport ?: continue
