@@ -32,6 +32,13 @@ interface TransportPlugin {
     suspend fun stop()
     suspend fun connect(address: String): Connection?
     fun selfAddress(): String?
+    /**
+     * Bu makinaya ait olan TÜM erişim adresleri (örn. her ağ arabirimi için bir lan://IP:port).
+     * Varsayılan: selfAddress() varsa onu liste olarak döndürür.
+     * Filtre amaçlı: Bir kişiye dial yaparken bu listede olan adresleri atlamak gerekir
+     * (kendine dial = handshake başarısız).
+     */
+    fun selfAddresses(): List<String> = listOfNotNull(selfAddress())
 }
 
 interface DiscoverableTransport {

@@ -110,6 +110,12 @@ UPDATE Contact SET nickname = ? WHERE id = ?;
 deleteContact:
 DELETE FROM Contact WHERE id = ?;
 
+deleteMessagesForContact:
+DELETE FROM Message WHERE contactId = ?;
+
+deleteOutboxForContact:
+DELETE FROM Outbox WHERE contactId = ?;
+
 insertPending:
 INSERT INTO PendingContact(id, ownerId, alias, inviteLink, state, createdAt) VALUES (?, ?, ?, ?, ?, ?);
 

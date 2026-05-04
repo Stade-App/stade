@@ -34,20 +34,44 @@ class LanTransport(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val selector = SelectorManager(Dispatchers.IO)
     private var server: ServerSocket? = null
+    /** Bind sırasında esas dinlenen port (fallback denenmişse tcpPort'tan farklı olabilir). */
+    @Volatile private var actualPort: Int = tcpPort
     private val discovery = DiscoveryService(nodeId, discoveryPort, tcpPort)
     private val mutex = Mutex()
 
     override suspend fun start(handler: suspend (Connection) -> Unit) = mutex.withLock {
         if (state.value.running) return@withLock
-        try {
-            val s = aSocket(selector).tcp().bind(hostname = "0.0.0.0", port = tcpPort)
-            server = s
-            state.value = TransportInfo(type, "LAN", available = true, running = true, message = "$tcpPort")
-            scope.launch { runAccept(s, handler) }
-            scope.launch { discovery.start() }
-        } catch (e: Throwable) {
-            state.value = TransportInfo(type, "LAN", available = false, running = false, message = e.message ?: "")
+        val lanIps = allLocalIpv4()
+        // Port 5901 başka bir uygulama tarafından (eski Stade instance, VNC, vs.)
+        // tutuluyor olabilir. 5901..5910 arası fallback dene; ama davet linkleri
+        // bu yeni portu içerecek (selfAddresses() actualPort'u kullanır), bu yüzden
+        // güvenli. Karşı taraf yeni davet linkimizi alıp adresi günceller.
+        var lastErr: Throwable? = null
+        for (candidate in tcpPort..(tcpPort + 9)) {
+            try {
+                val s = aSocket(selector).tcp().bind(hostname = "0.0.0.0", port = candidate)
+                server = s
+                actualPort = candidate
+                val msg = buildString {
+                    if (lanIps.isEmpty()) append("0.0.0.0:$candidate")
+                    else append(lanIps.joinToString(", ") { "$it:$candidate" })
+                    if (candidate != tcpPort) append(" (port $tcpPort doluydu, fallback)")
+                }
+                state.value = TransportInfo(
+                    type, "LAN",
+                    available = true, running = true,
+                    message = msg
+                )
+                scope.launch { runAccept(s, handler) }
+                scope.launch { discovery.start() }
+                return@withLock
+            } catch (e: Throwable) {
+                lastErr = e
+                continue
+            }
         }
+        state.value = TransportInfo(type, "LAN", available = false, running = false,
+            message = "$tcpPort..${tcpPort + 9} hepsi dolu — ${lastErr?.message ?: ""}")
     }
 
     override suspend fun stop() = mutex.withLock {
@@ -69,8 +93,12 @@ class LanTransport(
 
     override fun selfAddress(): String? {
         val ip = primaryIpv4() ?: return null
-        return "lan://$ip:$tcpPort"
+        return "lan://$ip:$actualPort"
     }
+
+    /** Tüm aktif arabirimlerin site-local IPv4 adreslerini lan:// olarak döndürür. */
+    override fun selfAddresses(): List<String> =
+        allLocalIpv4().map { "lan://$it:$actualPort" }
 
     override fun discoveredPeers(): List<String> = discovery.snapshot()
 
@@ -84,25 +112,51 @@ class LanTransport(
         }
     }
 
-    private fun primaryIpv4(): String? {
-        return runCatching {
-            val ifs = NetworkInterface.getNetworkInterfaces()
-            for (ni in ifs) {
-                if (!ni.isUp || ni.isLoopback || ni.isVirtual) continue
-                for (addr in ni.inetAddresses) {
-                    val host = addr.hostAddress ?: continue
-                    if (!addr.isLoopbackAddress && addr.isSiteLocalAddress && !host.contains(":")) return host
-                }
+    private fun primaryIpv4(): String? = allLocalIpv4().firstOrNull()
+
+    /** Tüm aktif (loopback olmayan) arabirimlerdeki site-local IPv4 adresleri. */
+    private fun allLocalIpv4(): List<String> = runCatching {
+        val out = mutableListOf<String>()
+        val ifs = NetworkInterface.getNetworkInterfaces()
+        for (ni in ifs) {
+            if (!ni.isUp || ni.isLoopback || ni.isVirtual) continue
+            for (addr in ni.inetAddresses) {
+                val host = addr.hostAddress ?: continue
+                if (addr.isLoopbackAddress) continue
+                if (host.contains(":")) continue          // IPv6 değil
+                if (!addr.isSiteLocalAddress &&
+                    !host.startsWith("10.") &&
+                    !host.startsWith("172.") &&
+                    !host.startsWith("192.168.")) continue
+                out += host
             }
-            null
-        }.getOrNull()
-    }
+        }
+        out
+    }.getOrDefault(emptyList())
 }
 
-internal class TcpConnection(private val socket: Socket, override val remoteAddress: String) : Connection {
-    private val reader: ByteReadChannel = socket.openReadChannel()
-    private val writer: ByteWriteChannel = socket.openWriteChannel(autoFlush = true)
+internal class TcpConnection : Connection {
+    private val socket: Socket
+    private val reader: ByteReadChannel
+    private val writer: ByteWriteChannel
     private val writeMutex = Mutex()
+    override val remoteAddress: String
+
+    /** Yeni socket: kendi read/write channel'larını aç. */
+    constructor(socket: Socket, remoteAddress: String) {
+        this.socket = socket
+        this.reader = socket.openReadChannel()
+        this.writer = socket.openWriteChannel(autoFlush = true)
+        this.remoteAddress = remoteAddress
+    }
+
+    /** Mevcut channel'lara sahip socket: SOCKS5 sonrası gibi. Tekrar openReadChannel ÇAĞRILMAZ. */
+    constructor(socket: Socket, reader: ByteReadChannel, writer: ByteWriteChannel, remoteAddress: String) {
+        this.socket = socket
+        this.reader = reader
+        this.writer = writer
+        this.remoteAddress = remoteAddress
+    }
 
     override suspend fun send(frame: ByteArray): Unit = writeMutex.withLock {
         val len = frame.size

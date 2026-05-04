@@ -56,10 +56,20 @@ class SyncEngine(
         data class ContactDisconnected(val contactId: String) : SyncEvent
         data class MessageReceived(val contactId: String, val messageId: String) : SyncEvent
         data class HandshakeRejected(val reason: String) : SyncEvent
+        data class DecryptFailed(val contactId: String) : SyncEvent
+        data class SendFailed(val contactId: String, val reason: String) : SyncEvent
     }
 
     suspend fun queueOutgoing(owner: LocalIdentity, contact: Contact, messageId: String, body: String, timestamp: Long) {
-        val payload = MessagePayload(messageId, timestamp, ratchet.seal(owner, contact, body.encodeToByteArray()))
+        val sealed = try {
+            ratchet.seal(owner, contact, body.encodeToByteArray())
+        } catch (e: Throwable) {
+            // Daha önce ChatService.send buradaki istisnayı runCatching ile sessizce yutuyordu.
+            // Artık event olarak yayınla; UI snackbar'da göstersin ki kullanıcı sebebi görsün.
+            _events.tryEmit(SyncEvent.SendFailed(contact.id, e.message ?: e::class.simpleName ?: "bilinmeyen hata"))
+            return
+        }
+        val payload = MessagePayload(messageId, timestamp, sealed)
         val frame = json.encodeToString(MessagePayload.serializer(), payload).encodeToByteArray()
         outbox.enqueue(contact.id, messageId, frame)
         sessionsLock.withLock { sessions[contact.id] }?.notifyOutbox()
@@ -115,7 +125,8 @@ class SyncEngine(
             connection.send(FrameCodec.encode(SyncRecord(RecordType.HELLO, json.encodeToString(HelloPayload.serializer(), ourHello).encodeToByteArray())))
         }.getOrElse { return null }
 
-        val helloFrame = withTimeoutOrNull(15_000) { connection.receive() } ?: return null
+        // Tor onion bağlantılarında her RTT 5-10sn olabildiği için cömert davran.
+        val helloFrame = withTimeoutOrNull(45_000) { connection.receive() } ?: return null
         val helloRecord = FrameCodec.decode(helloFrame) ?: return null
         if (helloRecord.type != RecordType.HELLO) return null
         val peerHello = runCatching {
@@ -125,7 +136,10 @@ class SyncEngine(
             _events.tryEmit(SyncEvent.HandshakeRejected("Protokol uyumsuz: v${peerHello.protocolVersion}"))
             return null
         }
-        if (peerHello.signingPublicKey.contentEquals(owner.publicSigningKey)) return null
+        if (peerHello.signingPublicKey.contentEquals(owner.publicSigningKey)) {
+            _events.tryEmit(SyncEvent.HandshakeRejected("Kendine bağlandın (bayat LAN adresi)"))
+            return null
+        }
 
         val ourSig = crypto.sign(owner.privateSigningKey, "stade-auth".encodeToByteArray() + peerHello.nonce)
         val ourAuth = AuthPayload(owner.id, ourSig)
@@ -133,7 +147,7 @@ class SyncEngine(
             connection.send(FrameCodec.encode(SyncRecord(RecordType.AUTH, json.encodeToString(AuthPayload.serializer(), ourAuth).encodeToByteArray())))
         }.getOrElse { return null }
 
-        val authFrame = withTimeoutOrNull(15_000) { connection.receive() } ?: return null
+        val authFrame = withTimeoutOrNull(45_000) { connection.receive() } ?: return null
         val authRecord = FrameCodec.decode(authFrame) ?: return null
         if (authRecord.type != RecordType.AUTH) return null
         val peerAuth = runCatching {
@@ -199,7 +213,10 @@ class SyncEngine(
         private val contact: Contact,
         @Volatile private var connection: Connection
     ) {
-        private val outboxSignal = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+        // replay = 1 sayesinde, abone olmadan önce yapılan tryEmit() çağrıları kaybolmaz.
+        // Bu, Tor handshake 30-60sn sürerken kuyruğa atılan mesajların ilk session
+        // başladığında drain edilmesini garanti eder.
+        private val outboxSignal = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
         private var rootJob: Job? = null
 
         fun notifyOutbox() { outboxSignal.tryEmit(Unit) }
@@ -221,22 +238,30 @@ class SyncEngine(
         }
 
         private suspend fun runSender(scope: CoroutineScope) {
-            outboxSignal.tryEmit(Unit)
+            // İlk kuyruğu drain et (session başlamadan önce queueOutgoing edilmiş olabilir).
+            if (!drainOutbox(scope)) return
+            // Sonra notifyOutbox çağrılarını dinle.
             outboxSignal.collect {
                 if (!scope.isActive) return@collect
-                val pending = outbox.pending(contact.id)
-                for (item in pending) {
-                    if (!scope.isActive) return@collect
-                    val ok = runCatching {
-                        connection.send(FrameCodec.encode(SyncRecord(RecordType.MESSAGE, item.payload)))
-                    }.isSuccess
-                    if (!ok) {
-                        scope.cancel()
-                        return@collect
-                    }
-                    outbox.bump(item.id)
-                }
+                if (!drainOutbox(scope)) return@collect
             }
+        }
+
+        /** Outbox'ta bekleyen tüm öğeleri sırayla gönderir. false dönerse bağlantı koptu. */
+        private suspend fun drainOutbox(scope: CoroutineScope): Boolean {
+            val pending = runCatching { outbox.pending(contact.id) }.getOrNull() ?: return true
+            for (item in pending) {
+                if (!scope.isActive) return false
+                val ok = runCatching {
+                    connection.send(FrameCodec.encode(SyncRecord(RecordType.MESSAGE, item.payload)))
+                }.isSuccess
+                if (!ok) {
+                    scope.cancel()
+                    return false
+                }
+                outbox.bump(item.id)
+            }
+            return true
         }
 
         private suspend fun runReceiver(scope: CoroutineScope) {
@@ -267,7 +292,10 @@ class SyncEngine(
                     }.getOrNull() ?: return
                     val plain = ratchet.open(owner, contact, payload.ratchetFrame)
                     if (plain == null) {
-                        // Şifre çözülemedi; ACK gönderme, kullanıcıya bildir.
+                        // Şifre çözülemedi — büyük ihtimalle taraflar arasında ratchet state
+                        // senkronizasyonu bozulmuş (kişi yeniden eklendi, eski outbox vs.).
+                        // Kullanıcıya bildir; ACK GÖNDERME (sender retry'a tabi tutsun).
+                        _events.tryEmit(SyncEvent.DecryptFailed(contact.id))
                         return
                     }
                     val saved = messages.saveIncoming(payload.messageId, contact.id, plain.decodeToString(), payload.timestamp)
@@ -294,4 +322,16 @@ class SyncEngine(
     }
 
     fun isConnected(contactId: String): Boolean = _connected.value.contains(contactId)
+
+    /**
+     * Kişiye ait aktif oturumu kapatır ve ratchet state'ini unutur.
+     * Kişiyi DB'den silmeden önce çağrılmalı.
+     */
+    suspend fun forgetContact(contactId: String) {
+        sessionsLock.withLock {
+            sessions.remove(contactId)?.let { runCatching { it.cancel() } }
+        }
+        updateConnectedSet()
+        runCatching { ratchet.forget(contactId) }
+    }
 }

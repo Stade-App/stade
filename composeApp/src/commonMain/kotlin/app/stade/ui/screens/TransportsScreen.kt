@@ -91,6 +91,15 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                             Spacer(Modifier.height(8.dp))
                             Text("Adres: $it", style = MaterialTheme.typography.bodySmall)
                         }
+                        // Bütün local adresler (filtre için bunlar kullanılır)
+                        val allAddrs = plugin?.let { runCatching { it.selfAddresses() }.getOrDefault(emptyList()) } ?: emptyList()
+                        if (allAddrs.size > 1) {
+                            Text(
+                                "Tüm adresler:\n" + allAddrs.joinToString("\n") { "  • $it" },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         if (cfg.type == TransportType.TOR) {
                             Spacer(Modifier.height(12.dp))
                             TorConfigEditor(
@@ -118,10 +127,11 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
     }
     var onion by remember(initial) { mutableStateOf(initialMap["onion"] ?: "") }
     var port by remember(initial) { mutableStateOf(initialMap["port"] ?: "5901") }
+    var listenPort by remember(initial) { mutableStateOf(initialMap["listenPort"] ?: "") }
 
     Column {
         Text(
-            "Hidden Service (isteğe bağlı). torrc'de 'HiddenServicePort <port> 127.0.0.1:<port>' satırı kurun ve üretilen .onion adresini girin.",
+            "Hidden Service (isteğe bağlı). torrc'de 'HiddenServicePort <port> 127.0.0.1:<yerel port>' satırı kurun ve üretilen .onion adresini girin. Yerel port boşsa Port ile aynı kullanılır; PC'de 5901 başka bir uygulama (ör. VNC) tarafından tutuluyorsa farklı bir yerel port (ör. 5921) verin.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -137,7 +147,15 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
         OutlinedTextField(
             value = port,
             onValueChange = { port = it.filter { c -> c.isDigit() }.take(5) },
-            label = { Text("Port") },
+            label = { Text("Port (onion VIRTPORT)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = listenPort,
+            onValueChange = { listenPort = it.filter { c -> c.isDigit() }.take(5) },
+            label = { Text("Yerel port (boşsa = Port)") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -147,6 +165,7 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
                 val cfg = buildString {
                     if (onion.isNotBlank()) append("onion=").append(onion).append('\n')
                     if (port.isNotBlank()) append("port=").append(port).append('\n')
+                    if (listenPort.isNotBlank()) append("listenPort=").append(listenPort).append('\n')
                     append("listenHost=127.0.0.1\n")
                 }
                 onSave(cfg)

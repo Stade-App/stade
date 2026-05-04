@@ -40,10 +40,44 @@ class DoubleRatchet(private val crypto: CryptoApi) {
         }
     }
 
+    /**
+     * Simetrik başlangıç — her iki taraf da hem send hem recv chain'i ROOT'tan
+     * "a2b" ve "b2a" etiketleriyle türetir. Bu sayede taraflar arasında
+     * "kim önce göndermeli" zorunluluğu yok; ikisi de bağımsız olarak ilk mesajı
+     * yollayabilir.
+     *
+     * İlk mesajların header'ında own identity DH pub'ı gider. Karşı tarafın
+     * dhRecvPub'ı da peer identity DH pub'ı olarak set edildiği için DH ratchet
+     * tetiklenmez — sadece kdfChain ile chain ilerletilir. İlk DH ratchet,
+     * taraflardan biri yeni bir ephemeral üretip header'da yolladığında olur.
+     */
+    fun initSymmetric(
+        rootSeed: ByteArray,
+        ownDh: KeyPair,
+        peerDhPub: ByteArray,
+        isAlice: Boolean
+    ): State {
+        val a2b = crypto.hkdf(rootSeed, ByteArray(0), "stade-dr-a2b".encodeToByteArray(), 32)
+        val b2a = crypto.hkdf(rootSeed, ByteArray(0), "stade-dr-b2a".encodeToByteArray(), 32)
+        return State(
+            rootKey = rootSeed.copyOf(),
+            sendChainKey = if (isAlice) a2b else b2a,
+            recvChainKey = if (isAlice) b2a else a2b,
+            dhSendPriv = ownDh.privateKey,
+            dhSendPub = ownDh.publicKey,
+            dhRecvPub = peerDhPub,
+            sendCounter = 0,
+            recvCounter = 0,
+            previousSendCounter = 0,
+            skipped = mutableMapOf()
+        )
+    }
+
+    @Deprecated("Use initSymmetric — eski Alice/Bob asimetrisi 'send chain not initialized' hatasına yol açıyordu.")
     fun initAlice(rootSeed: ByteArray, peerDhPub: ByteArray): State {
         val kp = crypto.generateAgreementKeyPair()
         val shared = crypto.keyAgreement(kp.privateKey, peerDhPub)
-        val derived = crypto.hkdf(shared, rootSeed, "stade-dr-init".encodeToByteArray(), 64)
+        val derived = crypto.hkdf(shared, rootSeed, "stade-dr-step".encodeToByteArray(), 64)
         return State(
             rootKey = derived.copyOfRange(0, 32),
             sendChainKey = derived.copyOfRange(32, 64),
@@ -58,6 +92,7 @@ class DoubleRatchet(private val crypto: CryptoApi) {
         )
     }
 
+    @Deprecated("Use initSymmetric — Bob'un sendChainKey'i null kalıyordu, kendi tarafından gönderim mümkün değildi.")
     fun initBob(rootSeed: ByteArray, ownDh: KeyPair): State {
         return State(
             rootKey = rootSeed.copyOf(),

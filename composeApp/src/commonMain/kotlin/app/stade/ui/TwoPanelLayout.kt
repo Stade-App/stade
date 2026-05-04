@@ -186,7 +186,8 @@ fun TwoPanelLayout(
                     owner = owner,
                     contactId = rp.contactId,
                     onBack = null,    // İki panelde geri butonu yok
-                    onVerify = { right = PanelRight.Verify(rp.contactId) }
+                    onVerify = { right = PanelRight.Verify(rp.contactId) },
+                    onContactDeleted = { right = PanelRight.Empty }
                 )
 
                 is PanelRight.Settings -> SettingsScreen(

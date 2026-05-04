@@ -22,15 +22,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -51,6 +60,8 @@ import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
 import app.stade.message.Message
 import app.stade.message.MessageDirection
+import app.stade.sync.SyncEngine
+import app.stade.transport.DialAttempt
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,13 +71,39 @@ fun ChatScreen(
     owner: LocalIdentity,
     contactId: String,
     onBack: (() -> Unit)?,   // null = iki panelde back butonu gizlenir
-    onVerify: () -> Unit
+    onVerify: () -> Unit,
+    onContactDeleted: (() -> Unit)? = null   // silme sonrası ekran değişimi (iki panelde de tetiklenir)
 ) {
     val scope = rememberCoroutineScope()
     val contact = remember(contactId) { container.contacts.get(contactId) }
     val messages by container.messages.observeMessages(contactId).collectAsState(initial = emptyList())
+    val connected by container.sync.connectedContacts.collectAsState()
+    val isOnline = connected.contains(contactId)
+    val diagnostics by container.connections.diagnostics.collectAsState()
     val listState = rememberLazyListState()
     var draft by remember { mutableStateOf("") }
+    val snackbar = remember { SnackbarHostState() }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
+
+    // SyncEngine olaylarını dinle: handshake hataları snackbar'da görünsün.
+    LaunchedEffect(contactId) {
+        container.sync.events.collect { ev ->
+            when (ev) {
+                is SyncEngine.SyncEvent.HandshakeRejected ->
+                    snackbar.showSnackbar("Bağlantı reddedildi: ${ev.reason}")
+                is SyncEngine.SyncEvent.ContactConnected ->
+                    if (ev.contactId == contactId) snackbar.showSnackbar("Bağlandı ✓")
+                is SyncEngine.SyncEvent.DecryptFailed ->
+                    if (ev.contactId == contactId)
+                        snackbar.showSnackbar("Mesaj şifresi çözülemedi — kişiyi her iki tarafta da silip yeniden ekleyin")
+                is SyncEngine.SyncEvent.SendFailed ->
+                    if (ev.contactId == contactId)
+                        snackbar.showSnackbar("Mesaj gönderilemedi: ${ev.reason}")
+                else -> { }
+            }
+        }
+    }
 
     // Yeni mesaj geldiğinde de okundu işaretle.
     LaunchedEffect(contactId, messages.size) {
@@ -79,14 +116,65 @@ fun ChatScreen(
         }
     }
 
+    if (showDeleteDialog && contact != null) {
+        AlertDialog(
+            onDismissRequest = { if (!deleting) showDeleteDialog = false },
+            title = { Text("Kişiyi sil?") },
+            text = {
+                Text(
+                    "\"${contact.nickname}\" kişisi, tüm mesajlar, bekleyen kuyruk kayıtları ve şifreleme " +
+                            "anahtarları (ratchet) tamamen silinecek. Aynı kişiyle yeniden konuşmak için her iki " +
+                            "tarafın da kişiyi silip yeni davet linkiyle baştan eklemesi gerekir.\n\n" +
+                            "Bu işlem geri alınamaz."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !deleting,
+                    onClick = {
+                        deleting = true
+                        scope.launch {
+                            runCatching {
+                                container.sync.forgetContact(contact.id)
+                                container.contacts.purge(contact.id)
+                            }
+                            showDeleteDialog = false
+                            deleting = false
+                            (onContactDeleted ?: onBack)?.invoke()
+                        }
+                    }
+                ) { Text("Sil", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !deleting,
+                    onClick = { showDeleteDialog = false }
+                ) { Text("Vazgeç") }
+            }
+        )
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text(contact?.nickname ?: "")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(8.dp).clip(CircleShape).background(
+                                    if (isOnline) Color(0xFF22C55E) else Color(0xFF9CA3AF)
+                                )
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text(contact?.nickname ?: "")
+                        }
                         Text(
-                            if (contact?.verified == true) "doğrulanmış" else "doğrulanmamış",
+                            buildString {
+                                append(if (isOnline) "bağlı" else "bağlı değil")
+                                append(" · ")
+                                append(if (contact?.verified == true) "doğrulanmış" else "doğrulanmamış")
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -103,6 +191,16 @@ fun ChatScreen(
                     IconButton(onClick = onVerify) {
                         Icon(Icons.Default.Verified, contentDescription = "Doğrula")
                     }
+                    IconButton(
+                        onClick = { showDeleteDialog = true },
+                        enabled = !deleting
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Kişiyi sil",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             )
         }
@@ -115,6 +213,129 @@ fun ChatScreen(
                 .padding(padding)
                 .imePadding()
         ) {
+            // Tanılama kartı: bağlı değilse neden olabilir, kullanıcı görsün.
+            if (!isOnline && contact != null) {
+                var refreshLink by remember { mutableStateOf("") }
+                var refreshStatus by remember { mutableStateOf<String?>(null) }
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            "Bağlantı kurulamadı — tanı:",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        if (contact.addresses.isEmpty()) {
+                            Text(
+                                "• Bu kişinin kayıtlı adresi yok.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        } else {
+                            Text(
+                                "• Denenmekte olan adresler:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            val perAddr = diagnostics[contactId].orEmpty()
+                            contact.addresses.forEach { addr ->
+                                val a = perAddr[addr]
+                                val (icon, label) = when (a?.status) {
+                                    DialAttempt.Status.TRYING -> "…" to "deneniyor"
+                                    DialAttempt.Status.CONNECT_OK -> "•" to "bağlandı, handshake…"
+                                    DialAttempt.Status.HANDSHAKE_OK -> "✓" to "bağlı"
+                                    DialAttempt.Status.CONNECT_FAIL -> "✗" to (a.detail ?: "ulaşılamadı")
+                                    DialAttempt.Status.HANDSHAKE_FAIL -> "✗" to (a.detail ?: "handshake hatası")
+                                    null -> "·" to "henüz denenmedi"
+                                }
+                                Text(
+                                    "   $icon  $addr — $label",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "İpucu: Tor servisi yeni başlatıldıysa onion descriptor internete yayılana kadar 5-10 dk sürebilir. Bu süre içinde \"ulaşılamadı\" görmek normaldir.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Eğer adresler eski/eksikse (örn. Tor adresi yok), karşı tarafın YENİ davet linkini buraya yapıştır:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = refreshLink,
+                            onValueChange = { refreshLink = it },
+                            label = { Text("stade://contact?…") },
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 3
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                enabled = refreshLink.isNotBlank(),
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            val parsed = container.handshake.parseInvite(refreshLink.trim())
+                                            if (parsed == null) {
+                                                refreshStatus = "Geçersiz bağlantı"
+                                                return@launch
+                                            }
+                                            if (!parsed.signingPublicKey.contentEquals(contact.publicSigningKey)) {
+                                                refreshStatus = "Bu link başka bir kişiye ait"
+                                                return@launch
+                                            }
+                                            if (parsed.addresses.isEmpty()) {
+                                                refreshStatus = "Linkte adres yok — karşı tarafın da Tor'u kurması gerek"
+                                                return@launch
+                                            }
+                                            container.contacts.setAddresses(contact.id, parsed.addresses)
+                                            refreshStatus = "Adresler güncellendi ✓ (${parsed.addresses.size})"
+                                            refreshLink = ""
+                                        } catch (e: Exception) {
+                                            refreshStatus = "Hata: ${e.message}"
+                                        }
+                                    }
+                                }
+                            ) { Text("Adresleri güncelle") }
+                            OutlinedButton(
+                                enabled = contact.addresses.isNotEmpty(),
+                                onClick = {
+                                    scope.launch {
+                                        runCatching {
+                                            container.contacts.setAddresses(contact.id, emptyList())
+                                            refreshStatus = "Adresler temizlendi"
+                                        }
+                                    }
+                                }
+                            ) { Text("Temizle") }
+                        }
+                        refreshStatus?.let {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                it,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+            }
+
             LazyColumn(
                 state = listState,
                 modifier = Modifier
