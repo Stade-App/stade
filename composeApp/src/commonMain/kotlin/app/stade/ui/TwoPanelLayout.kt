@@ -248,16 +248,12 @@ fun TwoPanelLayout(
                     ) {
                         BrandMark(size = 96.dp)
                         Text("Stade",
-                            style = MaterialTheme.typography.titleLarge)
-                        Text("Sol panelden bir kişi seç ya da yeni bir kişi ekle.",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Yeni bir sohbete başlamak için sol panelden bir kişi seç.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(4.dp))
-                        FilledTonalButton(onClick = { right = PanelRight.AddContact }) {
-                            Icon(Icons.Default.PersonAdd, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Kişi ekle")
-                        }
                     }
                 }
 
@@ -283,11 +279,6 @@ fun TwoPanelLayout(
                     onBack = { right = PanelRight.Settings }
                 )
 
-                is PanelRight.AddContact -> AddContactScreen(
-                    container = container,
-                    owner = owner,
-                    onBack = { right = PanelRight.Empty }
-                )
 
                 is PanelRight.Verify -> VerifyContactScreen(
                     container = container,
@@ -295,6 +286,8 @@ fun TwoPanelLayout(
                     contactId = rp.contactId,
                     onBack = { right = PanelRight.Chat(rp.contactId) }
                 )
+
+                else -> {}
             }
         }
     }
