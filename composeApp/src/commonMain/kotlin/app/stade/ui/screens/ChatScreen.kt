@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -64,6 +65,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
@@ -146,6 +148,10 @@ fun ChatScreen(
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex)
     }
+
+    // Klavye açıldığında en son mesaja kaydır:
+    // İçerik alanının yüksekliği düştüğünde (IME açıldı) scroll tetiklenir.
+    var prevColumnHeight by remember { mutableStateOf(Int.MAX_VALUE) }
 
     // ── Silme dialog'u ────────────────────────────────────────────────────────
     if (showDeleteDialog && contact != null) {
@@ -260,7 +266,13 @@ fun ChatScreen(
                 .padding(padding)
                 .imePadding()
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize().onSizeChanged { size ->
+                // Yükseklik azaldı → klavye açıldı → en sona kaydır
+                if (size.height < prevColumnHeight && messages.isNotEmpty()) {
+                    scope.launch { listState.scrollToItem(messages.lastIndex) }
+                }
+                prevColumnHeight = size.height
+            }) {
                 if (!isOnline && contact != null) {
                     DiagnosticsCard(
                         addresses = contact.addresses,
