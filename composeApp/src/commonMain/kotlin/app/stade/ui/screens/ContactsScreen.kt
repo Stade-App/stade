@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import app.stade.ui.components.Avatar
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -41,6 +42,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -62,6 +64,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.contact.Contact
@@ -326,7 +329,6 @@ fun ContactsScreen(
                         onClick = { onOpenChat(contact.id) },
                         onLongPress = { actionContact = contact }
                     )
-                    HorizontalDivider()
                 }
                 if (searchActive && filtered.isEmpty()) {
                     item {
@@ -370,67 +372,92 @@ private fun ContactRow(
     onClick: () -> Unit,
     onLongPress: () -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .combinedClickable(
-                onClick = { onClick() },
-                onLongClick = { onLongPress() }
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.Transparent, // Arka planı şeffaf bırakıyoruz
     ) {
-        Avatar(contact.nickname)
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(contact.nickname, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
-                if (contact.verified) {
-                    Spacer(Modifier.width(6.dp))
-                    Text("✓", color = MaterialTheme.colorScheme.primary)
-                }
-                Spacer(Modifier.width(8.dp))
-                Box(
-                    Modifier.size(8.dp).clip(CircleShape).background(
-                        if (connected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outline
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = { onClick() },
+                    onLongClick = { onLongPress() }
+                )
+                .padding(horizontal = 16.dp, vertical = 16.dp), // Dikey boşluğu artırdık
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Avatar
+            Avatar(contact.nickname, size = 52.dp)
+
+            Spacer(Modifier.width(16.dp))
+
+            // Bilgi Bölümü
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        contact.nickname,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleMedium
                     )
+                    if (contact.verified) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.Verified,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    // Durum Göstergesi (daha hafif bir renk)
+                    Box(
+                        Modifier.size(8.dp).clip(CircleShape).background(
+                            if (connected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outlineVariant
+                        )
+                    )
+                }
+
+                Spacer(Modifier.height(2.dp))
+
+                Text(
+                    lastMessage ?: "Henüz mesaj yok",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f), // Hafif şeffaflık modern gösterir
+                    maxLines = 1
                 )
             }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                lastMessage ?: "Henüz mesaj yok",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
-            )
-        }
-        if (unread > 0) {
-            Spacer(Modifier.width(12.dp))
-            Box(
-                Modifier.size(28.dp).clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    unread.toString(),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    style = MaterialTheme.typography.labelSmall
-                )
+
+            // Okunmamış sayısı
+            if (unread > 0) {
+                Box(
+                    Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        unread.toString(),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun Avatar(nickname: String) {
+private fun Avatar(nickname: String, size: Dp = 52.dp) { // Boyutu 52.dp yaptık
     Box(
-        Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
+        Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
         contentAlignment = Alignment.Center
     ) {
         Text(
             nickname.firstOrNull()?.uppercase() ?: "?",
             color = MaterialTheme.colorScheme.onSecondaryContainer,
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.titleMedium // Yazıyı da hafif büyüttük
         )
     }
 }

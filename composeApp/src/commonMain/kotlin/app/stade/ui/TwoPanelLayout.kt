@@ -197,7 +197,7 @@ fun TwoPanelLayout(
                         ),
                         title = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                BrandMark(size = 28.dp)
+                                Avatar(name = owner.nickname, size = 32.dp,shape = RoundedCornerShape(25))
                                 Spacer(Modifier.size(10.dp))
                                 Column {
                                     Text("Stade", style = MaterialTheme.typography.titleMedium)
