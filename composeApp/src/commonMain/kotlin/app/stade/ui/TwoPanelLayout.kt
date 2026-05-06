@@ -344,21 +344,32 @@ fun TwoPanelLayout(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        BrandMark(size = 96.dp)
-                        Text(
-                            "Stade",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "Yeni bir sohbete başlamak için sol panelden bir kişi seç.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(4.dp))
+                        // 1. Grup: Logo ve Başlık (Bunlar birbirine çok yakın olacak)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically, // Logo ile yazıları dikeyde ortalar
+                            horizontalArrangement = Arrangement.spacedBy(16.dp) // Logo ile yazı bloğu arasındaki mesafe
+                        ) {
+                            // 1. Logo (Sol taraf)
+                            BrandMark(size = 150.dp)
+
+                            // 2. Yazı bloğu (Sağ taraf)
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp) // "Stade" ve altındaki yazı arası
+                            ) {
+                                Text(
+                                    "Stade",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    "Yeni bir sohbete başlamak için sol panelden bir kişi seç.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
 
