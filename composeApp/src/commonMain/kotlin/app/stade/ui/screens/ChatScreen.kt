@@ -65,7 +65,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
@@ -100,7 +108,7 @@ fun ChatScreen(
     val isOnline = connected.contains(contactId)
     val diagnostics by container.connections.diagnostics.collectAsState()
     val listState = rememberLazyListState()
-    var draft by remember { mutableStateOf("") }
+    var draft by remember { mutableStateOf(TextFieldValue("")) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
 
@@ -358,9 +366,9 @@ fun ChatScreen(
                     onChange = { draft = it },
                     onSend = {
                         val c = contact ?: return@Composer
-                        val text = draft.trim()
+                        val text = draft.text.trim()
                         if (text.isEmpty()) return@Composer
-                        draft = ""
+                        draft = TextFieldValue("")
                         scope.launch { container.chat.send(owner, c, text) }
                     }
                 )
@@ -551,8 +559,8 @@ private fun DiagnosticsCard(
 
 @Composable
 private fun Composer(
-    draft: String,
-    onChange: (String) -> Unit,
+    draft: TextFieldValue,
+    onChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit
 ) {
     Row(
@@ -565,7 +573,24 @@ private fun Composer(
         TextField(
             value = draft,
             onValueChange = onChange,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Enter) {
+                        if (keyEvent.isShiftPressed) {
+                            // Shift+Enter → imlecin bulunduğu konuma \n ekle, imleci sonraki satıra taşı
+                            val cursor = draft.selection.end
+                            val newText = draft.text.substring(0, cursor) + "\n" + draft.text.substring(cursor)
+                            onChange(TextFieldValue(text = newText, selection = TextRange(cursor + 1)))
+                        } else {
+                            // Enter → gönder
+                            onSend()
+                        }
+                        true
+                    } else {
+                        false
+                    }
+                },
             placeholder = { Text("Mesaj yaz…") },
             maxLines = 5,
             shape = RoundedCornerShape(24.dp),
@@ -578,7 +603,7 @@ private fun Composer(
             )
         )
         FilledIconButton(
-            enabled = draft.isNotBlank(),
+            enabled = draft.text.isNotBlank(),
             onClick = onSend,
             modifier = Modifier.size(48.dp),
             shape = CircleShape,
