@@ -1,6 +1,7 @@
 package app.stade.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,6 +64,9 @@ import app.stade.message.Message
 import app.stade.message.MessageDirection
 import app.stade.sync.SyncEngine
 import app.stade.transport.DialAttempt
+import app.stade.ui.components.Avatar
+import app.stade.ui.components.formatChatTime
+import app.stade.ui.theme.StadeColors
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -104,13 +109,9 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(contactId, messages.size) {
-        container.messages.markRead(contactId)
-    }
+    LaunchedEffect(contactId, messages.size) { container.messages.markRead(contactId) }
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.scrollToItem(messages.lastIndex)
-        }
+        if (messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex)
     }
 
     if (showDeleteDialog && contact != null) {
@@ -155,26 +156,43 @@ fun ChatScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
                 title = {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier.size(8.dp).clip(CircleShape).background(
-                                    if (isOnline) Color(0xFF22C55E) else Color(0xFF9CA3AF)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(name = contact?.nickname ?: "?", size = 36.dp)
+                        Spacer(Modifier.size(10.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    contact?.nickname ?: "",
+                                    style = MaterialTheme.typography.titleMedium
                                 )
-                            )
-                            Spacer(Modifier.size(8.dp))
-                            Text(contact?.nickname ?: "")
+                                if (contact?.verified == true) {
+                                    Spacer(Modifier.size(6.dp))
+                                    Icon(
+                                        Icons.Default.Verified,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier.size(7.dp).clip(CircleShape).background(
+                                        if (isOnline) StadeColors.online else StadeColors.offline
+                                    )
+                                )
+                                Spacer(Modifier.size(6.dp))
+                                Text(
+                                    if (isOnline) "çevrimiçi" else "çevrimdışı",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
-                        Text(
-                            buildString {
-                                append(if (isOnline) "bağlı" else "bağlı değil")
-                                append(" · ")
-                                append(if (contact?.verified == true) "doğrulanmış" else "doğrulanmamış")
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 },
                 navigationIcon = {
@@ -205,215 +223,304 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .padding(padding)
                 .imePadding()
         ) {
             if (!isOnline && contact != null) {
-                var refreshLink by remember { mutableStateOf("") }
-                var refreshStatus by remember { mutableStateOf<String?>(null) }
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(8.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            "Bağlantı kurulamadı — tanı:",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        if (contact.addresses.isEmpty()) {
-                            Text(
-                                "• Bu kişinin kayıtlı adresi yok.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        } else {
-                            Text(
-                                "• Denenmekte olan adresler:",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            val perAddr = diagnostics[contactId].orEmpty()
-                            contact.addresses.forEach { addr ->
-                                val a = perAddr[addr]
-                                val (icon, label) = when (a?.status) {
-                                    DialAttempt.Status.TRYING -> "…" to "deneniyor"
-                                    DialAttempt.Status.CONNECT_OK -> "•" to "bağlandı, handshake…"
-                                    DialAttempt.Status.HANDSHAKE_OK -> "✓" to "bağlı"
-                                    DialAttempt.Status.CONNECT_FAIL -> "✗" to (a.detail ?: "ulaşılamadı")
-                                    DialAttempt.Status.HANDSHAKE_FAIL -> "✗" to (a.detail ?: "handshake hatası")
-                                    null -> "·" to "henüz denenmedi"
+                DiagnosticsCard(
+                    addresses = contact.addresses,
+                    perAddr = diagnostics[contactId].orEmpty(),
+                    onApplyInvite = { link ->
+                        scope.launch {
+                            try {
+                                val parsed = container.handshake.parseInvite(link.trim())
+                                when {
+                                    parsed == null ->
+                                        snackbar.showSnackbar("Geçersiz bağlantı")
+                                    !parsed.signingPublicKey.contentEquals(contact.publicSigningKey) ->
+                                        snackbar.showSnackbar("Bu link başka bir kişiye ait")
+                                    parsed.addresses.isEmpty() ->
+                                        snackbar.showSnackbar("Linkte adres yok")
+                                    else -> {
+                                        container.contacts.setAddresses(contact.id, parsed.addresses)
+                                        snackbar.showSnackbar("Adresler güncellendi (${parsed.addresses.size})")
+                                    }
                                 }
-                                Text(
-                                    "   $icon  $addr — $label",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
+                            } catch (e: Exception) {
+                                snackbar.showSnackbar("Hata: ${e.message}")
                             }
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                "İpucu: Tor servisi yeni başlatıldıysa onion descriptor internete yayılana kadar 5-10 dk sürebilir. Bu süre içinde \"ulaşılamadı\" görmek normaldir.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
                         }
-                        Spacer(Modifier.height(8.dp))
+                    },
+                    onClear = {
+                        scope.launch {
+                            runCatching { container.contacts.setAddresses(contact.id, emptyList()) }
+                            snackbar.showSnackbar("Adresler temizlendi")
+                        }
+                    }
+                )
+            }
+
+            if (messages.isEmpty()) {
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Avatar(name = contact?.nickname ?: "?", size = 64.dp)
                         Text(
-                            "Eğer adresler eski/eksikse (örn. Tor adresi yok), karşı tarafın YENİ davet linkini buraya yapıştır:",
+                            "Henüz mesaj yok",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "İlk mesajı sen gönder.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(Modifier.height(6.dp))
-                        OutlinedTextField(
-                            value = refreshLink,
-                            onValueChange = { refreshLink = it },
-                            label = { Text("stade://contact?…") },
-                            modifier = Modifier.fillMaxWidth(),
-                            maxLines = 3
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                enabled = refreshLink.isNotBlank(),
-                                onClick = {
-                                    scope.launch {
-                                        try {
-                                            val parsed = container.handshake.parseInvite(refreshLink.trim())
-                                            if (parsed == null) {
-                                                refreshStatus = "Geçersiz bağlantı"
-                                                return@launch
-                                            }
-                                            if (!parsed.signingPublicKey.contentEquals(contact.publicSigningKey)) {
-                                                refreshStatus = "Bu link başka bir kişiye ait"
-                                                return@launch
-                                            }
-                                            if (parsed.addresses.isEmpty()) {
-                                                refreshStatus = "Linkte adres yok — karşı tarafın da Tor'u kurması gerek"
-                                                return@launch
-                                            }
-                                            container.contacts.setAddresses(contact.id, parsed.addresses)
-                                            refreshStatus = "Adresler güncellendi ✓ (${parsed.addresses.size})"
-                                            refreshLink = ""
-                                        } catch (e: Exception) {
-                                            refreshStatus = "Hata: ${e.message}"
-                                        }
-                                    }
-                                }
-                            ) { Text("Adresleri güncelle") }
-                            OutlinedButton(
-                                enabled = contact.addresses.isNotEmpty(),
-                                onClick = {
-                                    scope.launch {
-                                        runCatching {
-                                            container.contacts.setAddresses(contact.id, emptyList())
-                                            refreshStatus = "Adresler temizlendi"
-                                        }
-                                    }
-                                }
-                            ) { Text("Temizle") }
-                        }
-                        refreshStatus?.let {
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                it,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) {
+                    items(messages, key = { it.id }) { msg ->
+                        val idx = messages.indexOf(msg)
+                        val prev = messages.getOrNull(idx - 1)
+                        val tight = prev != null &&
+                                prev.direction == msg.direction &&
+                                (msg.timestamp - prev.timestamp) < 60_000L
+                        Bubble(msg, tightWithPrev = tight)
                     }
                 }
             }
 
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                contentPadding = PaddingValues(vertical = 12.dp)
-            ) {
-                items(messages, key = { it.id }) { Bubble(it) }
-            }
+            Composer(
+                draft = draft,
+                onChange = { draft = it },
+                onSend = {
+                    val c = contact ?: return@Composer
+                    val text = draft.trim()
+                    if (text.isEmpty()) return@Composer
+                    draft = ""
+                    scope.launch { container.chat.send(owner, c, text) }
+                }
+            )
+        }
+    }
+}
 
+@Composable
+private fun DiagnosticsCard(
+    addresses: List<String>,
+    perAddr: Map<String, DialAttempt>,
+    onApplyInvite: (String) -> Unit,
+    onClear: () -> Unit
+) {
+    var refreshLink by remember { mutableStateOf("") }
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .border(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant,
+                    MaterialTheme.shapes.medium
+                )
+                .padding(14.dp)
+        ) {
+            Text("Bağlantı kurulamadı", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(6.dp))
+            if (addresses.isEmpty()) {
+                Text(
+                    "Bu kişinin kayıtlı adresi yok. Karşı tarafın yeni davet linkini aşağıya yapıştır.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "Denenen adresler",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                addresses.forEach { addr ->
+                    val a = perAddr[addr]
+                    val (icon, label, color) = when (a?.status) {
+                        DialAttempt.Status.TRYING ->
+                            Triple("…", "deneniyor", MaterialTheme.colorScheme.onSurfaceVariant)
+                        DialAttempt.Status.CONNECT_OK ->
+                            Triple("•", "bağlandı, handshake…", MaterialTheme.colorScheme.tertiary)
+                        DialAttempt.Status.HANDSHAKE_OK ->
+                            Triple("✓", "bağlı", StadeColors.online)
+                        DialAttempt.Status.CONNECT_FAIL ->
+                            Triple("✗", a.detail ?: "ulaşılamadı", MaterialTheme.colorScheme.error)
+                        DialAttempt.Status.HANDSHAKE_FAIL ->
+                            Triple("✗", a.detail ?: "handshake hatası", MaterialTheme.colorScheme.error)
+                        null ->
+                            Triple("·", "henüz denenmedi", MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(icon, color = color, style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.size(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                addr,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = color
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "İpucu: Tor servisi yeni başlatıldıysa onion descriptor'ın yayılması 5–10 dk alabilir.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = refreshLink,
+                onValueChange = { refreshLink = it },
+                label = { Text("YENİ davet linki") },
+                placeholder = { Text("stade://contact?…") },
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = 3,
+                shape = MaterialTheme.shapes.medium
+            )
+            Spacer(Modifier.height(8.dp))
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.Bottom,
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                TextField(
-                    value = draft,
-                    onValueChange = { draft = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("Mesaj yaz…") },
-                    maxLines = 4,
-                    shape = RoundedCornerShape(28.dp),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                    )
-                )
-                FilledIconButton(
-                    enabled = draft.isNotBlank() && contact != null,
-                    onClick = {
-                        val c = contact ?: return@FilledIconButton
-                        val text = draft.trim()
-                        draft = ""
-                        scope.launch { container.chat.send(owner, c, text) }
-                    },
-                    modifier = Modifier.size(52.dp),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Gönder")
-                }
+                OutlinedButton(
+                    enabled = refreshLink.isNotBlank(),
+                    onClick = { onApplyInvite(refreshLink); refreshLink = "" },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Adresleri güncelle") }
+                OutlinedButton(
+                    enabled = addresses.isNotEmpty(),
+                    onClick = onClear
+                ) { Text("Temizle") }
             }
         }
     }
 }
 
 @Composable
-private fun Bubble(msg: Message) {
+private fun Composer(
+    draft: String,
+    onChange: (String) -> Unit,
+    onSend: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        TextField(
+            value = draft,
+            onValueChange = onChange,
+            modifier = Modifier.weight(1f),
+            placeholder = { Text("Mesaj yaz…") },
+            maxLines = 5,
+            shape = RoundedCornerShape(24.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent
+            )
+        )
+        FilledIconButton(
+            enabled = draft.isNotBlank(),
+            onClick = onSend,
+            modifier = Modifier.size(48.dp),
+            shape = CircleShape,
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Gönder")
+        }
+    }
+}
+
+@Composable
+private fun Bubble(msg: Message, tightWithPrev: Boolean) {
     val outgoing = msg.direction == MessageDirection.OUT
     val align = if (outgoing) Alignment.End else Alignment.Start
-    val bg = if (outgoing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val fg = if (outgoing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    val bg = if (outgoing) MaterialTheme.colorScheme.primary
+             else MaterialTheme.colorScheme.surfaceContainerHighest
+    val fg = if (outgoing) MaterialTheme.colorScheme.onPrimary
+             else MaterialTheme.colorScheme.onSurface
+    val sub = fg.copy(alpha = if (outgoing) 0.75f else 0.55f)
 
-    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = align) {
+    val cornerTop = if (tightWithPrev) 6.dp else 18.dp
+    val cornerSelf = 18.dp
+    val cornerTail = if (tightWithPrev) 18.dp else 4.dp
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = if (tightWithPrev) 1.dp else 6.dp),
+        horizontalAlignment = align
+    ) {
         Box(
-            Modifier.widthIn(max = 300.dp)
-                .clip(RoundedCornerShape(
-                    topStart = 20.dp,
-                    topEnd = 20.dp,
-                    bottomStart = if (outgoing) 20.dp else 4.dp,
-                    bottomEnd = if (outgoing) 4.dp else 20.dp
-                ))
+            Modifier.widthIn(max = 320.dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = if (outgoing) cornerSelf else cornerTop,
+                        topEnd = if (outgoing) cornerTop else cornerSelf,
+                        bottomStart = if (outgoing) cornerSelf else cornerTail,
+                        bottomEnd = if (outgoing) cornerTail else cornerSelf
+                    )
+                )
                 .background(bg)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .padding(horizontal = 14.dp, vertical = 9.dp)
         ) {
             Column {
                 Text(msg.body, color = fg, style = MaterialTheme.typography.bodyMedium)
-                if (outgoing) {
-                    Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (msg.delivered) "✓ iletildi" else "bekliyor…",
-                        color = fg.copy(alpha = 0.6f),
+                        formatChatTime(msg.timestamp),
+                        color = sub,
                         style = MaterialTheme.typography.labelSmall
                     )
+                    if (outgoing) {
+                        Spacer(Modifier.size(6.dp))
+                        Text(
+                            if (msg.delivered) "✓✓" else "·",
+                            color = sub,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
                 }
             }
         }

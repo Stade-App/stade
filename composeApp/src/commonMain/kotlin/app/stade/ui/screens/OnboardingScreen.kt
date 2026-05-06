@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -21,9 +22,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
+import app.stade.ui.components.BrandMark
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -45,20 +48,30 @@ fun OnboardingScreen(container: AppContainer, onReady: (LocalIdentity) -> Unit) 
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (loading) {
-                Text("Yükleniyor…", style = MaterialTheme.typography.titleMedium)
+                BrandMark(size = 72.dp)
+                Spacer(Modifier.height(16.dp))
+                Text("Yükleniyor…", style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                Text("Stade'ya hoş geldin", style = MaterialTheme.typography.headlineMedium)
+                BrandMark(size = 96.dp)
+                Spacer(Modifier.height(20.dp))
+                Text("Stade'a hoş geldin",
+                    style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Uçtan uca şifreli, sunucusuz mesajlaşma. Başlamak için bir takma ad seç.",
-                    style = MaterialTheme.typography.bodyMedium
+                    "Uçtan uca şifreli, sunucusuz mesajlaşma.\nBaşlamak için bir takma ad seç.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(28.dp))
                 OutlinedTextField(
                     value = nickname,
                     onValueChange = { nickname = it },
                     label = { Text("Takma ad") },
                     singleLine = true,
+                    shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.widthIn(min = 280.dp, max = 420.dp)
                 )
                 Spacer(Modifier.height(16.dp))
@@ -69,7 +82,9 @@ fun OnboardingScreen(container: AppContainer, onReady: (LocalIdentity) -> Unit) 
                             val id = container.identities.create(nickname.trim())
                             onReady(id)
                         }
-                    }
+                    },
+                    modifier = Modifier.widthIn(min = 280.dp, max = 420.dp).fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
                 ) { Text("Kimlik oluştur") }
             }
         }

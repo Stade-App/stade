@@ -10,6 +10,8 @@ plugins {
 }
 
 kotlin {
+    jvmToolchain(17)
+
     applyDefaultHierarchyTemplate {
         common {
             group("jvmCommon") {

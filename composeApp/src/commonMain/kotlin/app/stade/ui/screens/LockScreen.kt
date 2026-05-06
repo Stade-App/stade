@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -22,8 +23,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
+import app.stade.ui.components.BrandMark
 
 @Composable
 fun LockScreen(container: AppContainer, onUnlocked: () -> Unit) {
@@ -38,16 +41,22 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            BrandMark(size = 80.dp)
+            Spacer(Modifier.height(20.dp))
             Text(
-                if (isSetup) "Uygulamayı kilidini aç" else "Bir parola belirle",
-                style = MaterialTheme.typography.headlineSmall
+                if (isSetup) "Kilidi aç" else "Bir parola belirle",
+                style = MaterialTheme.typography.titleLarge
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
-                if (isSetup) "Parolanı gir." else "Yerel verilere erişim için bir parola seç. Bu parola cihazdan çıkmaz.",
-                style = MaterialTheme.typography.bodyMedium
+                if (isSetup) "Devam etmek için parolanı gir."
+                else "Yerel verilere erişim için bir parola seç.\nBu parola cihazdan çıkmaz.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(28.dp))
             OutlinedTextField(
                 value = passphrase,
                 onValueChange = { passphrase = it; error = null },
@@ -55,6 +64,7 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit) {
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.widthIn(min = 280.dp, max = 420.dp)
             )
             if (!isSetup) {
@@ -66,14 +76,16 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit) {
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.widthIn(min = 280.dp, max = 420.dp)
                 )
             }
             error?.let {
-                Spacer(Modifier.height(8.dp))
-                Text(it, color = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.height(10.dp))
+                Text(it, color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.labelMedium)
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
             Button(
                 enabled = passphrase.length >= 4 && (isSetup || passphrase == confirm),
                 onClick = {
@@ -84,7 +96,9 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit) {
                         container.secrets.setupPassphrase(passphrase)
                         onUnlocked()
                     }
-                }
+                },
+                modifier = Modifier.widthIn(min = 280.dp, max = 420.dp).fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium
             ) { Text(if (isSetup) "Aç" else "Kaydet") }
         }
     }

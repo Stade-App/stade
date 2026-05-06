@@ -1,5 +1,6 @@
 package app.stade.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,8 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.SettingsEthernet
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -27,11 +31,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
+import app.stade.ui.components.Avatar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,45 +66,115 @@ fun SettingsScreen(
     ) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.Top
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Takma ad", style = MaterialTheme.typography.labelMedium)
-                    Text(owner.nickname, style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(12.dp))
-                    Text("Kimlik parmak izi", style = MaterialTheme.typography.labelMedium)
-                    Text(fingerprint, style = MaterialTheme.typography.bodyMedium)
+            // Profil kartı
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(name = owner.nickname, size = 56.dp)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(owner.nickname, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Yerel kimlik",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        "Kimlik parmak izi",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        fingerprint,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
+                    )
                 }
             }
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Taşıma katmanları", style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = onOpenTransports) { Text("Yönet") }
+
+            // Taşıma katmanları satırı
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { onOpenTransports() },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.SettingsEthernet, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Taşıma katmanları", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "LAN, Tor ve diğer ağ ayarları",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        Icons.Default.ChevronRight, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
-            Spacer(Modifier.height(16.dp))
+
+            Spacer(Modifier.height(8.dp))
+
             if (!confirmLogout) {
-                FilledTonalButton(onClick = { confirmLogout = true }, modifier = Modifier.fillMaxWidth()) { 
-                    Text("Oturumu kapat") 
-                }
+                FilledTonalButton(
+                    onClick = { confirmLogout = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
+                ) { Text("Oturumu kapat") }
             } else {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    shape = MaterialTheme.shapes.large
+                ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "Bu cihazda oturumu kapatmak istediğinden emin misin? Veriler korunur.",
+                            "Oturumu kapatmak istediğinden emin misin?",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
                             textAlign = TextAlign.Start
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Yerel veriler korunur; bir sonraki açılışta parola istenir.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
                         )
                         Spacer(Modifier.height(12.dp))
                         Row(modifier = Modifier.fillMaxWidth()) {
-                            TextButton(onClick = { confirmLogout = false }, modifier = Modifier.weight(1f)) { 
-                                Text("Vazgeç") 
-                            }
+                            TextButton(
+                                onClick = { confirmLogout = false },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Vazgeç") }
                             Spacer(Modifier.width(8.dp))
-                            Button(onClick = onLogout, modifier = Modifier.weight(1f)) { 
-                                Text("Çıkış") 
-                            }
+                            Button(
+                                onClick = onLogout,
+                                modifier = Modifier.weight(1f),
+                                shape = MaterialTheme.shapes.medium
+                            ) { Text("Çıkış") }
                         }
                     }
                 }
