@@ -1,5 +1,10 @@
 package app.stade.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -23,7 +28,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -37,8 +45,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -67,7 +74,12 @@ import app.stade.transport.DialAttempt
 import app.stade.ui.components.Avatar
 import app.stade.ui.components.formatChatTime
 import app.stade.ui.theme.StadeColors
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+// ── Bildirim tipi ──────────────────────────────────────────────────────────────
+private enum class NotificationKind { Success, Error, Info }
+private data class NotificationData(val message: String, val kind: NotificationKind)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,24 +99,45 @@ fun ChatScreen(
     val diagnostics by container.connections.diagnostics.collectAsState()
     val listState = rememberLazyListState()
     var draft by remember { mutableStateOf("") }
-    val snackbar = remember { SnackbarHostState() }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
 
+    // ── Bildirim durumu ──────────────────────────────────────────────────────
+    var notification by remember { mutableStateOf<NotificationData?>(null) }
+    var notificationKey by remember { mutableStateOf(0) }
+
+    // Bildirim otomatik kapanma
+    LaunchedEffect(notificationKey) {
+        if (notificationKey > 0) {
+            delay(3500L)
+            notification = null
+        }
+    }
+
+    fun showNotification(message: String, kind: NotificationKind = NotificationKind.Info) {
+        notification = NotificationData(message, kind)
+        notificationKey++
+    }
+
+    // ── Sync olayları ─────────────────────────────────────────────────────────
     LaunchedEffect(contactId) {
         container.sync.events.collect { ev ->
             when (ev) {
                 is SyncEngine.SyncEvent.HandshakeRejected ->
-                    snackbar.showSnackbar("Bağlantı reddedildi: ${ev.reason}")
+                    showNotification("Bağlantı reddedildi: ${ev.reason}", NotificationKind.Error)
                 is SyncEngine.SyncEvent.ContactConnected ->
-                    if (ev.contactId == contactId) snackbar.showSnackbar("Bağlandı ✓")
+                    if (ev.contactId == contactId)
+                        showNotification("Bağlandı ✓", NotificationKind.Success)
                 is SyncEngine.SyncEvent.DecryptFailed ->
                     if (ev.contactId == contactId)
-                        snackbar.showSnackbar("Mesaj şifresi çözülemedi — kişiyi her iki tarafta da silip yeniden ekleyin")
+                        showNotification(
+                            "Mesaj şifresi çözülemedi — kişiyi her iki tarafta da silip yeniden ekleyin",
+                            NotificationKind.Error
+                        )
                 is SyncEngine.SyncEvent.SendFailed ->
                     if (ev.contactId == contactId)
-                        snackbar.showSnackbar("Mesaj gönderilemedi: ${ev.reason}")
-                else -> { }
+                        showNotification("Mesaj gönderilemedi: ${ev.reason}", NotificationKind.Error)
+                else -> {}
             }
         }
     }
@@ -114,6 +147,7 @@ fun ChatScreen(
         if (messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex)
     }
 
+    // ── Silme dialog'u ────────────────────────────────────────────────────────
     if (showDeleteDialog && contact != null) {
         AlertDialog(
             onDismissRequest = { if (!deleting) showDeleteDialog = false },
@@ -122,8 +156,7 @@ fun ChatScreen(
                 Text(
                     "\"${contact.nickname}\" kişisi, tüm mesajlar, bekleyen kuyruk kayıtları ve şifreleme " +
                             "anahtarları (ratchet) tamamen silinecek. Aynı kişiyle yeniden konuşmak için her iki " +
-                            "tarafın da kişiyi silip yeni davet linkiyle baştan eklemesi gerekir.\n\n" +
-                            "Bu işlem geri alınamaz."
+                            "tarafın da kişiyi silip yeni davet linkiyle baştan eklemesi gerekir.\n\nBu işlem geri alınamaz."
                 )
             },
             confirmButton = {
@@ -153,7 +186,6 @@ fun ChatScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -220,104 +252,181 @@ fun ChatScreen(
             )
         }
     ) { padding ->
-        Column(
+        // ── İçerik + üst bildirim overlay'i ──────────────────────────────────
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .padding(padding)
                 .imePadding()
         ) {
-            if (!isOnline && contact != null) {
-                DiagnosticsCard(
-                    addresses = contact.addresses,
-                    perAddr = diagnostics[contactId].orEmpty(),
-                    onApplyInvite = { link ->
-                        scope.launch {
-                            try {
-                                val parsed = container.handshake.parseInvite(link.trim())
-                                when {
-                                    parsed == null ->
-                                        snackbar.showSnackbar("Geçersiz bağlantı")
-                                    !parsed.signingPublicKey.contentEquals(contact.publicSigningKey) ->
-                                        snackbar.showSnackbar("Bu link başka bir kişiye ait")
-                                    parsed.addresses.isEmpty() ->
-                                        snackbar.showSnackbar("Linkte adres yok")
-                                    else -> {
-                                        container.contacts.setAddresses(contact.id, parsed.addresses)
-                                        snackbar.showSnackbar("Adresler güncellendi (${parsed.addresses.size})")
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (!isOnline && contact != null) {
+                    DiagnosticsCard(
+                        addresses = contact.addresses,
+                        perAddr = diagnostics[contactId].orEmpty(),
+                        onApplyInvite = { link ->
+                            scope.launch {
+                                try {
+                                    val parsed = container.handshake.parseInvite(link.trim())
+                                    when {
+                                        parsed == null ->
+                                            showNotification("Geçersiz bağlantı", NotificationKind.Error)
+                                        !parsed.signingPublicKey.contentEquals(contact.publicSigningKey) ->
+                                            showNotification("Bu link başka bir kişiye ait", NotificationKind.Error)
+                                        parsed.addresses.isEmpty() ->
+                                            showNotification("Linkte adres yok", NotificationKind.Error)
+                                        else -> {
+                                            container.contacts.setAddresses(contact.id, parsed.addresses)
+                                            showNotification(
+                                                "Adresler güncellendi (${parsed.addresses.size})",
+                                                NotificationKind.Success
+                                            )
+                                        }
                                     }
+                                } catch (e: Exception) {
+                                    showNotification("Hata: ${e.message}", NotificationKind.Error)
                                 }
-                            } catch (e: Exception) {
-                                snackbar.showSnackbar("Hata: ${e.message}")
+                            }
+                        },
+                        onClear = {
+                            scope.launch {
+                                runCatching { container.contacts.setAddresses(contact.id, emptyList()) }
+                                showNotification("Adresler temizlendi", NotificationKind.Info)
                             }
                         }
-                    },
-                    onClear = {
-                        scope.launch {
-                            runCatching { container.contacts.setAddresses(contact.id, emptyList()) }
-                            snackbar.showSnackbar("Adresler temizlendi")
+                    )
+                }
+
+                if (messages.isEmpty()) {
+                    Box(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Avatar(name = contact?.nickname ?: "?", size = 64.dp)
+                            Text(
+                                "Henüz mesaj yok",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "İlk mesajı sen gönder.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
+                    }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        contentPadding = PaddingValues(vertical = 12.dp)
+                    ) {
+                        items(messages, key = { it.id }) { msg ->
+                            val idx = messages.indexOf(msg)
+                            val prev = messages.getOrNull(idx - 1)
+                            val tight = prev != null &&
+                                    prev.direction == msg.direction &&
+                                    (msg.timestamp - prev.timestamp) < 60_000L
+                            Bubble(msg, tightWithPrev = tight)
+                        }
+                    }
+                }
+
+                Composer(
+                    draft = draft,
+                    onChange = { draft = it },
+                    onSend = {
+                        val c = contact ?: return@Composer
+                        val text = draft.trim()
+                        if (text.isEmpty()) return@Composer
+                        draft = ""
+                        scope.launch { container.chat.send(owner, c, text) }
                     }
                 )
             }
 
-            if (messages.isEmpty()) {
-                Box(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Avatar(name = contact?.nickname ?: "?", size = 64.dp)
-                        Text(
-                            "Henüz mesaj yok",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "İlk mesajı sen gönder.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                    contentPadding = PaddingValues(vertical = 12.dp)
-                ) {
-                    items(messages, key = { it.id }) { msg ->
-                        val idx = messages.indexOf(msg)
-                        val prev = messages.getOrNull(idx - 1)
-                        val tight = prev != null &&
-                                prev.direction == msg.direction &&
-                                (msg.timestamp - prev.timestamp) < 60_000L
-                        Bubble(msg, tightWithPrev = tight)
-                    }
-                }
-            }
-
-            Composer(
-                draft = draft,
-                onChange = { draft = it },
-                onSend = {
-                    val c = contact ?: return@Composer
-                    val text = draft.trim()
-                    if (text.isEmpty()) return@Composer
-                    draft = ""
-                    scope.launch { container.chat.send(owner, c, text) }
-                }
+            // ── Üst bildirim banneri — TopAppBar'ın hemen altında ────────────
+            TopNotificationBanner(
+                data = notification,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
             )
         }
     }
 }
+
+// ── Üst bildirim banneri ──────────────────────────────────────────────────────
+
+@Composable
+private fun TopNotificationBanner(
+    data: NotificationData?,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = data != null,
+        enter = slideInVertically { -it } + fadeIn(),
+        exit = slideOutVertically { -it } + fadeOut(),
+        modifier = modifier
+    ) {
+        if (data == null) return@AnimatedVisibility
+
+        val (bg, fg, icon) = when (data.kind) {
+            NotificationKind.Success -> Triple(
+                MaterialTheme.colorScheme.primaryContainer,
+                MaterialTheme.colorScheme.onPrimaryContainer,
+                Icons.Default.CheckCircle
+            )
+            NotificationKind.Error -> Triple(
+                MaterialTheme.colorScheme.errorContainer,
+                MaterialTheme.colorScheme.onErrorContainer,
+                Icons.Default.Error
+            )
+            NotificationKind.Info -> Triple(
+                MaterialTheme.colorScheme.secondaryContainer,
+                MaterialTheme.colorScheme.onSecondaryContainer,
+                Icons.Default.Info
+            )
+        }
+
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = bg,
+            shadowElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = fg,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = data.message,
+                    color = fg,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+// ── DiagnosticsCard ───────────────────────────────────────────────────────────
 
 @Composable
 private fun DiagnosticsCard(
@@ -386,11 +495,7 @@ private fun DiagnosticsCard(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Text(
-                                label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = color
-                            )
+                            Text(label, style = MaterialTheme.typography.labelSmall, color = color)
                         }
                     }
                 }
@@ -429,6 +534,8 @@ private fun DiagnosticsCard(
         }
     }
 }
+
+// ── Composer ──────────────────────────────────────────────────────────────────
 
 @Composable
 private fun Composer(
@@ -473,14 +580,16 @@ private fun Composer(
     }
 }
 
+// ── Bubble ────────────────────────────────────────────────────────────────────
+
 @Composable
 private fun Bubble(msg: Message, tightWithPrev: Boolean) {
     val outgoing = msg.direction == MessageDirection.OUT
     val align = if (outgoing) Alignment.End else Alignment.Start
     val bg = if (outgoing) MaterialTheme.colorScheme.primary
-             else MaterialTheme.colorScheme.surfaceContainerHighest
+    else MaterialTheme.colorScheme.surfaceContainerHighest
     val fg = if (outgoing) MaterialTheme.colorScheme.onPrimary
-             else MaterialTheme.colorScheme.onSurface
+    else MaterialTheme.colorScheme.onSurface
     val sub = fg.copy(alpha = if (outgoing) 0.75f else 0.55f)
 
     val cornerTop = if (tightWithPrev) 6.dp else 18.dp

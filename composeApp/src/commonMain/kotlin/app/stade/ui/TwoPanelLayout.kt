@@ -19,19 +19,27 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -42,14 +50,22 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.contact.Contact
@@ -63,6 +79,7 @@ import app.stade.ui.screens.SettingsScreen
 import app.stade.ui.screens.TransportsScreen
 import app.stade.ui.screens.VerifyContactScreen
 import app.stade.ui.theme.StadeColors
+import kotlinx.coroutines.launch
 
 private sealed class PanelRight {
     data object Empty : PanelRight()
@@ -80,19 +97,92 @@ fun TwoPanelLayout(
     owner: LocalIdentity,
     onLogout: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
     val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
     val connectedSet by container.sync.connectedContacts.collectAsState()
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
     var query by remember { mutableStateOf("") }
+
+    // ── Kişi aksiyon durumu ───────────────────────────────────────────────────
+    var deleteTargetContact by remember { mutableStateOf<Contact?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
 
     val filtered = remember(contacts, query) {
         if (query.isBlank()) contacts
         else contacts.filter { it.nickname.contains(query.trim(), ignoreCase = true) }
     }
 
+    // ── Silme onayı dialog'u ──────────────────────────────────────────────────
+    if (showDeleteConfirm && deleteTargetContact != null) {
+        val c = deleteTargetContact!!
+        AlertDialog(
+            onDismissRequest = {
+                if (!deleting) {
+                    showDeleteConfirm = false
+                    deleteTargetContact = null
+                }
+            },
+            icon = {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text("\"${c.nickname}\" silinsin mi?") },
+            text = {
+                Text(
+                    "Tüm mesajlar, bekleyen kayıtlar ve şifreleme anahtarları kalıcı olarak silinecek. " +
+                            "Yeniden konuşmak için her iki tarafın da kişiyi silip baştan eklemesi gerekir.\n\n" +
+                            "Bu işlem geri alınamaz.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    enabled = !deleting,
+                    onClick = {
+                        deleting = true
+                        scope.launch {
+                            runCatching {
+                                container.sync.forgetContact(c.id)
+                                container.contacts.purge(c.id)
+                            }
+                            val currentRight = right
+                            if (currentRight is PanelRight.Chat && currentRight.contactId == c.id) {
+                                right = PanelRight.Empty
+                            }
+                            if (right is PanelRight.Verify &&
+                                (right as PanelRight.Verify).contactId == c.id) {
+                                right = PanelRight.Empty
+                            }
+                            showDeleteConfirm = false
+                            deleteTargetContact = null
+                            deleting = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) { Text("Sil") }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !deleting,
+                    onClick = {
+                        showDeleteConfirm = false
+                        deleteTargetContact = null
+                    }
+                ) { Text("Vazgeç") }
+            }
+        )
+    }
+
     Row(modifier = Modifier.fillMaxSize()) {
 
-        // ── Sol panel ─────────────────────────────────────────
+        // ── Sol panel ─────────────────────────────────────────────────────────
         Surface(
             modifier = Modifier.width(320.dp).fillMaxHeight(),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -137,8 +227,10 @@ fun TwoPanelLayout(
                                 .padding(horizontal = 12.dp, vertical = 4.dp),
                             placeholder = { Text("Ara…") },
                             leadingIcon = {
-                                Icon(Icons.Default.Search, contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Icon(
+                                    Icons.Default.Search, contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             },
                             singleLine = true,
                             shape = RoundedCornerShape(20.dp),
@@ -161,9 +253,11 @@ fun TwoPanelLayout(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Icon(Icons.Default.PersonAdd, null,
+                                Icon(
+                                    Icons.Default.PersonAdd, null,
                                     modifier = Modifier.size(52.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                                 Text("Henüz kişin yok", style = MaterialTheme.typography.titleMedium)
                                 Text(
                                     "Mesajlaşmaya başlamak için\nbir kişi ekle",
@@ -199,7 +293,14 @@ fun TwoPanelLayout(
                                         lastMessage = lastMsg?.body,
                                         lastMessageTs = lastMsg?.timestamp,
                                         unread = unread,
-                                        onClick = { right = PanelRight.Chat(contact.id) }
+                                        onClick = { right = PanelRight.Chat(contact.id) },
+                                        onVerifyRequest = {
+                                            right = PanelRight.Verify(contact.id)
+                                        },
+                                        onDeleteRequest = {
+                                            deleteTargetContact = contact
+                                            showDeleteConfirm = true
+                                        }
                                     )
                                 }
                                 if (filtered.isEmpty()) {
@@ -234,7 +335,7 @@ fun TwoPanelLayout(
 
         VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-        // ── Sağ panel ─────────────────────────────────────────
+        // ── Sağ panel ─────────────────────────────────────────────────────────
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             when (val rp = right) {
                 is PanelRight.Empty -> Box(
@@ -247,12 +348,16 @@ fun TwoPanelLayout(
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         BrandMark(size = 96.dp)
-                        Text("Stade",
+                        Text(
+                            "Stade",
                             style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Yeni bir sohbete başlamak için sol panelden bir kişi seç.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "Yeni bir sohbete başlamak için sol panelden bir kişi seç.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Spacer(Modifier.height(4.dp))
                     }
                 }
@@ -279,6 +384,11 @@ fun TwoPanelLayout(
                     onBack = { right = PanelRight.Settings }
                 )
 
+                is PanelRight.AddContact -> AddContactScreen(
+                    container = container,
+                    owner = owner,
+                    onBack = { right = PanelRight.Empty }
+                )
 
                 is PanelRight.Verify -> VerifyContactScreen(
                     container = container,
@@ -286,13 +396,14 @@ fun TwoPanelLayout(
                     contactId = rp.contactId,
                     onBack = { right = PanelRight.Chat(rp.contactId) }
                 )
-
-                else -> {}
             }
         }
     }
 }
 
+// ── Kişi satırı ───────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun PanelContactRow(
     contact: Contact,
@@ -301,99 +412,187 @@ private fun PanelContactRow(
     lastMessage: String?,
     lastMessageTs: Long?,
     unread: Long,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onVerifyRequest: () -> Unit,
+    onDeleteRequest: () -> Unit
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(bg)
-            .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Sol seçim çubuğu
-        Box(
-            Modifier
-                .size(width = 3.dp, height = 36.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primary
-                    else Color.Transparent
-                )
-        )
-        Spacer(Modifier.width(8.dp))
 
-        // Avatar + online noktası
-        Box {
-            Avatar(name = contact.nickname, size = 42.dp)
+    // Sağ tık bağlam menüsü durumu
+    var showContextMenu by remember { mutableStateOf(false) }
+    var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
+    var rowHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+
+    Box(modifier = Modifier.onSizeChanged { rowHeightPx = it.height }) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(bg)
+                .clickable(onClick = onClick)
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            // DEĞİŞİKLİK BURADA: event.button ve PointerButton yerine
+                            // event.buttons.isSecondaryPressed kullanıyoruz.
+                            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                                val pos = event.changes.firstOrNull()?.position
+                                if (pos != null) {
+                                    menuOffset = with(density) {
+                                        DpOffset(
+                                            x = pos.x.toDp(),
+                                            // y: tıklanan noktadan itibaren aç
+                                            // DropdownMenu default olarak Box'ın altından açıldığından
+                                            // rowHeight - clickY kadar yukarı çekelim
+                                            y = pos.y.toDp() - rowHeightPx.toDp()
+                                        )
+                                    }
+                                }
+                                event.changes.forEach { it.consume() }
+                                showContextMenu = true
+                            }
+                        }
+                    }
+                }
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Sol seçim çubuğu
             Box(
                 Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(11.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                    .padding(2.dp)
-            ) {
-                Box(
-                    Modifier.fillMaxSize().clip(CircleShape).background(
-                        if (connected) StadeColors.online else StadeColors.offline
+                    .size(width = 3.dp, height = 36.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
                     )
-                )
+            )
+            Spacer(Modifier.width(8.dp))
+
+            // Avatar + online noktası
+            Box {
+                Avatar(name = contact.nickname, size = 42.dp)
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(11.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .padding(2.dp)
+                ) {
+                    Box(
+                        Modifier.fillMaxSize().clip(CircleShape).background(
+                            if (connected) StadeColors.online else StadeColors.offline
+                        )
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            // Metin sütunu — isim üstte, son mesaj + saat altta sağda
+            Column(Modifier.weight(1f)) {
+                // ── Satır 1: İsim + doğrulandı işareti ───────────────────────
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        contact.nickname,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (contact.verified) {
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "✓",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                // ── Satır 2: Son mesaj (sol) + saat (sağ alt) ────────────────
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        lastMessage ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (lastMessageTs != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            formatChatTime(lastMessageTs),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            if (unread > 0) {
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    Modifier
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (unread > 99) "99+" else unread.toString(),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
             }
         }
 
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    contact.nickname,
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                if (contact.verified) {
-                    Spacer(Modifier.width(4.dp))
-                    Text("✓",
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelMedium)
-                }
-                Spacer(Modifier.weight(1f))
-                lastMessageTs?.let {
-                    Text(
-                        formatChatTime(it),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+        // ── Sağ tık bağlam menüsü ─────────────────────────────────────────────
+        DropdownMenu(
+            expanded = showContextMenu,
+            onDismissRequest = { showContextMenu = false },
+            offset = menuOffset
+        ) {
+            DropdownMenuItem(
+                text = { Text("Doğrulama kodunu göster") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Verified,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
                     )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onVerifyRequest()
                 }
-            }
-            if (lastMessage != null) {
-                Text(
-                    lastMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-        if (unread > 0) {
-            Spacer(Modifier.width(8.dp))
-            Box(
-                Modifier.size(22.dp).clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    if (unread > 99) "99+" else unread.toString(),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
+            )
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = {
+                    Text("Kişiyi sil", color = MaterialTheme.colorScheme.error)
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onDeleteRequest()
+                }
+            )
         }
     }
 }
