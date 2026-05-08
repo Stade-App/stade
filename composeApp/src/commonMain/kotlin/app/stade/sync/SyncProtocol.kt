@@ -8,28 +8,54 @@ enum class RecordType(val code: Byte) {
     MESSAGE(3),
     ACK(4),
     PING(5),
-    BYE(6);
+    BYE(6),
+
+    /**
+     * Yeni kişi tanışmasında karşı tarafın ML-KEM-768 public key'ine encapsulate
+     * edilmiş ciphertext'i taşır. Tek seferlik; root key türetiminde kullanılır.
+     */
+    KEM_OFFER(7);
 
     companion object {
         fun fromCode(c: Byte): RecordType? = entries.firstOrNull { it.code == c }
     }
 }
 
+/**
+ * v2 hello: hibrit kimlik, transcript commitment ile downgrade attack koruması.
+ *
+ * `transcriptCommitment = Blake2b("stade-tc-v2" || proto(BE int32) ||
+ *                                 Ed25519pub || X25519pub || MLKEMpub || MLDSApub)`
+ */
 @Serializable
 data class HelloPayload(
     val protocolVersion: Int,
-    val ownerId: String,
-    val signingPublicKey: ByteArray,
-    val nonce: ByteArray,
-    val handshakePublicKey: ByteArray = ByteArray(0),
-    val nickname: String = "",
+    val stadeId: String,
+    val nickname: String,
+    val signingPublicKey: ByteArray,      // Ed25519
+    val handshakePublicKey: ByteArray,    // X25519
+    val mlkemPublicKey: ByteArray,        // ML-KEM-768
+    val mldsaPublicKey: ByteArray,        // ML-DSA-65
+    val nonce: ByteArray,                 // 32 B challenge
+    val transcriptCommitment: ByteArray,  // 32 B
     val addresses: List<String> = emptyList()
 )
 
+/**
+ * v2 auth: hibrit imza. İki imza da
+ *   `"stade-auth-v2" || peerNonce || ownTC || peerTC`
+ * üzerine üretilmek zorunda; ikisinin de geçmesi gerekir.
+ */
 @Serializable
 data class AuthPayload(
-    val ownerId: String,
-    val challengeSignature: ByteArray
+    val stadeId: String,
+    val edSignature: ByteArray,
+    val mldsaSignature: ByteArray
+)
+
+@Serializable
+data class KemOfferPayload(
+    val ciphertext: ByteArray
 )
 
 @Serializable

@@ -83,6 +83,7 @@ import app.stade.sync.SyncEngine
 import app.stade.transport.DialAttempt
 import app.stade.ui.components.Avatar
 import app.stade.ui.components.formatChatTime
+import app.stade.ui.components.maskAddress
 import app.stade.ui.theme.StadeColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -285,21 +286,22 @@ fun ChatScreen(
                     DiagnosticsCard(
                         addresses = contact.addresses,
                         perAddr = diagnostics[contactId].orEmpty(),
-                        onApplyInvite = { link ->
+                        onApplyInvite = { code ->
                             scope.launch {
                                 try {
-                                    val parsed = container.handshake.parseInvite(link.trim())
+                                    val parsed = container.handshake.parseInvite(code.trim())
                                     when {
                                         parsed == null ->
-                                            showNotification("Geçersiz bağlantı", NotificationKind.Error)
+                                            showNotification("Davet kodu geçersiz", NotificationKind.Error)
                                         !parsed.signingPublicKey.contentEquals(contact.publicSigningKey) ->
-                                            showNotification("Bu link başka bir kişiye ait", NotificationKind.Error)
+                                            showNotification("Bu davet başka bir kişiye ait", NotificationKind.Error)
                                         parsed.addresses.isEmpty() ->
-                                            showNotification("Linkte adres yok", NotificationKind.Error)
+                                            showNotification("Davette bağlantı bilgisi yok", NotificationKind.Error)
                                         else -> {
                                             container.contacts.setAddresses(contact.id, parsed.addresses)
+                                            container.connections.queueDial(parsed.addresses)
                                             showNotification(
-                                                "Adresler güncellendi (${parsed.addresses.size})",
+                                                "Bağlantı bilgileri güncellendi",
                                                 NotificationKind.Success
                                             )
                                         }
@@ -476,30 +478,31 @@ private fun DiagnosticsCard(
             Spacer(Modifier.height(6.dp))
             if (addresses.isEmpty()) {
                 Text(
-                    "Bu kişinin kayıtlı adresi yok. Karşı tarafın yeni davet linkini aşağıya yapıştır.",
+                    "Bu kişinin kayıtlı bağlantı bilgisi yok. Karşı taraftan yeni bir davet kodu iste " +
+                        "ve aşağıya yapıştır.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
                 Text(
-                    "Denenen adresler",
+                    "Bağlantı kanalları",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(4.dp))
-                addresses.forEach { addr ->
+                addresses.forEachIndexed { idx, addr ->
                     val a = perAddr[addr]
                     val (icon, label, color) = when (a?.status) {
                         DialAttempt.Status.TRYING ->
                             Triple("…", "deneniyor", MaterialTheme.colorScheme.onSurfaceVariant)
                         DialAttempt.Status.CONNECT_OK ->
-                            Triple("•", "bağlandı, handshake…", MaterialTheme.colorScheme.tertiary)
+                            Triple("•", "kanal hazır, doğrulama…", MaterialTheme.colorScheme.tertiary)
                         DialAttempt.Status.HANDSHAKE_OK ->
                             Triple("✓", "bağlı", StadeColors.online)
                         DialAttempt.Status.CONNECT_FAIL ->
-                            Triple("✗", a.detail ?: "ulaşılamadı", MaterialTheme.colorScheme.error)
+                            Triple("✗", "ulaşılamıyor", MaterialTheme.colorScheme.error)
                         DialAttempt.Status.HANDSHAKE_FAIL ->
-                            Triple("✗", a.detail ?: "handshake hatası", MaterialTheme.colorScheme.error)
+                            Triple("✗", "doğrulama başarısız", MaterialTheme.colorScheme.error)
                         null ->
                             Triple("·", "henüz denenmedi", MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -511,7 +514,7 @@ private fun DiagnosticsCard(
                         Spacer(Modifier.size(8.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                addr,
+                                "Kanal #${idx + 1} • ${maskAddress(addr)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -521,7 +524,8 @@ private fun DiagnosticsCard(
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "İpucu: Tor servisi yeni başlatıldıysa onion descriptor'ın yayılması 5–10 dk alabilir.",
+                    "Bağlantı uzaktan kuruluyorsa karşı tarafın çevrimiçi olması ve " +
+                        "ağ kanallarının hazır olması birkaç dakika sürebilir.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -530,10 +534,10 @@ private fun DiagnosticsCard(
             OutlinedTextField(
                 value = refreshLink,
                 onValueChange = { refreshLink = it },
-                label = { Text("YENİ davet linki") },
-                placeholder = { Text("stade://contact?…") },
+                label = { Text("Yeni davet kodu") },
+                placeholder = { Text("STADE2-…") },
                 modifier = Modifier.fillMaxWidth(),
-                maxLines = 3,
+                maxLines = 4,
                 shape = MaterialTheme.shapes.medium
             )
             Spacer(Modifier.height(8.dp))
@@ -545,7 +549,7 @@ private fun DiagnosticsCard(
                     enabled = refreshLink.isNotBlank(),
                     onClick = { onApplyInvite(refreshLink); refreshLink = "" },
                     modifier = Modifier.weight(1f)
-                ) { Text("Adresleri güncelle") }
+                ) { Text("Davet kodunu uygula") }
                 OutlinedButton(
                     enabled = addresses.isNotEmpty(),
                     onClick = onClear

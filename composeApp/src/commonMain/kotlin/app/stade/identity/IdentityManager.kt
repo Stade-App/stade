@@ -3,14 +3,18 @@ package app.stade.identity
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.stade.crypto.CryptoApi
-import app.stade.crypto.Encoding
+import app.stade.crypto.PqCrypto
 import app.stade.db.StadeDb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Clock
 
-class IdentityManager(private val db: StadeDb, private val crypto: CryptoApi) {
+class IdentityManager(
+    private val db: StadeDb,
+    private val crypto: CryptoApi,
+    private val pq: PqCrypto
+) {
 
     fun observeIdentities(): Flow<List<LocalIdentity>> =
         db.stadeDbQueries.selectAllIdentities()
@@ -19,17 +23,32 @@ class IdentityManager(private val db: StadeDb, private val crypto: CryptoApi) {
             .map { rows -> rows.map { it.toDomain() } }
 
     suspend fun create(nickname: String): LocalIdentity {
-        val signing = crypto.generateSigningKeyPair()
-        val handshake = crypto.generateAgreementKeyPair()
-        val id = Encoding.toHex(crypto.hash(signing.publicKey)).substring(0, 32)
+        val signing = crypto.generateSigningKeyPair()         // Ed25519
+        val handshake = crypto.generateAgreementKeyPair()     // X25519
+        val mlkem = pq.generateMlKemKeyPair()                 // ML-KEM-768
+        val mldsa = pq.generateMlDsaKeyPair()                 // ML-DSA-65
+        val id = StadeId.derive(signing.publicKey, mldsa.publicKey, crypto::hash)
         val now = Clock.System.now().toEpochMilliseconds()
         db.stadeDbQueries.insertIdentity(
-            id, nickname, signing.publicKey, signing.privateKey,
-            handshake.publicKey, handshake.privateKey, now
+            id, nickname,
+            signing.publicKey, signing.privateKey,
+            handshake.publicKey, handshake.privateKey,
+            mlkem.publicKey, mlkem.privateKey,
+            mldsa.publicKey, mldsa.privateKey,
+            now
         )
         return LocalIdentity(
-            id, nickname, signing.publicKey, signing.privateKey,
-            handshake.publicKey, handshake.privateKey, now
+            id = id,
+            nickname = nickname,
+            publicSigningKey = signing.publicKey,
+            privateSigningKey = signing.privateKey,
+            publicHandshakeKey = handshake.publicKey,
+            privateHandshakeKey = handshake.privateKey,
+            publicMlKemKey = mlkem.publicKey,
+            privateMlKemKey = mlkem.privateKey,
+            publicMlDsaKey = mldsa.publicKey,
+            privateMlDsaKey = mldsa.privateKey,
+            createdAt = now
         )
     }
 
@@ -44,6 +63,10 @@ class IdentityManager(private val db: StadeDb, private val crypto: CryptoApi) {
             privateSigningKey = privateKey,
             publicHandshakeKey = handshakePublicKey,
             privateHandshakeKey = handshakePrivateKey,
+            publicMlKemKey = mlkemPublicKey,
+            privateMlKemKey = mlkemPrivateKey,
+            publicMlDsaKey = mldsaPublicKey,
+            privateMlDsaKey = mldsaPrivateKey,
             createdAt = createdAt
         )
 }

@@ -9,9 +9,10 @@ import kotlinx.serialization.json.Json
 
 class RatchetSessions(
     private val crypto: CryptoApi,
+    private val pq: PqCrypto,
     private val contacts: ContactManager
 ) {
-    private val ratchet = DoubleRatchet(crypto)
+    private val ratchet = DoubleRatchet(crypto, pq)
     private val states = mutableMapOf<String, DoubleRatchet.State>()
     private val locks = mutableMapOf<String, Mutex>()
     private val locksMutex = Mutex()

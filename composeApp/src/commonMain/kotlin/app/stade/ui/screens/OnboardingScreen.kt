@@ -59,7 +59,8 @@ fun OnboardingScreen(container: AppContainer, onReady: (LocalIdentity) -> Unit) 
                     style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Uçtan uca şifreli, sunucusuz mesajlaşma.\nBaşlamak için bir takma ad seç.",
+                    "Uçtan uca şifreli, sunucusuz, post-quantum güvenli mesajlaşma.\n" +
+                        "Başlamak için bir takma ad seç — kalıcı bir Stade ID atanacak.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

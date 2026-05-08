@@ -38,6 +38,13 @@ class ConnectionManager(
     private val tasks = mutableListOf<Job>()
     private val backoff = mutableMapOf<String, Long>()
     private val dialing = mutableSetOf<String>()
+    /**
+     * Davet kabul edilmiş ama henüz Contact'a dönüşmemiş adresler.
+     * Handshake bittiğinde SyncEngine bu bağlantıyı işler ve Contact otomatik
+     * eklenir; bu listeden çıkan adresler ContactManager içindeki contact'a
+     * geçer.
+     */
+    private val pendingDial = mutableSetOf<String>()
 
     private val _diagnostics = MutableStateFlow<Map<String, Map<String, DialAttempt>>>(emptyMap())
     val diagnostics: StateFlow<Map<String, Map<String, DialAttempt>>> = _diagnostics.asStateFlow()
@@ -53,6 +60,28 @@ class ConnectionManager(
         registry.all().flatMap { runCatching { it.selfAddresses() }.getOrDefault(emptyList()) }
             .filter { it.isNotBlank() }
             .distinct()
+
+    /**
+     * Davet kabul edildiğinde, henüz contact olmayan ama bağlanması istenen
+     * adresleri kuyruğa alır. Dialer döngüsü bunları bilinen contact adresleriyle
+     * birlikte deneyecek; başarılı handshake olunca SyncEngine yeni Contact'ı
+     * yaratır.
+     */
+    fun queueDial(addresses: List<String>) {
+        val selfSet = runCatching { selfAddresses().toSet() }.getOrDefault(emptySet())
+        synchronized(pendingDial) {
+            for (a in addresses) {
+                if (a.isNotBlank() && a !in selfSet) pendingDial.add(a)
+            }
+        }
+    }
+
+    private fun snapshotPendingAddresses(): List<String> =
+        synchronized(pendingDial) { pendingDial.toList() }
+
+    private fun consumePendingAddress(addr: String) {
+        synchronized(pendingDial) { pendingDial.remove(addr) }
+    }
 
     suspend fun start(owner: LocalIdentity) = mutex.withLock {
         if (ownerRef?.id == owner.id) return@withLock
@@ -77,6 +106,7 @@ class ConnectionManager(
         tasks.clear()
         backoff.clear()
         dialing.clear()
+        synchronized(pendingDial) { pendingDial.clear() }
         for (plugin in registry.all()) runCatching { plugin.stop() }
         scope.cancel()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -93,7 +123,37 @@ class ConnectionManager(
                     backoff[contact.id] = now + 10_000L
                 }
             }
+            // Davet kabul edildiğinde gelen ama henüz contact olmayan adresler
+            tryDialPending(owner, now)
             delay(5_000)
+        }
+    }
+
+    private suspend fun tryDialPending(owner: LocalIdentity, now: Long) {
+        val pending = snapshotPendingAddresses()
+        if (pending.isEmpty()) return
+        val knownAddrs: Set<String> = contacts.all()
+            .filter { it.ownerId == owner.id }
+            .flatMap { it.addresses }
+            .toSet()
+        for (addr in pending) {
+            if (addr in knownAddrs) {
+                consumePendingAddress(addr) // zaten contact'ta var
+                continue
+            }
+            val key = "pending|$addr"
+            if ((backoff[key] ?: 0L) > now) continue
+            val plugin = pluginForAddress(addr) ?: continue
+            val conn = runCatching { plugin.connect(addr) }.getOrNull()
+            if (conn == null) {
+                backoff[key] = nowMs() + 30_000L
+                continue
+            }
+            scope.launch {
+                runCatching { sync.handleConnection(owner, conn) }
+                consumePendingAddress(addr)
+            }
+            return // her tarama döngüsünde tek pending tetikle
         }
     }
 
@@ -178,5 +238,3 @@ class ConnectionManager(
 
     private fun nowMs(): Long = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
 }
-
-

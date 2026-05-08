@@ -5,6 +5,10 @@ CREATE TABLE LocalIdentity (
     privateKey BLOB NOT NULL,
     handshakePublicKey BLOB NOT NULL,
     handshakePrivateKey BLOB NOT NULL,
+    mlkemPublicKey BLOB NOT NULL,
+    mlkemPrivateKey BLOB NOT NULL,
+    mldsaPublicKey BLOB NOT NULL,
+    mldsaPrivateKey BLOB NOT NULL,
     createdAt INTEGER NOT NULL
 );
 
@@ -14,6 +18,8 @@ CREATE TABLE Contact (
     nickname TEXT NOT NULL,
     publicKey BLOB NOT NULL,
     handshakePublicKey BLOB NOT NULL,
+    mlkemPublicKey BLOB NOT NULL,
+    mldsaPublicKey BLOB NOT NULL,
     rootKey BLOB NOT NULL,
     ratchetState BLOB,
     isAlice INTEGER NOT NULL DEFAULT 0,
@@ -75,7 +81,7 @@ selectIdentity:
 SELECT * FROM LocalIdentity WHERE id = ?;
 
 insertIdentity:
-INSERT INTO LocalIdentity(id, nickname, publicKey, privateKey, handshakePublicKey, handshakePrivateKey, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO LocalIdentity(id, nickname, publicKey, privateKey, handshakePublicKey, handshakePrivateKey, mlkemPublicKey, mlkemPrivateKey, mldsaPublicKey, mldsaPrivateKey, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectContacts:
 SELECT * FROM Contact WHERE ownerId = ? ORDER BY nickname;
@@ -89,8 +95,11 @@ SELECT * FROM Contact WHERE id = ?;
 selectContactByPublicKey:
 SELECT * FROM Contact WHERE publicKey = ?;
 
+selectContactByStadeId:
+SELECT * FROM Contact WHERE id = ?;
+
 insertContact:
-INSERT INTO Contact(id, ownerId, nickname, publicKey, handshakePublicKey, rootKey, ratchetState, isAlice, verified, lastSeen, createdAt, addresses) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO Contact(id, ownerId, nickname, publicKey, handshakePublicKey, mlkemPublicKey, mldsaPublicKey, rootKey, ratchetState, isAlice, verified, lastSeen, createdAt, addresses) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 setContactVerified:
 UPDATE Contact SET verified = 1 WHERE id = ?;

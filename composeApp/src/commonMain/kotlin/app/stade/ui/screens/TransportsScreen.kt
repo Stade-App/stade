@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.transport.TransportType
+import app.stade.ui.components.maskAddress
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,13 +90,17 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                         }
                         plugin?.selfAddress()?.let {
                             Spacer(Modifier.height(8.dp))
-                            Text("Adres: $it", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "Durum: ${maskAddress(it)} hazır",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         val allAddrs = plugin?.let { runCatching { it.selfAddresses() }.getOrDefault(emptyList()) } ?: emptyList()
                         if (allAddrs.size > 1) {
                             Text(
-                                "Tüm adresler:\n" + allAddrs.joinToString("\n") { "  • $it" },
-                                style = MaterialTheme.typography.bodySmall,
+                                "${allAddrs.size} kanal hazır",
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -130,7 +135,9 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
 
     Column {
         Text(
-            "Hidden Service (isteğe bağlı). torrc'de 'HiddenServicePort <port> 127.0.0.1:<yerel port>' satırı kurun ve üretilen .onion adresini girin. Yerel port boşsa Port ile aynı kullanılır; PC'de 5901 başka bir uygulama (ör. VNC) tarafından tutuluyorsa farklı bir yerel port (ör. 5921) verin.",
+            "Hidden Service (gelişmiş — isteğe bağlı). Bağlantı kanalı kurmak için " +
+                "torrc'de uygun yapılandırmayı kurmanız ve elde edilen kimliği aşağıdaki " +
+                "alana girmeniz gerekir. Boş bırakırsanız bu kanal devre dışı kalır.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -138,7 +145,7 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
         OutlinedTextField(
             value = onion,
             onValueChange = { onion = it.trim() },
-            label = { Text(".onion adresi") },
+            label = { Text("Hidden service kimliği") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -170,13 +177,13 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
                 onSave(cfg)
             },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Kaydet (Tor'u yeniden başlat)") }
+        ) { Text("Kaydet ve kanalı yeniden başlat") }
     }
 }
 
 private fun label(type: TransportType): String = when (type) {
-    TransportType.LAN -> "LAN (Wi-Fi)"
-    TransportType.TOR -> "Tor (Onion)"
+    TransportType.LAN -> "Yerel ağ"
+    TransportType.TOR -> "Uzak ağ kanalı"
     TransportType.BLUETOOTH -> "Bluetooth"
     TransportType.REMOVABLE -> "Çıkarılabilir medya"
 }

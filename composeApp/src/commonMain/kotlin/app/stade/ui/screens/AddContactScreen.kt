@@ -43,10 +43,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
+import app.stade.ui.components.StadeIdCard
 import app.stade.ui.qr.QrCodeView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -60,7 +60,7 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
         container.handshake.createInvite(owner, container.connections.selfAddresses())
     }
     var alias by remember { mutableStateOf("") }
-    var pastedLink by remember { mutableStateOf("") }
+    var pastedCode by remember { mutableStateOf("") }
     var status by remember { mutableStateOf<String?>(null) }
     val scroll = rememberScrollState()
 
@@ -87,8 +87,10 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(scroll),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Adım 1
+            // Adım 1: Stade ID + davet QR'ı
             StepCard(stepNumber = 1, title = "Kendi davetini paylaş") {
+                StadeIdCard(stadeId = owner.stadeId)
+                Spacer(Modifier.height(12.dp))
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                     contentAlignment = Alignment.Center
@@ -101,38 +103,38 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                             .padding(10.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        QrCodeView(payload = invite, modifier = Modifier.size(200.dp))
+                        QrCodeView(payload = invite.display, modifier = Modifier.size(200.dp))
                     }
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    invite,
+                    "Karşı taraf bu QR'ı tarasın ya da aşağıdaki davet kodunu yapıştırsın. " +
+                        "Davet kodu karşı tarafa ulaştığında bağlantı bilgileri otomatik aktarılır — " +
+                        "ağ adresi vb. teknik detayları manuel paylaşmana gerek yok.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    overflow = TextOverflow.Ellipsis,
-                    maxLines = 4
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 TextButton(onClick = {
-                    clipboard.setText(AnnotatedString(invite))
-                    status = "Davet linki kopyalandı"
+                    clipboard.setText(AnnotatedString(invite.display))
+                    status = "Davet kodu kopyalandı"
                 }) {
                     Icon(Icons.Default.ContentCopy, contentDescription = null,
                         modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Linki kopyala")
+                    Text("Davet kodunu kopyala")
                 }
             }
 
             // Adım 2
             StepCard(stepNumber = 2, title = "Karşı tarafın davetini gir") {
                 OutlinedTextField(
-                    value = pastedLink,
-                    onValueChange = { pastedLink = it },
-                    label = { Text("Davet linki") },
-                    placeholder = { Text("stade://contact?…") },
+                    value = pastedCode,
+                    onValueChange = { pastedCode = it },
+                    label = { Text("Davet kodu") },
+                    placeholder = { Text("STADE2-…") },
                     modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3,
+                    maxLines = 4,
                     shape = MaterialTheme.shapes.medium
                 )
                 Spacer(Modifier.height(8.dp))
@@ -146,45 +148,45 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                 )
                 Spacer(Modifier.height(12.dp))
                 FilledTonalButton(
-                    enabled = pastedLink.isNotBlank() && alias.isNotBlank(),
+                    enabled = pastedCode.isNotBlank() && alias.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
                     onClick = {
                         scope.launch {
                             try {
-                                val parsed = container.handshake.parseInvite(pastedLink.trim())
+                                val parsed = container.handshake.parseInvite(pastedCode.trim())
                                 if (parsed == null) {
-                                    status = "Geçersiz bağlantı"
+                                    status = "Davet kodu geçersiz veya bozuk"
                                     return@launch
                                 }
                                 if (parsed.signingPublicKey.contentEquals(owner.publicSigningKey)) {
-                                    status = "Bu senin kendi bağlantın"
+                                    status = "Bu senin kendi davetin"
                                     return@launch
                                 }
-                                if (container.contacts.findByPublicKey(parsed.signingPublicKey) != null) {
-                                    status = "Bu kişi zaten ekli"
+                                if (container.contacts.findByStadeId(parsed.stadeId) != null) {
+                                    status = "Bu kişi zaten ekli (${parsed.stadeId})"
                                     return@launch
                                 }
-                                val rootKey = container.handshake.deriveRootKey(owner, parsed)
-                                val isAlice = container.handshake.isAlice(owner, parsed)
-                                container.contacts.addFromHandshake(
-                                    owner = owner,
-                                    nickname = alias.trim(),
-                                    peerSigningKey = parsed.signingPublicKey,
-                                    peerHandshakeKey = parsed.handshakePublicKey,
-                                    rootKey = rootKey,
-                                    isAlice = isAlice,
-                                    addresses = parsed.addresses
-                                )
-                                status = "Kişi eklendi ✓"
-                                pastedLink = ""
+                                // Bob rolündeyiz: PQ KEM ile root türet — el ile rehearse
+                                // edebiliriz ama gerçek root SyncEngine handshake'ı sırasında
+                                // hibrit KEM_OFFER üzerinden hesaplanacak. Burada sadece
+                                // contact stub'ını oluşturmuyoruz — bağlantı kurulduğunda
+                                // otomatik eklenir. Adres listesi bilgisini paylaşalım:
+                                val addrs = parsed.addresses
+                                if (addrs.isEmpty()) {
+                                    status = "Davet kabul edildi — karşı tarafın çevrimiçi olmasını bekle"
+                                } else {
+                                    container.connections.queueDial(addrs)
+                                    status = "Davet kabul edildi (${parsed.nickname}) — bağlanılıyor…"
+                                }
+                                pastedCode = ""
                                 alias = ""
                             } catch (e: Exception) {
                                 status = "Hata: ${e.message ?: "Bilinmeyen hata"}"
                             }
                         }
                     }
-                ) { Text("Kişi olarak ekle") }
+                ) { Text("Daveti kabul et") }
                 status?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(

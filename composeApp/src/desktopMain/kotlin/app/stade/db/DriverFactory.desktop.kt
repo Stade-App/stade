@@ -14,9 +14,8 @@ actual class DriverFactory {
         val driver = JdbcSqliteDriver("jdbc:sqlite:${dbFile.absolutePath}", Properties())
         if (fresh) {
             StadeDb.Schema.create(driver)
-        } else {
-            runCatching { driver.execute(null, "ALTER TABLE Contact ADD COLUMN addresses TEXT NOT NULL DEFAULT ''", 0) }
         }
+        // Şema sürüm probe & clean-slate AppContainer'da yapılıyor.
         return driver
     }
 }

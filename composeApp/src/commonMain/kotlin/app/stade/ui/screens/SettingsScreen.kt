@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
 import app.stade.ui.components.Avatar
+import app.stade.ui.components.StadeIdCard
 import app.stade.ui.theme.getDynamicColorEnabled
 import app.stade.ui.theme.isDynamicColorSupported
 import app.stade.ui.theme.setDynamicColorEnabled
@@ -153,6 +154,14 @@ fun SettingsScreen(
                         fingerprintCopied = true
                     }
                 )
+            }
+
+            // ── Stade ID kartı ───────────────────────────────────
+            item {
+                SettingsSectionLabel("Kimlik")
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    StadeIdCard(stadeId = owner.stadeId)
+                }
             }
 
             // ── Görünüm (yalnızca Android 12+) ──────────────────

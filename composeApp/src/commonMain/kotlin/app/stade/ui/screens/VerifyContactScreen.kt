@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
 import app.stade.ui.components.Avatar
+import app.stade.ui.components.StadeIdCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,6 +96,10 @@ fun VerifyContactScreen(
                     Avatar(name = contact?.nickname ?: "?", size = 64.dp)
                     Spacer(Modifier.height(10.dp))
                     Text(contact?.nickname ?: "", style = MaterialTheme.typography.titleMedium)
+                    contact?.let {
+                        Spacer(Modifier.height(10.dp))
+                        StadeIdCard(stadeId = it.stadeId, title = "Karşı tarafın Stade ID'si")
+                    }
                     if (verified) {
                         Spacer(Modifier.height(4.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
