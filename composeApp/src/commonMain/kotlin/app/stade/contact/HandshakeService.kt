@@ -85,16 +85,40 @@ class HandshakeService(
         return InviteCode(display = "STADE2-$b32", raw = raw)
     }
 
+    // ── QR chunk kodlama ──────────────────────────────────────────────────────
+
+    /**
+     * Davet kodunu QR kodu kapasitesine sığan parçalara böler.
+     * Her parça "STDP/<idx>/<toplam>/<veri>" formatındadır.
+     * Alıcı taraf parçaları toplayıp birleştirerek orijinal STADE2-… kodunu elde eder.
+     *
+     * QR alfanümerik mod (Level L) max kapasitesi ≈ 4296 karakter.
+     * Güvenli sınır olarak 4100 kullanılıyor.
+     */
+    fun createQrChunks(invite: InviteCode): List<String> {
+        val b32 = invite.display.removePrefix("STADE2-")
+        val chunkSize = 4100
+        val total = (b32.length + chunkSize - 1) / chunkSize
+        return (0 until total).map { i ->
+            val from = i * chunkSize
+            val to = minOf(from + chunkSize, b32.length)
+            "STDP/${i + 1}/$total/${b32.substring(from, to)}"
+        }
+    }
+
     // ── Davet ayrıştırma + doğrulama ─────────────────────────────────────────
 
     fun parseInvite(code: String): InvitePayload? = runCatching {
-        val cleaned = code.trim().replace("\\s".toRegex(), "")
+        // Tüm boşluk ve alfanümerik-olmayan karakterleri sil (em-dash, sıfır genişlik boşluk,
+        // akıllı tire, satır sonu, vb. transfer bozulmalarına karşı savunma).
+        val stripped = code.replace(Regex("[^A-Za-z0-9]"), "").uppercase()
         val b32 = when {
-            cleaned.startsWith("STADE2-", ignoreCase = true) -> cleaned.substring(7)
-            cleaned.startsWith("STADE2", ignoreCase = true) -> cleaned.substring(6)
+            stripped.startsWith("STADE2") -> stripped.substring(6)
             else -> return@runCatching null
         }
-        val raw = Encoding.fromBase32(b32)
+        // Geçersiz base32 karakterler kaldıysa temizle
+        val cleanB32 = b32.filter { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567" }
+        val raw = Encoding.fromBase32(cleanB32)
         return@runCatching parseRaw(raw)
     }.getOrNull()
 

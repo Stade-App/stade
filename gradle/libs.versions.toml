@@ -11,6 +11,7 @@ androidx-activity = "1.9.3"
 androidx-core = "1.13.1"
 bouncycastle = "1.78.1"
 zxing = "3.5.3"
+camerax = "1.4.1"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -27,6 +28,10 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
 bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

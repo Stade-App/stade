@@ -1,12 +1,14 @@
 package app.stade
 
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import java.awt.Dimension
 import app.stade.crypto.Encoding
 import app.stade.db.DriverFactory
 import app.stade.db.StadeDb
@@ -28,12 +30,13 @@ fun main() = application {
             )
         }
     }
-    val state = rememberWindowState(size = DpSize(420.dp, 760.dp))
+    val state = rememberWindowState(size = DpSize(1024.dp, 680.dp))
     Window(
         onCloseRequest = ::exitApplication,
         state = state,
         title = "Stade"
     ) {
+        SideEffect { window.minimumSize = Dimension(700, 660) }
         Surface { StadeApp(container) }
     }
 }

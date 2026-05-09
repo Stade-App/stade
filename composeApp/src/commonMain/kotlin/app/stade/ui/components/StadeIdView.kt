@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -46,6 +47,9 @@ fun StadeIdCard(
     val clipboard = LocalClipboardManager.current
     var copied by remember(stadeId) { mutableStateOf(false) }
 
+    // Radiusu buradan kontrol edebilirsin. 12.dp daha az yuvarlaktır.
+    val cardShape = MaterialTheme.shapes.medium
+
     LaunchedEffect(copied) {
         if (copied) {
             delay(1800)
@@ -56,13 +60,14 @@ fun StadeIdCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable {
+            .clip(cardShape) // 1. Önce kırpıyoruz ki ripple (tıklama efekti) dışarı taşmasın
+            .clickable {    // 2. Sonra tıklanabilir yapıyoruz
                 clipboard.setText(AnnotatedString(stadeId))
                 copied = true
             },
-        shape = MaterialTheme.shapes.large,
+        shape = cardShape, // Kartın kendi görsel şekli
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
         ),
         elevation = CardDefaults.cardElevation(0.dp)
     ) {

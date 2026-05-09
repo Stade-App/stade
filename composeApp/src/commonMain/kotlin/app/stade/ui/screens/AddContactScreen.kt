@@ -47,7 +47,6 @@ import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
 import app.stade.ui.components.StadeIdCard
-import app.stade.ui.qr.QrCodeView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -87,29 +86,12 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(scroll),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Adım 1: Stade ID + davet QR'ı
+            // Adım 1: Stade ID + davet kodu
             StepCard(stepNumber = 1, title = "Kendi davetini paylaş") {
                 StadeIdCard(stadeId = owner.stadeId)
                 Spacer(Modifier.height(12.dp))
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(220.dp)
-                            .clip(MaterialTheme.shapes.medium)
-                            .background(androidx.compose.ui.graphics.Color.White)
-                            .padding(10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        QrCodeView(payload = invite.display, modifier = Modifier.size(200.dp))
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
                 Text(
-                    "Karşı taraf bu QR'ı tarasın ya da aşağıdaki davet kodunu yapıştırsın. " +
-                        "Davet kodu karşı tarafa ulaştığında bağlantı bilgileri otomatik aktarılır — " +
+                    "Davet kodu karşı tarafa ulaştığında bağlantı bilgileri otomatik aktarılır — " +
                         "ağ adresi vb. teknik detayları manuel paylaşmana gerek yok.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
