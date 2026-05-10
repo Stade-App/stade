@@ -89,7 +89,6 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(scroll),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Adım 1: Stade ID + davet kodu
             StepCard(stepNumber = 1, title = "Kendi davetini paylaş") {
                 Text(
                     "Bağlantı kurmak için aşağıdaki butona basıp davet kodunu paylaş. " +
@@ -132,7 +131,6 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                 StadeIdCard(stadeId = owner.stadeId)
             }
 
-            // Adım 2
             StepCard(stepNumber = 2, title = "Karşı tarafın davetini gir") {
                 OutlinedTextField(
                     value = pastedCode,
@@ -165,9 +163,6 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                         scope.launch {
                             try {
                                 val trimmed = pastedCode.trim()
-                                // Sık yapılan hata: kullanıcı uzun davet kodu yerine
-                                // karşı tarafın Stade ID'sini (kısa etiket) yapıştırıyor.
-                                // Erken yakalayıp net mesaj göster.
                                 val looksLikeStadeId = Regex("^STADE-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}$")
                                     .matches(trimmed.uppercase())
                                 if (looksLikeStadeId) {
@@ -228,11 +223,6 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                     status = "Bu kişi zaten ekli (${parsed.stadeId})"
                                     return@launch
                                 }
-                                // Bob rolündeyiz: PQ KEM ile root türet — el ile rehearse
-                                // edebiliriz ama gerçek root SyncEngine handshake'ı sırasında
-                                // hibrit KEM_OFFER üzerinden hesaplanacak. Burada sadece
-                                // contact stub'ını oluşturmuyoruz — bağlantı kurulduğunda
-                                // otomatik eklenir. Adres listesi bilgisini paylaşalım:
                                 val addrs = parsed.addresses
                                 if (addrs.isEmpty()) {
                                     status = "Davet kabul edildi — karşı tarafın çevrimiçi olmasını bekle"
@@ -242,9 +232,6 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                     status = "Davet kabul edildi (${parsed.nickname}) — bağlanılıyor… " +
                                         "(${addrs.size} adres deneniyor; karşı taraf çevrimiçi olmalı)"
                                     statusSticky = true
-                                    // Bağlantı kurulup contact eklenene kadar canlı izle.
-                                    // 90 sn sonra hâlâ yoksa kullanıcıya açık bir uyarı ver
-                                    // — sessizce kaybolmasın.
                                     val targetId = parsed.stadeId
                                     val deadline = kotlinx.datetime.Clock.System.now().toEpochMilliseconds() + 90_000L
                                     while (kotlinx.datetime.Clock.System.now().toEpochMilliseconds() < deadline) {

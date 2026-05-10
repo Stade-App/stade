@@ -76,7 +76,6 @@ fun VerifyContactScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Kişi başlığı
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -116,7 +115,6 @@ fun VerifyContactScreen(
                 }
             }
 
-            // Güvenlik numarası
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -146,7 +144,6 @@ fun VerifyContactScreen(
                 }
             }
 
-            // QR bloğu kaldırıldı — güvenlik numarası metin olarak yeterli
 
             Button(
                 modifier = Modifier.fillMaxWidth(),
@@ -163,9 +160,6 @@ fun VerifyContactScreen(
     }
 }
 
-/**
- * Güvenlik numarasını 5'erli gruplara bölüp 4 satıra yayan, monospace blok.
- */
 @Composable
 private fun SafetyNumberBlock(raw: String) {
     val digits = raw.filter { it.isDigit() }
@@ -173,9 +167,7 @@ private fun SafetyNumberBlock(raw: String) {
         Text("-", style = MaterialTheme.typography.titleSmall)
         return
     }
-    // 5'erli gruplar
     val groups = digits.chunked(5)
-    // 4 satır × 4 grup düzeni (toplam 80 hane). Eksikse esnek dolduralım.
     val perRow = if (groups.size >= 4) (groups.size + 3) / 4 else groups.size
     val rows = groups.chunked(perRow.coerceAtLeast(1))
 

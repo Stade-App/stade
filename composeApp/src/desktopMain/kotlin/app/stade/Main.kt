@@ -44,7 +44,7 @@ fun main() = application {
         onCloseRequest = ::exitApplication,
         state = windowState,
         title = "Stade",
-        icon = painterResource(Res.drawable.app_icon_desktop) // Otomatik üretilen kaynak
+        icon = painterResource(Res.drawable.app_icon_desktop)
     ) {
         SideEffect { window.minimumSize = Dimension(700, 660) }
         Surface { StadeApp(container) }

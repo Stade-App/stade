@@ -104,20 +104,6 @@ class SyncEngine(
         _connected.value = sessions.keys.toSet()
     }
 
-    /**
-     * v2 PQXDH handshake.
-     *
-     * Akış:
-     *   1. Her iki taraf HELLO gönderir/alır. Versiyon eşitliği zorunlu;
-     *      transcriptCommitment downgrade saldırısını engeller.
-     *   2. Karşılıklı Stade ID self-conflict kontrolü.
-     *   3. AUTH: Ed25519 + ML-DSA hibrit imza (ikisi de geçmek zorunda).
-     *   4. Yeni kişiyse: deterministik şekilde Alice = leksikografik küçük Stade ID.
-     *      Alice ML-KEM encapsulate eder + KEM_OFFER gönderir.
-     *      Bob KEM_OFFER alır + decapsulate eder.
-     *      Her iki taraf rootKey hesaplar + Contact ekler.
-     *   5. Mevcut kişiyse: KEM değiş-tokuşu yok; sadece adresler merge edilir.
-     */
     private suspend fun handshake(owner: LocalIdentity, connection: Connection): Pair<Contact, Boolean>? {
         val ourNonce = crypto.randomBytes(32)
         val ourTc = transcriptCommitment(
@@ -150,7 +136,6 @@ class SyncEngine(
             json.decodeFromString(HelloPayload.serializer(), helloRecord.payload.decodeToString())
         }.getOrNull() ?: return null
 
-        // ── Versiyon ve format kontrolleri ─────────────────────────────────
         if (peerHello.protocolVersion != protocolVersion) {
             _events.tryEmit(SyncEvent.HandshakeRejected("Protokol uyumsuz: v${peerHello.protocolVersion} (uygulama v$protocolVersion)"))
             return null
@@ -168,14 +153,12 @@ class SyncEngine(
             return null
         }
 
-        // Stade ID public key'lerden türetilebilir olmalı (cüzdan tutarlılığı)
         val derivedPeerId = StadeId.derive(peerHello.signingPublicKey, peerHello.mldsaPublicKey, crypto::hash)
         if (derivedPeerId != peerHello.stadeId) {
             _events.tryEmit(SyncEvent.HandshakeRejected("Stade ID anahtarlarla eşleşmiyor"))
             return null
         }
 
-        // Transcript commitment doğrulama
         val expectedPeerTc = transcriptCommitment(
             protocolVersion,
             peerHello.signingPublicKey,
@@ -188,7 +171,6 @@ class SyncEngine(
             return null
         }
 
-        // ── AUTH alış-veriş (hibrit imza) ──────────────────────────────────
         val authMessage = AUTH_PREFIX + peerHello.nonce + ourTc + peerHello.transcriptCommitment
         val ourEdSig = crypto.sign(owner.privateSigningKey, authMessage)
         val ourDsaSig = pq.signMlDsa(owner.privateMlDsaKey, owner.publicMlDsaKey, authMessage)
@@ -220,7 +202,6 @@ class SyncEngine(
             return null
         }
 
-        // ── Mevcut veya yeni kişi ──────────────────────────────────────────
         val existing = contacts.findByStadeId(peerHello.stadeId)
             ?: contacts.findByPublicKey(peerHello.signingPublicKey)
         if (existing != null) {
@@ -234,7 +215,6 @@ class SyncEngine(
             return existing to false
         }
 
-        // ── Yeni kişi: KEM değiş-tokuşu + root key türetimi ────────────────
         val invite = InvitePayload(
             stadeId = peerHello.stadeId,
             nickname = peerHello.nickname.ifBlank { "Bilinmeyen" },
@@ -248,7 +228,6 @@ class SyncEngine(
         val kemCt: ByteArray
         val kemSs: ByteArray
         if (isAlice) {
-            // Alice encapsulate eder ve gönderir
             val enc = handshakeService.encapsulateForPeer(invite)
             kemCt = enc.ciphertext
             kemSs = enc.sharedSecret
@@ -256,7 +235,6 @@ class SyncEngine(
                 json.encodeToString(KemOfferPayload.serializer(), KemOfferPayload(kemCt)).encodeToByteArray())
             runCatching { connection.send(FrameCodec.encode(rec)) }.getOrElse { return null }
         } else {
-            // Bob bekler
             val frame = withTimeoutOrNull(45_000) { connection.receive() } ?: return null
             val rec = FrameCodec.decode(frame) ?: return null
             if (rec.type != RecordType.KEM_OFFER) return null

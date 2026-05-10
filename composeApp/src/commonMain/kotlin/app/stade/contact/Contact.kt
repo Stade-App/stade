@@ -4,13 +4,13 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Contact(
-    val id: String,                            // = peer Stade ID
+    val id: String,
     val ownerId: String,
     val nickname: String,
-    val publicSigningKey: ByteArray,           // Ed25519
-    val publicHandshakeKey: ByteArray,         // X25519
-    val publicMlKemKey: ByteArray,             // ML-KEM-768
-    val publicMlDsaKey: ByteArray,             // ML-DSA-65
+    val publicSigningKey: ByteArray,
+    val publicHandshakeKey: ByteArray,
+    val publicMlKemKey: ByteArray,
+    val publicMlDsaKey: ByteArray,
     val rootKey: ByteArray,
     val ratchetState: ByteArray?,
     val isAlice: Boolean,

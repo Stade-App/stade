@@ -23,10 +23,10 @@ class IdentityManager(
             .map { rows -> rows.map { it.toDomain() } }
 
     suspend fun create(nickname: String): LocalIdentity {
-        val signing = crypto.generateSigningKeyPair()         // Ed25519
-        val handshake = crypto.generateAgreementKeyPair()     // X25519
-        val mlkem = pq.generateMlKemKeyPair()                 // ML-KEM-768
-        val mldsa = pq.generateMlDsaKeyPair()                 // ML-DSA-65
+        val signing = crypto.generateSigningKeyPair()
+        val handshake = crypto.generateAgreementKeyPair()
+        val mlkem = pq.generateMlKemKeyPair()
+        val mldsa = pq.generateMlDsaKeyPair()
         val id = StadeId.derive(signing.publicKey, mldsa.publicKey, crypto::hash)
         val now = Clock.System.now().toEpochMilliseconds()
         db.stadeDbQueries.insertIdentity(

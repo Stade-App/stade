@@ -11,7 +11,7 @@ private val _disabled = mutableStateOf(false)
 
 actual fun getDynamicColorEnabled(): State<Boolean> = _disabled
 
-actual fun setDynamicColorEnabled(value: Boolean) { /* Desktop'ta desteklenmiyor */ }
+actual fun setDynamicColorEnabled(value: Boolean) { }
 
 @Composable
 actual fun resolveDynamicColorScheme(dark: Boolean): ColorScheme? = null

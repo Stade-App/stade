@@ -91,7 +91,6 @@ import app.stade.ui.theme.StadeColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// ── Bildirim tipi ──────────────────────────────────────────────────────────────
 private enum class NotificationKind { Success, Error, Info }
 private data class NotificationData(val message: String, val kind: NotificationKind)
 
@@ -116,11 +115,9 @@ fun ChatScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
 
-    // ── Bildirim durumu ──────────────────────────────────────────────────────
     var notification by remember { mutableStateOf<NotificationData?>(null) }
     var notificationKey by remember { mutableStateOf(0) }
 
-    // Bildirim otomatik kapanma
     LaunchedEffect(notificationKey) {
         if (notificationKey > 0) {
             delay(3500L)
@@ -133,7 +130,6 @@ fun ChatScreen(
         notificationKey++
     }
 
-    // ── Sync olayları ─────────────────────────────────────────────────────────
     LaunchedEffect(contactId) {
         container.sync.events.collect { ev ->
             when (ev) {
@@ -156,8 +152,6 @@ fun ChatScreen(
         }
     }
 
-    // ── Sohbet ekranda açık olduğu süre aktif kişiyi işaretle ───────────────────
-    // Arka plana geçiş durumu AppContainer.isAppInForeground ile ayrıca izlenir.
     DisposableEffect(contactId) {
         container.activeContactId = contactId
         cancelMessagesNotification(contactId)
@@ -170,11 +164,8 @@ fun ChatScreen(
         if (messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex)
     }
 
-    // Klavye açıldığında en son mesaja kaydır:
-    // İçerik alanının yüksekliği düştüğünde (IME açıldı) scroll tetiklenir.
     var prevColumnHeight by remember { mutableStateOf(Int.MAX_VALUE) }
 
-    // ── Silme dialog'u ────────────────────────────────────────────────────────
     if (showDeleteDialog && contact != null) {
         AlertDialog(
             onDismissRequest = { if (!deleting) showDeleteDialog = false },
@@ -279,7 +270,6 @@ fun ChatScreen(
             )
         }
     ) { padding ->
-        // ── İçerik + üst bildirim overlay'i ──────────────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -288,7 +278,6 @@ fun ChatScreen(
                 .imePadding()
         ) {
             Column(modifier = Modifier.fillMaxSize().onSizeChanged { size ->
-                // Yükseklik azaldı → klavye açıldı → en sona kaydır
                 if (size.height < prevColumnHeight && messages.isNotEmpty()) {
                     scope.launch { listState.scrollToItem(messages.lastIndex) }
                 }
@@ -388,7 +377,6 @@ fun ChatScreen(
                 )
             }
 
-            // ── Üst bildirim banneri — TopAppBar'ın hemen altında ────────────
             TopNotificationBanner(
                 data = notification,
                 modifier = Modifier
@@ -399,7 +387,6 @@ fun ChatScreen(
     }
 }
 
-// ── Üst bildirim banneri ──────────────────────────────────────────────────────
 
 @Composable
 private fun TopNotificationBanner(
@@ -460,7 +447,6 @@ private fun TopNotificationBanner(
     }
 }
 
-// ── DiagnosticsCard ───────────────────────────────────────────────────────────
 
 @Composable
 private fun DiagnosticsCard(
@@ -571,7 +557,6 @@ private fun DiagnosticsCard(
     }
 }
 
-// ── Composer ──────────────────────────────────────────────────────────────────
 
 @Composable
 private fun Composer(
@@ -594,12 +579,10 @@ private fun Composer(
                 .onPreviewKeyEvent { keyEvent ->
                     if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Enter) {
                         if (keyEvent.isShiftPressed) {
-                            // Shift+Enter → imlecin bulunduğu konuma \n ekle, imleci sonraki satıra taşı
                             val cursor = draft.selection.end
                             val newText = draft.text.substring(0, cursor) + "\n" + draft.text.substring(cursor)
                             onChange(TextFieldValue(text = newText, selection = TextRange(cursor + 1)))
                         } else {
-                            // Enter → gönder
                             onSend()
                         }
                         true
@@ -633,7 +616,6 @@ private fun Composer(
     }
 }
 
-// ── Bubble ────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun Bubble(msg: Message, tightWithPrev: Boolean) {

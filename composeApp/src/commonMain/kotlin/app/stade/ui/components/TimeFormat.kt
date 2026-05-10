@@ -5,13 +5,6 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-/**
- * Mesaj zaman damgası formatlama.
- * - Bugün ise: HH:mm
- * - Dün ise: "dün HH:mm"
- * - Bu yıl ise: "DD.MM HH:mm"
- * - Daha eski: "DD.MM.YY HH:mm"
- */
 fun formatChatTime(epochMillis: Long): String {
     val tz = TimeZone.currentSystemDefault()
     val nowEpochMs = Clock.System.now().toEpochMilliseconds()
@@ -38,7 +31,6 @@ fun formatChatTime(epochMillis: Long): String {
 }
 
 private fun epochDays(d: LocalDateTime): Long {
-    // Basit Julian-day yaklaşımı; tam doğruluk gerekmez (sadece "kaç gün önce" sayımı için).
     val y = d.year.toLong()
     val m = d.monthNumber.toLong()
     val day = d.dayOfMonth.toLong()

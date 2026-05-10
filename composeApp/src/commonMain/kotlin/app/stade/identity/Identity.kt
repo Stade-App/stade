@@ -4,16 +4,16 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class LocalIdentity(
-    val id: String,                       // = stadeId (kanonik kimlik)
+    val id: String,
     val nickname: String,
-    val publicSigningKey: ByteArray,      // Ed25519 (32 B)
-    val privateSigningKey: ByteArray,     // Ed25519
-    val publicHandshakeKey: ByteArray,    // X25519 (32 B)
-    val privateHandshakeKey: ByteArray,   // X25519
-    val publicMlKemKey: ByteArray,        // ML-KEM-768 (~1184 B)
-    val privateMlKemKey: ByteArray,       // ML-KEM-768 (~2400 B)
-    val publicMlDsaKey: ByteArray,        // ML-DSA-65 (~1952 B)
-    val privateMlDsaKey: ByteArray,       // ML-DSA-65 (~4032 B)
+    val publicSigningKey: ByteArray,
+    val privateSigningKey: ByteArray,
+    val publicHandshakeKey: ByteArray,
+    val privateHandshakeKey: ByteArray,
+    val publicMlKemKey: ByteArray,
+    val privateMlKemKey: ByteArray,
+    val publicMlDsaKey: ByteArray,
+    val privateMlDsaKey: ByteArray,
     val createdAt: Long
 ) {
     val stadeId: String get() = id

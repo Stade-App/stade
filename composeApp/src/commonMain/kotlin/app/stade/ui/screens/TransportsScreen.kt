@@ -114,8 +114,6 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                                 onSave = { newCfg ->
                                     container.transportSettings.setConfig(TransportType.TOR, newCfg)
                                     configs = container.transportSettings.all()
-                                    // Çalışan transport yeni config'i okuyabilmesi için
-                                    // durdur+başlat. Yoksa SOCKS portu değişikliği uygulanmaz.
                                     scope.launch {
                                         runCatching { container.connections.restart(TransportType.TOR) }
                                     }

@@ -32,7 +32,6 @@ class AppContainer(
 
     val db: StadeDb = run {
         val driver = driverFactory.create()
-        // Schema sürüm probe — yeni v2 sütunu yoksa eski DB; sıfırla.
         val schemaOk = runCatching {
             driver.executeQuery(
                 identifier = null,
@@ -42,7 +41,6 @@ class AppContainer(
             )
         }.isSuccess
         if (!schemaOk) {
-            // Tüm tabloları drop et ve schema'yı yeniden oluştur. Clean-slate.
             val indexes = listOf("idxMessageContact", "idxOutboxContact")
             val tables = listOf(
                 "Outbox", "Message", "Contact", "PendingContact",
@@ -53,7 +51,6 @@ class AppContainer(
             StadeDb.Schema.create(driver)
         }
         val database = StadeDb(driver)
-        // Schema sürümünü işaretle (gelecekte ek migration tetikleyebilir)
         runCatching {
             database.stadeDbQueries.putKv("schema.version", "2".encodeToByteArray())
         }
@@ -78,15 +75,7 @@ class AppContainer(
     }
     val secrets = SecretStore(db, crypto)
 
-    /**
-     * Şu an hangi kişinin sohbeti ekranda açık.
-     * ChatScreen giriş/çıkışında set/clear edilir.
-     */
     @Volatile var activeContactId: String? = null
 
-    /**
-     * Uygulama ön planda mı? Android'de ActivityLifecycleCallbacks ile yönetilir.
-     * Arka plana geçildiğinde false olur → aktif sohbet için de bildirim gönderilir.
-     */
     @Volatile var isAppInForeground: Boolean = true
 }

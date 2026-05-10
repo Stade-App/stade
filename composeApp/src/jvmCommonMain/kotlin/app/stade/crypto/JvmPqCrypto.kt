@@ -1,9 +1,5 @@
 package app.stade.crypto
 
-// NOTE: Bu sınıf BC'yi bilinçli olarak **lightweight API** üzerinden kullanır;
-// Security.addProvider(BouncyCastleProvider()) ÇAĞRILMAZ. Aksi halde Android'de
-// Conscrypt ile sıralama çatışmaları yaşanır. Tüm PQ ilkelleri aşağıdaki paketten
-// gelir: org.bouncycastle.pqc.crypto.crystals.{kyber,dilithium} (BC 1.78.x).
 
 import org.bouncycastle.pqc.crypto.crystals.dilithium.DilithiumKeyGenerationParameters
 import org.bouncycastle.pqc.crypto.crystals.dilithium.DilithiumKeyPairGenerator

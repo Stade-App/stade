@@ -44,11 +44,9 @@ class StadeService : Service() {
         super.onDestroy()
     }
 
-    // ── Kanallar ────────────────────────────────────────────────────────────────
 
     private fun ensureChannels() {
         val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        // Bağlantı kanalı (öncelik: MIN, sessiz)
         if (mgr.getNotificationChannel(channelId) == null) {
             mgr.createNotificationChannel(
                 NotificationChannel(channelId, "Bağlantı", NotificationManager.IMPORTANCE_MIN).apply {
@@ -57,7 +55,6 @@ class StadeService : Service() {
                 }
             )
         }
-        // Mesaj kanalı (öncelik: HIGH, ses + titreşim)
         if (mgr.getNotificationChannel(msgChannelId) == null) {
             mgr.createNotificationChannel(
                 NotificationChannel(msgChannelId, "Mesajlar", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -68,7 +65,6 @@ class StadeService : Service() {
         }
     }
 
-    // ── Ön plan bildirimi ────────────────────────────────────────────────────────
 
     private fun buildForegroundNotification(): Notification =
         NotificationCompat.Builder(this, channelId)
@@ -80,7 +76,6 @@ class StadeService : Service() {
             .build()
 
 
-    // ── SyncEngine olaylarını dinle ──────────────────────────────────────────────
 
     private fun observeMessages() {
         val container = (application as StadeApplication).container
@@ -117,7 +112,6 @@ class StadeService : Service() {
         }
     }
 
-    // ── Gizlilik bildirimi (tek bildirim, sayaç güncellenir) ────────────────────
 
     private fun showPrivacyNotification(count: Int) {
         val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -141,7 +135,6 @@ class StadeService : Service() {
     }
 
 
-    // ── Mesaj bildirimi ──────────────────────────────────────────────────────────
 
     private fun showMessageNotification(contactId: String, senderName: String, preview: String) {
         val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -162,7 +155,6 @@ class StadeService : Service() {
             .setAutoCancel(true)
             .setContentIntent(openIntent)
             .build()
-        // Her kişi için ayrı bildirim id'si
         val notifId = (contactId.hashCode() and 0x7FFFFFFF) + 1000
         mgr.notify(notifId, notif)
     }

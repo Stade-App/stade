@@ -35,9 +35,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
-/**
- * Tıklanabilir, kopyalanan zaman geri bildirim veren Stade ID kartı.
- */
 @Composable
 fun StadeIdCard(
     stadeId: String,
@@ -47,7 +44,6 @@ fun StadeIdCard(
     val clipboard = LocalClipboardManager.current
     var copied by remember(stadeId) { mutableStateOf(false) }
 
-    // Radiusu buradan kontrol edebilirsin. 12.dp daha az yuvarlaktır.
     val cardShape = MaterialTheme.shapes.medium
 
     LaunchedEffect(copied) {
@@ -60,12 +56,12 @@ fun StadeIdCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(cardShape) // 1. Önce kırpıyoruz ki ripple (tıklama efekti) dışarı taşmasın
-            .clickable {    // 2. Sonra tıklanabilir yapıyoruz
+            .clip(cardShape)
+            .clickable {
                 clipboard.setText(AnnotatedString(stadeId))
                 copied = true
             },
-        shape = cardShape, // Kartın kendi görsel şekli
+        shape = cardShape,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
         ),
@@ -115,14 +111,9 @@ fun StadeIdCard(
     }
 }
 
-/**
- * Transport URI'sini kullanıcıya gösterilecek opak bir hâle dönüştürür.
- * Onion ve IP/host bilgisi ASLA tam görüntülenmez.
- */
 fun maskAddress(addr: String): String {
     return when {
         addr.startsWith("tor://", ignoreCase = true) -> {
-            // tor://abcdef…onion:5901 → "Uzak ağ • a…1"
             val rest = addr.removePrefix("tor://").substringBefore(':')
             val first = rest.firstOrNull()?.toString() ?: "?"
             val last = rest.lastOrNull()?.toString() ?: "?"

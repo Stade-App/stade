@@ -1,29 +1,5 @@
 package app.stade.crypto
 
-/**
- * Çift halka (Double Ratchet) — PQ hibrit varyant.
- *
- * Her DH ratchet step'inde X25519 paylaşılan gizliye **ek** bir ML-KEM-768
- * paylaşılan gizlisi karıştırılır. Yeni X25519 ratchet pub'u publish edilirken
- * **aynı header'da** yeni bir ML-KEM-768 ratchet pub'u da publish edilir.
- * Karşı taraf bu pub'a encapsulate edip ürettiği ciphertext'i bir SONRAKİ giden
- * mesajının header'ında geri yollar; her iki taraf da aynı `kemSs`'i elde eder
- * ve kök / zincir anahtarına dahil eder.
- *
- * Header v2 wire formatı (DH ratchet adımı için, big-endian):
- *
- *   offset  size  field
- *   0       2     headerVersion = 0x0002
- *   2       1     flags  (bit0: hasKemPub, bit1: hasKemCt)
- *   3       4     previousCounter
- *   7       4     counter
- *   11      32    dhPub (X25519)
- *   43      1184  mlkemRatchetPub        (yalnızca flag bit0)
- *   1227    1088  mlkemRatchetCt         (yalnızca flag bit1)
- *
- * `headerLen` her zaman ilk 4 baytta (frame içinde) tutulduğundan değişken
- * uzunluk parserda flag tabanlı işlenir.
- */
 class DoubleRatchet(
     private val crypto: CryptoApi,
     private val pq: PqCrypto
@@ -36,11 +12,10 @@ class DoubleRatchet(
         var dhSendPriv: ByteArray,
         var dhSendPub: ByteArray,
         var dhRecvPub: ByteArray?,
-        // PQ ratchet alanları
-        var mlkemSendPriv: ByteArray,        // boş başlar — ilk DH ratchet adımında üretilir
-        var mlkemSendPub: ByteArray,         // boş başlar
-        var mlkemRecvPub: ByteArray?,        // peer'ın bize publish ettiği son ratchet KEM pub
-        var pendingKemCiphertext: ByteArray?,// sıradaki giden mesajda iliştirilecek ct
+        var mlkemSendPriv: ByteArray,
+        var mlkemSendPub: ByteArray,
+        var mlkemRecvPub: ByteArray?,
+        var pendingKemCiphertext: ByteArray?,
         var sendCounter: Int,
         var recvCounter: Int,
         var previousSendCounter: Int,
@@ -49,10 +24,6 @@ class DoubleRatchet(
 
     data class SkippedKey(val dhPub: List<Byte>, val counter: Int)
 
-    /**
-     * Genişletilmiş header. Eski 32+8 byte düzeniyle geriye-uyumsuz; bu sürümde
-     * **tüm** header'lar v2 formatındadır.
-     */
     data class Header(
         val dhPub: ByteArray,
         val previousCounter: Int,
@@ -128,8 +99,6 @@ class DoubleRatchet(
         val chain = state.sendChainKey ?: error("send chain not initialized")
         val (newChain, messageKey) = kdfChain(chain)
         state.sendChainKey = newChain
-        // Bu mesaj header'ında: kendi mlkemSendPub'umuzu (varsa) publish ediyoruz,
-        // ve önceden üretilmiş bir pending ct varsa peer'a iliştiriyoruz (bir kez).
         val headerKemPub = state.mlkemSendPub.takeIf { it.isNotEmpty() }
         val headerKemCt = state.pendingKemCiphertext
         val header = Header(
@@ -139,7 +108,6 @@ class DoubleRatchet(
             mlkemPub = headerKemPub,
             mlkemCt = headerKemCt
         )
-        // pending ct'yi yedik — bir daha göndermeyelim
         state.pendingKemCiphertext = null
         state.sendCounter += 1
         val nonce = crypto.hkdf(messageKey, ByteArray(0), "stade-dr-nonce".encodeToByteArray(), 12)
@@ -258,8 +226,6 @@ class DoubleRatchet(
         val recvPub = state.dhRecvPub ?: return
         var localChain = chain
         var counter = state.recvCounter
-        // PQ + DH ratchet ile her step iki KDF girdisi tükettiğinden limiti
-        // 64 → 128'e çıkardık (DoS riskine karşı yine sınırlı).
         val limit = until.coerceAtMost(counter + 128)
         while (counter < limit) {
             val (next, mk) = kdfChain(localChain)
@@ -277,32 +243,26 @@ class DoubleRatchet(
         state.recvCounter = 0
         state.dhRecvPub = header.dhPub
 
-        // Receiving step
         val sharedRecv = crypto.keyAgreement(state.dhSendPriv, header.dhPub)
         val recvSecret = sharedRecv + (incomingKemSs ?: ByteArray(0))
         val derivedRecv = crypto.hkdf(recvSecret, state.rootKey, "stade-pqdr-step-v2".encodeToByteArray(), 64)
         state.rootKey = derivedRecv.copyOfRange(0, 32)
         state.recvChainKey = derivedRecv.copyOfRange(32, 64)
 
-        // Yeni X25519 ratchet keypair üret
         val newDh = crypto.generateAgreementKeyPair()
         state.dhSendPriv = newDh.privateKey
         state.dhSendPub = newDh.publicKey
 
-        // Yeni ML-KEM ratchet keypair üret (peer bunu sonraki gönderiminde encapsulate edecek)
         val newKem = pq.generateMlKemKeyPair()
         state.mlkemSendPriv = newKem.privateKey
         state.mlkemSendPub = newKem.publicKey
 
-        // Sending step — peer'in DH pub'ı sabit; KEM tarafında bu adımda ek ss yok
-        // (peer'in ratchet KEM pub'unu şu an aldıysak yukarıda ayrıca karıştırırız).
         val sharedSend = crypto.keyAgreement(state.dhSendPriv, header.dhPub)
         val derivedSend = crypto.hkdf(sharedSend, state.rootKey, "stade-pqdr-step-v2".encodeToByteArray(), 64)
         state.rootKey = derivedSend.copyOfRange(0, 32)
         state.sendChainKey = derivedSend.copyOfRange(32, 64)
     }
 
-    /** Aynı DH dönemi içinde ek bir KEM ortak gizlisini root'a karıştır. */
     private fun mixKemSs(state: State, kemSs: ByteArray) {
         val derived = crypto.hkdf(kemSs, state.rootKey, "stade-pqdr-mix-v2".encodeToByteArray(), 32)
         state.rootKey = derived

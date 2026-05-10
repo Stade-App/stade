@@ -10,7 +10,6 @@ actual object InviteShare {
             val home = System.getProperty("user.home") ?: "."
             val file = File(home, "stade-invite-$safeNick.txt")
             file.writeText(invite)
-            // Dosya yöneticisinde göstermeye çalış (yoksa text editörle aç)
             runCatching {
                 if (Desktop.isDesktopSupported()) {
                     Desktop.getDesktop().open(file.parentFile ?: file)

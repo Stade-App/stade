@@ -91,12 +91,10 @@ fun ContactsScreen(
     var query by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
 
-    // ── Uzun basma aksiyon durumu ─────────────────────────────────────────────
     var actionContact by remember { mutableStateOf<Contact?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
 
-    // ── Uzun basma aksiyon dialog'u ───────────────────────────────────────────
     if (actionContact != null && !showDeleteConfirm) {
         val c = actionContact!!
         AlertDialog(
@@ -150,7 +148,6 @@ fun ContactsScreen(
         )
     }
 
-    // ── Silme onayı dialog'u ──────────────────────────────────────────────────
     if (showDeleteConfirm && actionContact != null) {
         val c = actionContact!!
         AlertDialog(
@@ -205,7 +202,6 @@ fun ContactsScreen(
         )
     }
 
-    // Kişi sayısı 1'e düşerse aramayı kapat
     LaunchedEffect(contacts.size) {
         if (contacts.size <= 1 && searchActive) {
             searchActive = false
@@ -213,12 +209,10 @@ fun ContactsScreen(
         }
     }
 
-    // Arama açıldığında klavyeyi göster
     LaunchedEffect(searchActive) {
         if (searchActive) focusRequester.requestFocus()
     }
 
-    // Geri tuşuyla aramayı kapat
     PlatformBackHandler(enabled = searchActive) {
         searchActive = false
         query = ""
@@ -375,7 +369,7 @@ private fun ContactRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = Color.Transparent, // Arka planı şeffaf bırakıyoruz
+        color = Color.Transparent,
     ) {
         Row(
             modifier = Modifier
@@ -384,10 +378,9 @@ private fun ContactRow(
                     onClick = { onClick() },
                     onLongClick = { onLongPress() }
                 )
-                .padding(horizontal = 16.dp, vertical = 16.dp), // Dikey boşluğu artırdık
+                .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar + aktiflik noktası (TwoPanelLayout ile aynı şekilde)
             Box {
                 Avatar(contact.nickname, size = 52.dp)
                 Box(
@@ -411,7 +404,6 @@ private fun ContactRow(
 
             Spacer(Modifier.width(16.dp))
 
-            // Bilgi Bölümü
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -435,12 +427,11 @@ private fun ContactRow(
                 Text(
                     lastMessage ?: "Henüz mesaj yok",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f), // Hafif şeffaflık modern gösterir
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                     maxLines = 1
                 )
             }
 
-            // Okunmamış sayısı
             if (unread > 0) {
                 Box(
                     Modifier
@@ -461,7 +452,7 @@ private fun ContactRow(
 }
 
 @Composable
-private fun Avatar(nickname: String, size: Dp = 52.dp) { // Boyutu 52.dp yaptık
+private fun Avatar(nickname: String, size: Dp = 52.dp) {
     Box(
         Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
         contentAlignment = Alignment.Center
@@ -469,7 +460,7 @@ private fun Avatar(nickname: String, size: Dp = 52.dp) { // Boyutu 52.dp yaptık
         Text(
             nickname.firstOrNull()?.uppercase() ?: "?",
             color = MaterialTheme.colorScheme.onSecondaryContainer,
-            style = MaterialTheme.typography.titleMedium // Yazıyı da hafif büyüttük
+            style = MaterialTheme.typography.titleMedium
         )
     }
 }

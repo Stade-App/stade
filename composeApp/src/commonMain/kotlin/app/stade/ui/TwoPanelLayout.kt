@@ -103,7 +103,6 @@ fun TwoPanelLayout(
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
     var query by remember { mutableStateOf("") }
 
-    // ── Kişi aksiyon durumu ───────────────────────────────────────────────────
     var deleteTargetContact by remember { mutableStateOf<Contact?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
@@ -113,7 +112,6 @@ fun TwoPanelLayout(
         else contacts.filter { it.nickname.contains(query.trim(), ignoreCase = true) }
     }
 
-    // ── Silme onayı dialog'u ──────────────────────────────────────────────────
     if (showDeleteConfirm && deleteTargetContact != null) {
         val c = deleteTargetContact!!
         AlertDialog(
@@ -182,7 +180,6 @@ fun TwoPanelLayout(
 
     Row(modifier = Modifier.fillMaxSize()) {
 
-        // ── Sol panel ─────────────────────────────────────────────────────────
         Surface(
             modifier = Modifier.width(320.dp).fillMaxHeight(),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -335,7 +332,6 @@ fun TwoPanelLayout(
 
         VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-        // ── Sağ panel ─────────────────────────────────────────────────────────
         Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
             when (val rp = right) {
                 is PanelRight.Empty -> Box(
@@ -346,17 +342,14 @@ fun TwoPanelLayout(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // 1. Grup: Logo ve Başlık (Bunlar birbirine çok yakın olacak)
                         Row(
-                            verticalAlignment = Alignment.CenterVertically, // Logo ile yazıları dikeyde ortalar
-                            horizontalArrangement = Arrangement.spacedBy(16.dp) // Logo ile yazı bloğu arasındaki mesafe
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            // 1. Logo (Sol taraf)
                             BrandMark(size = 150.dp)
 
-                            // 2. Yazı bloğu (Sağ taraf)
                             Column(
-                                verticalArrangement = Arrangement.spacedBy(6.dp) // "Stade" ve altındaki yazı arası
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
                                     "Stade",
@@ -412,7 +405,6 @@ fun TwoPanelLayout(
     }
 }
 
-// ── Kişi satırı ───────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -429,7 +421,6 @@ private fun PanelContactRow(
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
 
-    // Sağ tık bağlam menüsü durumu
     var showContextMenu by remember { mutableStateOf(false) }
     var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
     var rowHeightPx by remember { mutableStateOf(0) }
@@ -447,17 +438,12 @@ private fun PanelContactRow(
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
-                            // DEĞİŞİKLİK BURADA: event.button ve PointerButton yerine
-                            // event.buttons.isSecondaryPressed kullanıyoruz.
                             if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
                                 val pos = event.changes.firstOrNull()?.position
                                 if (pos != null) {
                                     menuOffset = with(density) {
                                         DpOffset(
                                             x = pos.x.toDp(),
-                                            // y: tıklanan noktadan itibaren aç
-                                            // DropdownMenu default olarak Box'ın altından açıldığından
-                                            // rowHeight - clickY kadar yukarı çekelim
                                             y = pos.y.toDp() - rowHeightPx.toDp()
                                         )
                                     }
@@ -471,7 +457,6 @@ private fun PanelContactRow(
                 .padding(horizontal = 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Sol seçim çubuğu
             Box(
                 Modifier
                     .size(width = 3.dp, height = 36.dp)
@@ -482,7 +467,6 @@ private fun PanelContactRow(
             )
             Spacer(Modifier.width(8.dp))
 
-            // Avatar + online noktası
             Box {
                 Avatar(name = contact.nickname, size = 42.dp)
                 Box(
@@ -503,9 +487,7 @@ private fun PanelContactRow(
 
             Spacer(Modifier.width(12.dp))
 
-            // Metin sütunu — isim üstte, son mesaj + saat altta sağda
             Column(Modifier.weight(1f)) {
-                // ── Satır 1: İsim + doğrulandı işareti ───────────────────────
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         contact.nickname,
@@ -525,7 +507,6 @@ private fun PanelContactRow(
                     }
                 }
                 Spacer(Modifier.height(2.dp))
-                // ── Satır 2: Son mesaj (sol) + saat (sağ alt) ────────────────
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -567,7 +548,6 @@ private fun PanelContactRow(
             }
         }
 
-        // ── Sağ tık bağlam menüsü ─────────────────────────────────────────────
         DropdownMenu(
             expanded = showContextMenu,
             onDismissRequest = { showContextMenu = false },

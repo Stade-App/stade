@@ -15,7 +15,6 @@ actual class DriverFactory {
         if (fresh) {
             StadeDb.Schema.create(driver)
         }
-        // Şema sürüm probe & clean-slate AppContainer'da yapılıyor.
         return driver
     }
 }

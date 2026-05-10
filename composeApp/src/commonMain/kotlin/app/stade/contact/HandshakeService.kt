@@ -7,36 +7,6 @@ import app.stade.crypto.PqCrypto
 import app.stade.identity.LocalIdentity
 import app.stade.identity.StadeId
 
-/**
- * Davet (invite) — kullanıcıya `STADE2-…` opak bir Crockford Base32 dizisi olarak
- * gösterilir. İçeride binary bir paket vardır; tor:// / lan:// gibi transport
- * URI'leri kesinlikle UI'da görünmez, sadece payload'ta gezer.
- *
- * Wire format (binary, big-endian):
- *
- *   offset  size  field
- *   ------  ----  ----------------------------------------------------------
- *   0       4     magic = 'S' 'T' 'D' '2'
- *   4       1     version = 0x02
- *   5       1     flags     (rezerve, şu an 0)
- *   6       2     nicknameLen (UTF-8)
- *   8       N     nickname (UTF-8)
- *   8+N     32    Ed25519 public
- *   40+N    32    X25519  public
- *   72+N    1184  ML-KEM-768 public
- *   1256+N  1952  ML-DSA-65  public
- *   3208+N  2     addressBlobLen
- *   3210+N  M     addressBlob = utf8("addr1\naddr2\n…")
- *   3210+N+M 64   Ed25519 imza( TBS )
- *   3274+N+M 3309 ML-DSA-65 imza( TBS )
- *
- *   TBS = magic || version || flags || nicknameLen || nickname ||
- *         Ed25519pub || X25519pub || MLKEMpub || MLDSApub ||
- *         addressBlobLen || addressBlob
- *
- * Stade ID byte stream'inde **saklanmaz**; alıcı public key'lerden yeniden
- * türetir (StadeId.derive).
- */
 data class InvitePayload(
     val stadeId: String,
     val nickname: String,
@@ -48,9 +18,7 @@ data class InvitePayload(
 )
 
 data class InviteCode(
-    /** Kullanıcıya gösterilecek opak string (`STADE2-…`). */
     val display: String,
-    /** İç temsil — QR kütüphanesi de bunu alır. */
     val raw: ByteArray
 ) {
     override fun equals(other: Any?): Boolean =
@@ -58,10 +26,6 @@ data class InviteCode(
     override fun hashCode(): Int = display.hashCode() * 31 + raw.contentHashCode()
 }
 
-/**
- * Davet ayrıştırma sonucu — başarı veya teşhis edilebilir hata.
- * UI bu hatalardan kullanışlı bir mesaj üretir.
- */
 sealed class InviteParseResult {
     data class Ok(val payload: InvitePayload) : InviteParseResult()
     data class MissingPrefix(val firstChars: String) : InviteParseResult()
@@ -81,10 +45,9 @@ class HandshakeService(
     private val pq: PqCrypto
 ) {
 
-    private val magic = byteArrayOf(0x53, 0x54, 0x44, 0x32) // "STD2"
+    private val magic = byteArrayOf(0x53, 0x54, 0x44, 0x32)
     private val version: Byte = 0x02
 
-    // ── Davet üretimi ─────────────────────────────────────────────────────────
 
     fun createInvite(owner: LocalIdentity, addresses: List<String> = emptyList()): InviteCode {
         val cleanAddrs = addresses.filter { it.isNotBlank() }.distinct()
@@ -103,16 +66,7 @@ class HandshakeService(
         return InviteCode(display = "STADE2-$b32", raw = raw)
     }
 
-    // ── QR chunk kodlama ──────────────────────────────────────────────────────
 
-    /**
-     * Davet kodunu QR kodu kapasitesine sığan parçalara böler.
-     * Her parça "STDP/<idx>/<toplam>/<veri>" formatındadır.
-     * Alıcı taraf parçaları toplayıp birleştirerek orijinal STADE2-… kodunu elde eder.
-     *
-     * QR alfanümerik mod (Level L) max kapasitesi ≈ 4296 karakter.
-     * Güvenli sınır olarak 4100 kullanılıyor.
-     */
     fun createQrChunks(invite: InviteCode): List<String> {
         val b32 = invite.display.removePrefix("STADE2-")
         val chunkSize = 4100
@@ -124,14 +78,10 @@ class HandshakeService(
         }
     }
 
-    // ── Davet ayrıştırma + doğrulama ─────────────────────────────────────────
 
     fun parseInvite(code: String): InvitePayload? =
         (parseInviteDetailed(code) as? InviteParseResult.Ok)?.payload
 
-    /**
-     * Aynı parse ama hatayı yutmaz — UI'da kullanıcıya nereden bozulduğunu söylemek için.
-     */
     fun parseInviteDetailed(code: String): InviteParseResult {
         val stripped = code.replace(Regex("[^A-Za-z0-9]"), "").uppercase()
         if (!stripped.startsWith("STADE2")) {
@@ -155,7 +105,7 @@ class HandshakeService(
         off += 4
         if (raw[off] != version) return InviteParseResult.BadVersion(raw[off].toInt() and 0xff)
         off += 1
-        off += 1 // flags
+        off += 1
         val nickLen = readU16(raw, off); off += 2
         if (nickLen < 0 || nickLen > 1024 || off + nickLen > raw.size) {
             return InviteParseResult.BadNickname(nickLen)
@@ -204,28 +154,10 @@ class HandshakeService(
     }
 
     companion object {
-        /** ML-DSA-65 (Dilithium3) imza uzunluğu — BC 1.78.x deterministik 3309 üretir. */
         const val DSA_SIG_LEN: Int = 3309
     }
 
-    // ── PQXDH hibrit anahtar türetimi ─────────────────────────────────────────
 
-    /**
-     * Yeni kişi tanışmasında kullanılan hibrit kök anahtar türetimi.
-     *
-     * - x25519 = X25519(ownerPriv, peerPub)
-     * - kemSs  = ML-KEM-768 ortak gizli (Alice encapsulate eder, Bob decapsulate)
-     * - rootKey = HKDF(secret = x25519 || kemSs,
-     *                  salt   = Blake2b(transcript),
-     *                  info   = "stade-pqxdh-root-v2",
-     *                  L      = 32)
-     *
-     * Transcript downgrade attack koruması için içerir:
-     *   "stade-pqxdh-v2" || min(ownerStadeId, peerStadeId) || max(...) ||
-     *   loEdPub || hiEdPub || loXPub || hiXPub ||
-     *   loKemPub || hiKemPub || kemCiphertext
-     *   (lo/hi = stadeId leksikografik sırasına göre — her iki tarafta kanonik)
-     */
     fun deriveRootKey(
         owner: LocalIdentity,
         peer: InvitePayload,
@@ -235,7 +167,6 @@ class HandshakeService(
         val dh = crypto.keyAgreement(owner.privateHandshakeKey, peer.handshakePublicKey)
         val ownerId = owner.stadeId.encodeToByteArray()
         val peerId = peer.stadeId.encodeToByteArray()
-        // Transkript her iki tarafta da aynı olsun: her şeyi stadeId sıralamasına göre kanonik hale getir.
         val ownerIsLo = compareLex(ownerId, peerId) <= 0
         val (lo, hi) = if (ownerIsLo) ownerId to peerId else peerId to ownerId
         val (loSigningPub, hiSigningPub) =
@@ -258,23 +189,15 @@ class HandshakeService(
         return crypto.hkdf(secret, salt, "stade-pqxdh-root-v2".encodeToByteArray(), 32)
     }
 
-    /** Bob'un peer'a gönderdiği KEM ciphertext'i + Bob tarafındaki ortak gizli. */
     fun encapsulateForPeer(peer: InvitePayload): KemResult =
         pq.mlkemEncapsulate(peer.mlkemPublicKey)
 
-    /** Alice tarafı: gelen ct'den ortak gizliyi çıkarır. */
     fun decapsulate(owner: LocalIdentity, ciphertext: ByteArray): ByteArray =
         pq.mlkemDecapsulate(owner.privateMlKemKey, ciphertext)
 
-    /**
-     * "Alice" kim? Stade ID'leri leksikografik karşılaştırarak deterministik karar.
-     * Alice rolü ML-KEM şifreyi göndermekten sorumlu olabilir; ancak SyncEngine
-     * KEM_OFFER yönünü kendi belirler (her iki tarafta tutarlı olduğu sürece).
-     */
     fun isAlice(owner: LocalIdentity, peer: InvitePayload): Boolean =
         compareLex(owner.stadeId.encodeToByteArray(), peer.stadeId.encodeToByteArray()) < 0
 
-    // ── helpers ───────────────────────────────────────────────────────────────
 
     private fun composeTbs(
         nickname: String,

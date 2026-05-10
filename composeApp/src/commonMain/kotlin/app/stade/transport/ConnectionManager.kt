@@ -38,12 +38,6 @@ class ConnectionManager(
     private val tasks = mutableListOf<Job>()
     private val backoff = mutableMapOf<String, Long>()
     private val dialing = mutableSetOf<String>()
-    /**
-     * Davet kabul edilmiş ama henüz Contact'a dönüşmemiş adresler.
-     * Handshake bittiğinde SyncEngine bu bağlantıyı işler ve Contact otomatik
-     * eklenir; bu listeden çıkan adresler ContactManager içindeki contact'a
-     * geçer.
-     */
     private val pendingDial = mutableSetOf<String>()
 
     private val _diagnostics = MutableStateFlow<Map<String, Map<String, DialAttempt>>>(emptyMap())
@@ -61,12 +55,6 @@ class ConnectionManager(
             .filter { it.isNotBlank() }
             .distinct()
 
-    /**
-     * Davet kabul edildiğinde, henüz contact olmayan ama bağlanması istenen
-     * adresleri kuyruğa alır. Dialer döngüsü bunları bilinen contact adresleriyle
-     * birlikte deneyecek; başarılı handshake olunca SyncEngine yeni Contact'ı
-     * yaratır.
-     */
     fun queueDial(addresses: List<String>) {
         val selfSet = runCatching { selfAddresses().toSet() }.getOrDefault(emptySet())
         synchronized(pendingDial) {
@@ -100,11 +88,6 @@ class ConnectionManager(
 
     suspend fun stop() = mutex.withLock { stopInternal() }
 
-    /**
-     * Tek bir taşıma katmanını durdurup yeniden başlatır. Config değişikliğinin
-     * (örn. Tor SOCKS portu) hemen geçerli olması için Settings ekranı bunu
-     * çağırır. Genel start() çalışmıyorsa hiçbir şey yapmaz.
-     */
     suspend fun restart(type: TransportType) = mutex.withLock {
         val owner = ownerRef ?: return@withLock
         val plugin = registry.get(type) ?: return@withLock
@@ -140,7 +123,6 @@ class ConnectionManager(
                     backoff[contact.id] = now + 10_000L
                 }
             }
-            // Davet kabul edildiğinde gelen ama henüz contact olmayan adresler
             tryDialPending(owner, now)
             delay(5_000)
         }
@@ -155,7 +137,7 @@ class ConnectionManager(
             .toSet()
         for (addr in pending) {
             if (addr in knownAddrs) {
-                consumePendingAddress(addr) // zaten contact'ta var
+                consumePendingAddress(addr)
                 continue
             }
             val key = "pending|$addr"
@@ -170,7 +152,7 @@ class ConnectionManager(
                 runCatching { sync.handleConnection(owner, conn) }
                 consumePendingAddress(addr)
             }
-            return // her tarama döngüsünde tek pending tetikle
+            return
         }
     }
 

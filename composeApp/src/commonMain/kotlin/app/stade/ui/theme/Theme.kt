@@ -14,7 +14,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// ── Marka rengi: derin okyanus mavisi → akıcı camgöbeği ──
 private val Primary     = Color(0xFF1E6091)
 private val PrimaryDark = Color(0xFF0B3D62)
 private val Accent      = Color(0xFF61A5C2)

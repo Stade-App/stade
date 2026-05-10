@@ -32,7 +32,6 @@ class StadeApplication : Application() {
                 BluetoothTransport { bluetoothAdapter() }
             )
         }
-        // Ön plan / arka plan takibi — sıfır bağımlılık, saf Android API
         var startedCount = 0
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {

@@ -156,7 +156,6 @@ fun SettingsScreen(
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
 
-            // ── Profil başlığı ───────────────────────────────────
             item {
                 ProfileHeader(
                     owner = owner,
@@ -169,7 +168,6 @@ fun SettingsScreen(
                 )
             }
 
-            // ── Stade ID kartı ───────────────────────────────────
             item {
                 SettingsSectionLabel("Kimlik")
                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -177,7 +175,6 @@ fun SettingsScreen(
                 }
             }
 
-            // ── Görünüm (yalnızca Android 12+) ──────────────────
             if (isDynamicColorSupported) {
                 item {
                     SettingsSectionLabel("Görünüm")
@@ -194,7 +191,6 @@ fun SettingsScreen(
                 }
             }
 
-            // ── Bildirimler (yalnızca Android) ──────────────────
             if (isNotificationSupported) {
                 item {
                     SettingsSectionLabel("Bildirimler")
@@ -242,7 +238,6 @@ fun SettingsScreen(
                 }
             }
 
-            // ── Ağ Bağlantısı ────────────────────────────────────
             item {
                 SettingsSectionLabel("Ağ Bağlantısı")
                 SettingsGroup {
@@ -256,7 +251,6 @@ fun SettingsScreen(
                 }
             }
 
-            // ── Hesap ────────────────────────────────────────────
             item {
                 SettingsSectionLabel("Hesap")
                 SettingsGroup {
@@ -274,7 +268,6 @@ fun SettingsScreen(
     }
 }
 
-// ── Profil başlığı bileşeni ──────────────────────────────────────────────────
 
 @Composable
 private fun ProfileHeader(
@@ -283,7 +276,6 @@ private fun ProfileHeader(
     copied: Boolean,
     onCopyFingerprint: () -> Unit
 ) {
-    // 1. Şekli bir değişkene atayalım ki hem Card hem de clip için aynı olsun
     val cardShape = RoundedCornerShape(16.dp)
 
     Box(
@@ -300,10 +292,8 @@ private fun ProfileHeader(
                 .padding(top = 20.dp, bottom = 28.dp, start = 24.dp, end = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Büyük avatar
             Avatar(name = owner.nickname, size = 84.dp)
             Spacer(Modifier.height(14.dp))
-            // İsim
             Text(
                 owner.nickname,
                 style = MaterialTheme.typography.headlineSmall,
@@ -317,13 +307,12 @@ private fun ProfileHeader(
             )
             Spacer(Modifier.height(16.dp))
 
-            // 2. Card modifier'larını güncelledik
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(cardShape) // ÖNEMLİ: Önce kırp (clip)
-                    .clickable { onCopyFingerprint() }, // Sonra tıklanabilir yap
-                shape = cardShape, // Kartın kendi şekli
+                    .clip(cardShape)
+                    .clickable { onCopyFingerprint() },
+                shape = cardShape,
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                 ),
@@ -378,7 +367,6 @@ private fun ProfileHeader(
     }
 }
 
-// ── Bölüm başlığı ────────────────────────────────────────────────────────────
 
 @Composable
 private fun SettingsSectionLabel(title: String) {
@@ -390,7 +378,6 @@ private fun SettingsSectionLabel(title: String) {
     )
 }
 
-// ── Ayar grubu kartı ─────────────────────────────────────────────────────────
 
 @Composable
 private fun SettingsGroup(content: @Composable () -> Unit) {
@@ -406,7 +393,6 @@ private fun SettingsGroup(content: @Composable () -> Unit) {
     }
 }
 
-// ── Satır: Toggle / Switch ────────────────────────────────────────────────────
 
 @Composable
 private fun SwitchSettingsRow(
@@ -439,7 +425,6 @@ private fun SwitchSettingsRow(
     }
 }
 
-// ── Satır: Navigasyon / Chevron ───────────────────────────────────────────────
 
 @Composable
 private fun NavigationSettingsRow(
@@ -474,7 +459,6 @@ private fun NavigationSettingsRow(
     }
 }
 
-// ── Satır: Aksiyon (tıklanabilir, renk özelleştirilebilir) ──────────────────
 
 @Composable
 private fun ActionSettingsRow(
@@ -505,7 +489,6 @@ private fun ActionSettingsRow(
     }
 }
 
-// ── İkon kutusu (yuvarlak köşeli, renkli arka plan) ──────────────────────────
 
 @Composable
 private fun SettingsIconBox(icon: ImageVector, tint: Color) {

@@ -38,9 +38,6 @@ class TorTransport(
         val cfg = parseConfig(configProvider())
         val cfgHost = cfg["socksHost"]?.takeIf { it.isNotBlank() } ?: defaultSocksHost
         val cfgPort = cfg["socksPort"]?.toIntOrNull()?.takeIf { it in 1..65535 } ?: defaultSocksPort
-        // Önce kullanıcı yapılandırmasını dene; başarısızsa standart Tor (9050)
-        // ve Tor Browser (9150) portlarını otomatik tara. Hangisi cevap verirse
-        // onu kullan — kullanıcı manuel port denemek zorunda kalmasın.
         val probeOrder = buildList {
             add(cfgHost to cfgPort)
             if (cfgHost == "127.0.0.1") {
@@ -103,8 +100,6 @@ class TorTransport(
                 cfg["onion"].isNullOrBlank() -> append(" · onion adresi girilmedi")
             }
         }
-        // Yarı kanal da kullanılabilir: outbound varsa peer'lara erişebiliriz; sadece inbound varsa
-        // peer bize gelebilir. İkisi de yoksa transport gerçekten devre dışı.
         val anyUp = socksOk || listening
         state.value = TransportInfo(
             type, "Tor",

@@ -12,7 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import app.stade.StadeApplication
 
 actual val isDynamicColorSupported: Boolean
-    get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S  // API 31+
+    get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
 private val _dynamicColorEnabled by lazy {
     val prefs = StadeApplication.instance
