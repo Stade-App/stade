@@ -76,7 +76,7 @@ class StadeService : Service() {
             .setOngoing(true)
             .build()
 
-    // Gizlilik modunda biriken mesaj sayısı (servis yeniden başladığında sıfırlanır)
+    // Gizlilik modunda biriken toplam mesaj sayısı (servis yeniden başladığında sıfırlanır)
     private var hiddenMsgCount = 0
     private val hiddenNotifId = 9001
 
@@ -89,8 +89,10 @@ class StadeService : Service() {
                 when (event) {
                     is SyncEngine.SyncEvent.MessageReceived -> {
                         if (!getNotificationsEnabled().value) return@collect
+                        // Kullanıcı o sohbeti zaten açık görüyorsa bildirim basma
+                        if (container.activeContactId == event.contactId) return@collect
                         if (getNotificationPrivacyEnabled().value) {
-                            // Gizlilik modu: içerik gösterilmez, sayaç güncellenir
+                            // Gizlilik modu: içerik gösterilmez, tek birleşik bildirimde sayaç artar
                             hiddenMsgCount++
                             showPrivacyNotification()
                         } else {
@@ -107,7 +109,7 @@ class StadeService : Service() {
         }
     }
 
-    // ── Gizlilik bildirimi ───────────────────────────────────────────────────────
+    // ── Gizlilik bildirimi (tek bildirim, sayaç güncellenir) ────────────────────
 
     private fun showPrivacyNotification() {
         val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -129,6 +131,7 @@ class StadeService : Service() {
             .build()
         mgr.notify(hiddenNotifId, notif)
     }
+
 
     // ── Mesaj bildirimi ──────────────────────────────────────────────────────────
 

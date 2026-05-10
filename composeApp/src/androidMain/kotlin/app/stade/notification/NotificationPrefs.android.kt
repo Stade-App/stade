@@ -1,5 +1,6 @@
 package app.stade.notification
 
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
@@ -42,4 +43,12 @@ actual fun openNotificationSettings() {
     }
     runCatching { ctx.startActivity(intent) }
 }
+
+actual fun cancelMessagesNotification(contactId: String) {
+    val mgr = StadeApplication.instance
+        .getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    val notifId = (contactId.hashCode() and 0x7FFFFFFF) + 1000
+    mgr.cancel(notifId)
+}
+
 

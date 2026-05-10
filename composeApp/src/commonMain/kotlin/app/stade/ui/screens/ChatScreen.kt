@@ -54,6 +54,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -79,6 +80,7 @@ import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
 import app.stade.message.Message
 import app.stade.message.MessageDirection
+import app.stade.notification.cancelMessagesNotification
 import app.stade.sync.SyncEngine
 import app.stade.transport.DialAttempt
 import app.stade.ui.components.Avatar
@@ -151,6 +153,15 @@ fun ChatScreen(
                 else -> {}
             }
         }
+    }
+
+    // ── Sohbet açık olduğu süre aktif kişiyi işaretle ────────────────────────
+    // Bu sayede StadeService bu kişiye bildirim basmaz;
+    // ekrandan çıkınca (onDispose) işaret temizlenir.
+    DisposableEffect(contactId) {
+        container.activeContactId = contactId
+        cancelMessagesNotification(contactId)   // Varsa birikmiş bildirimi hemen sil
+        onDispose { container.activeContactId = null }
     }
 
     LaunchedEffect(contactId, messages.size) { container.messages.markRead(contactId) }

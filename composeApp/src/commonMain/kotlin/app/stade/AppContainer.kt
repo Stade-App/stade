@@ -77,4 +77,12 @@ class AppContainer(
         sync.selfAddressesProvider = { it.selfAddresses() }
     }
     val secrets = SecretStore(db, crypto)
+
+    /**
+     * Şu an hangi kişinin sohbeti ekranda açık.
+     * ChatScreen giriş/çıkışında set/clear edilir.
+     * StadeService bu değere bakarak zaten görülen
+     * sohbete bildirim basmaktan kaçınır.
+     */
+    @Volatile var activeContactId: String? = null
 }

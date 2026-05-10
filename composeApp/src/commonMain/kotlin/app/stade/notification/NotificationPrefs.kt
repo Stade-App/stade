@@ -23,3 +23,9 @@ expect fun setNotificationPrivacyEnabled(value: Boolean)
 /** Sistemin bildirim ayarları ekranını açar (desteklenmeyen platformda no-op). */
 expect fun openNotificationSettings()
 
+/**
+ * Belirli bir kişiye ait mesaj bildirimini (varsa) hemen iptal eder.
+ * ChatScreen açıldığında çağrılır; böylece zaten görülen bildirimler temizlenir.
+ */
+expect fun cancelMessagesNotification(contactId: String)
+

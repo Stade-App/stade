@@ -15,3 +15,4 @@ actual fun setNotificationPrivacyEnabled(value: Boolean) { }
 
 actual fun openNotificationSettings() { }
 
+actual fun cancelMessagesNotification(contactId: String) { }
