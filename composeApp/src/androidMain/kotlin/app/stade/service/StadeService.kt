@@ -10,6 +10,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import app.stade.MainActivity
 import app.stade.StadeApplication
+import app.stade.notification.NotificationIds
 import app.stade.notification.getNotificationPrivacyEnabled
 import app.stade.notification.getNotificationsEnabled
 import app.stade.sync.SyncEngine
@@ -17,12 +18,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 class StadeService : Service() {
     private val channelId = "stade.connectivity"
     private val msgChannelId = "stade.messages"
-    private val notificationId = 4242
+    private val notificationId = NotificationIds.FOREGROUND
+    private val hiddenNotifId = NotificationIds.HIDDEN_MESSAGES
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     override fun onCreate() {
@@ -76,9 +79,6 @@ class StadeService : Service() {
             .setOngoing(true)
             .build()
 
-    // Gizlilik modunda biriken toplam mesaj sayısı (servis yeniden başladığında sıfırlanır)
-    private var hiddenMsgCount = 0
-    private val hiddenNotifId = 9001
 
     // ── SyncEngine olaylarını dinle ──────────────────────────────────────────────
 
@@ -89,14 +89,10 @@ class StadeService : Service() {
                 when (event) {
                     is SyncEngine.SyncEvent.MessageReceived -> {
                         if (!getNotificationsEnabled().value) return@collect
-                        // Kullanıcı o sohbeti açık görüyorsa VE uygulama ön plandaysa bildirim basma.
-                        // isAppInForeground=false (arka plan) olduğunda sohbet ekranı açık olsa bile
-                        // kullanıcı mesajı göremez, bu yüzden bildirim gönderilmeli.
                         if (container.isAppInForeground && container.activeContactId == event.contactId) return@collect
                         if (getNotificationPrivacyEnabled().value) {
-                            // Gizlilik modu: içerik gösterilmez, tek birleşik bildirimde sayaç artar
-                            hiddenMsgCount++
-                            showPrivacyNotification()
+                            val total = runCatching { container.messages.totalUnread() }.getOrDefault(0L).toInt()
+                            if (total > 0) showPrivacyNotification(total)
                         } else {
                             val contact = container.contacts.get(event.contactId)
                             val senderName = contact?.nickname ?: "Bilinmeyen"
@@ -109,11 +105,21 @@ class StadeService : Service() {
                 }
             }
         }
+        scope.launch {
+            val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            container.messages.observeTotalUnread().distinctUntilChanged().collect { count ->
+                if (count == 0L) {
+                    mgr.cancel(hiddenNotifId)
+                } else if (getNotificationPrivacyEnabled().value && getNotificationsEnabled().value) {
+                    showPrivacyNotification(count.toInt())
+                }
+            }
+        }
     }
 
     // ── Gizlilik bildirimi (tek bildirim, sayaç güncellenir) ────────────────────
 
-    private fun showPrivacyNotification() {
+    private fun showPrivacyNotification(count: Int) {
         val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         val openIntent = PendingIntent.getActivity(
             this, hiddenNotifId,
@@ -125,8 +131,8 @@ class StadeService : Service() {
         val notif = NotificationCompat.Builder(this, msgChannelId)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
             .setContentTitle("Stade")
-            .setContentText("$hiddenMsgCount yeni mesajınız var")
-            .setNumber(hiddenMsgCount)
+            .setContentText("$count yeni mesajınız var")
+            .setNumber(count)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(openIntent)

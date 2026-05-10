@@ -165,11 +165,18 @@ class DoubleRatchet(
 
         val skippedKey = SkippedKey(header.dhPub.toList(), header.counter)
         state.skipped.remove(skippedKey)?.let { mk ->
-            return openWith(mk, ct, ad)
+            val out = openWith(mk, ct, ad)
+            if (out == null) state.skipped[skippedKey] = mk
+            return out
         }
 
-        // Peer KEM ct geri-yolladıysa, kendi gönderdiğimiz mlkemSendPriv ile aç
-        // (kendi son publish'imize karşılık); shared'ı root türetiminde kullanırız.
+        if (header.dhPub.contentEquals(state.dhSendPub)) return null
+        if (state.dhRecvPub != null && header.dhPub.contentEquals(state.dhRecvPub!!) &&
+            header.counter < state.recvCounter
+        ) return null
+
+        val snapshot = snapshotState(state)
+
         val peerSentKemCtForUs = header.mlkemCt
         val incomingKemSs: ByteArray? = if (peerSentKemCtForUs != null && state.mlkemSendPriv.isNotEmpty()) {
             runCatching { pq.mlkemDecapsulate(state.mlkemSendPriv, peerSentKemCtForUs) }.getOrNull()
@@ -179,30 +186,65 @@ class DoubleRatchet(
             skipMessageKeys(state, header.previousCounter)
             dhRatchet(state, header, incomingKemSs)
         } else if (incomingKemSs != null) {
-            // Aynı DH dönemi ama yine de KEM ct geldi (peer'in pending ct'si).
-            // Root'a karıştır:
             mixKemSs(state, incomingKemSs)
         }
 
-        // Peer yeni KEM pub publish ettiyse — bizim sıradaki gönderimiz için
-        // encapsulate edip pending'e koyalım.
         val peerKemPub = header.mlkemPub
         if (peerKemPub != null && (state.mlkemRecvPub == null || !peerKemPub.contentEquals(state.mlkemRecvPub!!))) {
             state.mlkemRecvPub = peerKemPub
             val enc = runCatching { pq.mlkemEncapsulate(peerKemPub) }.getOrNull()
             if (enc != null) {
                 state.pendingKemCiphertext = enc.ciphertext
-                // Bu yöndeki (peer→biz) shared'ı root'a karıştır:
                 mixKemSs(state, enc.sharedSecret)
             }
         }
 
         skipMessageKeys(state, header.counter)
-        val chain = state.recvChainKey ?: return null
+        val chain = state.recvChainKey ?: run { restoreState(state, snapshot); return null }
         val (newChain, messageKey) = kdfChain(chain)
         state.recvChainKey = newChain
         state.recvCounter += 1
-        return openWith(messageKey, ct, ad)
+        val plain = openWith(messageKey, ct, ad)
+        if (plain == null) {
+            restoreState(state, snapshot)
+            return null
+        }
+        return plain
+    }
+
+    private fun snapshotState(s: State): State = State(
+        rootKey = s.rootKey.copyOf(),
+        sendChainKey = s.sendChainKey?.copyOf(),
+        recvChainKey = s.recvChainKey?.copyOf(),
+        dhSendPriv = s.dhSendPriv.copyOf(),
+        dhSendPub = s.dhSendPub.copyOf(),
+        dhRecvPub = s.dhRecvPub?.copyOf(),
+        mlkemSendPriv = s.mlkemSendPriv.copyOf(),
+        mlkemSendPub = s.mlkemSendPub.copyOf(),
+        mlkemRecvPub = s.mlkemRecvPub?.copyOf(),
+        pendingKemCiphertext = s.pendingKemCiphertext?.copyOf(),
+        sendCounter = s.sendCounter,
+        recvCounter = s.recvCounter,
+        previousSendCounter = s.previousSendCounter,
+        skipped = LinkedHashMap(s.skipped)
+    )
+
+    private fun restoreState(s: State, snap: State) {
+        s.rootKey = snap.rootKey
+        s.sendChainKey = snap.sendChainKey
+        s.recvChainKey = snap.recvChainKey
+        s.dhSendPriv = snap.dhSendPriv
+        s.dhSendPub = snap.dhSendPub
+        s.dhRecvPub = snap.dhRecvPub
+        s.mlkemSendPriv = snap.mlkemSendPriv
+        s.mlkemSendPub = snap.mlkemSendPub
+        s.mlkemRecvPub = snap.mlkemRecvPub
+        s.pendingKemCiphertext = snap.pendingKemCiphertext
+        s.sendCounter = snap.sendCounter
+        s.recvCounter = snap.recvCounter
+        s.previousSendCounter = snap.previousSendCounter
+        s.skipped.clear()
+        s.skipped.putAll(snap.skipped)
     }
 
     private fun openWith(messageKey: ByteArray, ct: ByteArray, ad: ByteArray): ByteArray? {

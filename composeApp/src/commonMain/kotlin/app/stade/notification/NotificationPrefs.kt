@@ -29,3 +29,9 @@ expect fun openNotificationSettings()
  */
 expect fun cancelMessagesNotification(contactId: String)
 
+/**
+ * Tüm aktif mesaj/gizlilik bildirimlerini temizler. Uygulama ön plana
+ * döndüğünde veya bir sohbet ekranı açıldığında çağrılır.
+ */
+expect fun clearAllMessageNotifications()
+

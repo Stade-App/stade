@@ -36,6 +36,17 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
     fun unreadCount(contactId: String): Long =
         db.stadeDbQueries.countUnread(contactId).executeAsOne()
 
+    fun observeTotalUnread(): Flow<Long> =
+        db.stadeDbQueries.countAllUnread()
+            .asFlow()
+            .mapToOne(Dispatchers.Default)
+
+    fun totalUnread(): Long =
+        db.stadeDbQueries.countAllUnread().executeAsOne()
+
+    fun exists(messageId: String): Boolean =
+        db.stadeDbQueries.messageExists(messageId).executeAsOne() > 0L
+
     fun markRead(contactId: String) {
         db.stadeDbQueries.markRead(contactId)
     }

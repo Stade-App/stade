@@ -81,6 +81,7 @@ import app.stade.identity.LocalIdentity
 import app.stade.message.Message
 import app.stade.message.MessageDirection
 import app.stade.notification.cancelMessagesNotification
+import app.stade.notification.clearAllMessageNotifications
 import app.stade.sync.SyncEngine
 import app.stade.transport.DialAttempt
 import app.stade.ui.components.Avatar
@@ -160,6 +161,7 @@ fun ChatScreen(
     DisposableEffect(contactId) {
         container.activeContactId = contactId
         cancelMessagesNotification(contactId)
+        clearAllMessageNotifications()
         onDispose { container.activeContactId = null }
     }
 

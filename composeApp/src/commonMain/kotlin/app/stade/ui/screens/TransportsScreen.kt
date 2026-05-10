@@ -29,6 +29,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,11 +37,13 @@ import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.transport.TransportType
 import app.stade.ui.components.maskAddress
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
     var configs by remember { mutableStateOf(container.transportSettings.all()) }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -111,6 +114,11 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                                 onSave = { newCfg ->
                                     container.transportSettings.setConfig(TransportType.TOR, newCfg)
                                     configs = container.transportSettings.all()
+                                    // Çalışan transport yeni config'i okuyabilmesi için
+                                    // durdur+başlat. Yoksa SOCKS portu değişikliği uygulanmaz.
+                                    scope.launch {
+                                        runCatching { container.connections.restart(TransportType.TOR) }
+                                    }
                                 }
                             )
                         }
@@ -132,6 +140,8 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
     var onion by remember(initial) { mutableStateOf(initialMap["onion"] ?: "") }
     var port by remember(initial) { mutableStateOf(initialMap["port"] ?: "5901") }
     var listenPort by remember(initial) { mutableStateOf(initialMap["listenPort"] ?: "") }
+    var socksHost by remember(initial) { mutableStateOf(initialMap["socksHost"] ?: "127.0.0.1") }
+    var socksPort by remember(initial) { mutableStateOf(initialMap["socksPort"] ?: "9050") }
 
     Column {
         Text(
@@ -165,6 +175,29 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "SOCKS5 (giden bağlantı için). Standart Tor: 9050. Tor Browser: 9150. Orbot: 9050. " +
+                "Bu çalışmazsa sistemde Tor yüklü değil veya farklı portta dinliyor demektir.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = socksHost,
+            onValueChange = { socksHost = it.trim() },
+            label = { Text("SOCKS5 host") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = socksPort,
+            onValueChange = { socksPort = it.filter { c -> c.isDigit() }.take(5) },
+            label = { Text("SOCKS5 port") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
         Spacer(Modifier.height(8.dp))
         Button(
             onClick = {
@@ -173,6 +206,8 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
                     if (port.isNotBlank()) append("port=").append(port).append('\n')
                     if (listenPort.isNotBlank()) append("listenPort=").append(listenPort).append('\n')
                     append("listenHost=127.0.0.1\n")
+                    if (socksHost.isNotBlank()) append("socksHost=").append(socksHost).append('\n')
+                    if (socksPort.isNotBlank()) append("socksPort=").append(socksPort).append('\n')
                 }
                 onSave(cfg)
             },

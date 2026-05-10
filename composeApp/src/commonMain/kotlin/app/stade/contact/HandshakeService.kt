@@ -58,6 +58,24 @@ data class InviteCode(
     override fun hashCode(): Int = display.hashCode() * 31 + raw.contentHashCode()
 }
 
+/**
+ * Davet ayrıştırma sonucu — başarı veya teşhis edilebilir hata.
+ * UI bu hatalardan kullanışlı bir mesaj üretir.
+ */
+sealed class InviteParseResult {
+    data class Ok(val payload: InvitePayload) : InviteParseResult()
+    data class MissingPrefix(val firstChars: String) : InviteParseResult()
+    data class TooShort(val expected: Int, val actual: Int) : InviteParseResult()
+    data object BadMagic : InviteParseResult()
+    data class BadVersion(val version: Int) : InviteParseResult()
+    data class BadNickname(val length: Int) : InviteParseResult()
+    data class BadAddressBlob(val length: Int) : InviteParseResult()
+    data object EdVerifyFail : InviteParseResult()
+    data object MlDsaVerifyFail : InviteParseResult()
+    data class TrailingBytes(val extra: Int) : InviteParseResult()
+    data class DecodeError(val cause: String) : InviteParseResult()
+}
+
 class HandshakeService(
     private val crypto: CryptoApi,
     private val pq: PqCrypto
@@ -108,64 +126,86 @@ class HandshakeService(
 
     // ── Davet ayrıştırma + doğrulama ─────────────────────────────────────────
 
-    fun parseInvite(code: String): InvitePayload? = runCatching {
-        // Tüm boşluk ve alfanümerik-olmayan karakterleri sil (em-dash, sıfır genişlik boşluk,
-        // akıllı tire, satır sonu, vb. transfer bozulmalarına karşı savunma).
-        val stripped = code.replace(Regex("[^A-Za-z0-9]"), "").uppercase()
-        val b32 = when {
-            stripped.startsWith("STADE2") -> stripped.substring(6)
-            else -> return@runCatching null
-        }
-        // Geçersiz base32 karakterler kaldıysa temizle
-        val cleanB32 = b32.filter { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567" }
-        val raw = Encoding.fromBase32(cleanB32)
-        return@runCatching parseRaw(raw)
-    }.getOrNull()
+    fun parseInvite(code: String): InvitePayload? =
+        (parseInviteDetailed(code) as? InviteParseResult.Ok)?.payload
 
-    private fun parseRaw(raw: ByteArray): InvitePayload? {
-        // En az: magic(4)+ver(1)+flags(1)+nickLen(2)+0+ed(32)+x(32)+kem(1184)+dsa(1952)+addrLen(2)+0+edsig(64)+dsasig(3309)
-        if (raw.size < 6 + 2 + 32 + 32 + 1184 + 1952 + 2 + 64 + 3309) return null
+    /**
+     * Aynı parse ama hatayı yutmaz — UI'da kullanıcıya nereden bozulduğunu söylemek için.
+     */
+    fun parseInviteDetailed(code: String): InviteParseResult {
+        val stripped = code.replace(Regex("[^A-Za-z0-9]"), "").uppercase()
+        if (!stripped.startsWith("STADE2")) {
+            return InviteParseResult.MissingPrefix(stripped.take(8))
+        }
+        val b32 = stripped.substring(6)
+        val cleanB32 = b32.filter { it in "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567" }
+        val raw = try {
+            Encoding.fromBase32(cleanB32)
+        } catch (e: Throwable) {
+            return InviteParseResult.DecodeError(e.message ?: e::class.simpleName ?: "decode")
+        }
+        return parseRaw(raw)
+    }
+
+    private fun parseRaw(raw: ByteArray): InviteParseResult {
+        val minSize = 6 + 2 + 32 + 32 + 1184 + 1952 + 2 + 64 + DSA_SIG_LEN
+        if (raw.size < minSize) return InviteParseResult.TooShort(minSize, raw.size)
         var off = 0
-        for (i in 0 until 4) if (raw[off + i] != magic[i]) return null
+        for (i in 0 until 4) if (raw[off + i] != magic[i]) return InviteParseResult.BadMagic
         off += 4
-        if (raw[off] != version) return null
+        if (raw[off] != version) return InviteParseResult.BadVersion(raw[off].toInt() and 0xff)
         off += 1
-        // flags
-        off += 1
+        off += 1 // flags
         val nickLen = readU16(raw, off); off += 2
-        if (nickLen < 0 || nickLen > 1024 || off + nickLen > raw.size) return null
+        if (nickLen < 0 || nickLen > 1024 || off + nickLen > raw.size) {
+            return InviteParseResult.BadNickname(nickLen)
+        }
         val nickname = raw.copyOfRange(off, off + nickLen).decodeToString()
         off += nickLen
-        if (off + 32 + 32 + 1184 + 1952 + 2 > raw.size) return null
+        if (off + 32 + 32 + 1184 + 1952 + 2 > raw.size) {
+            return InviteParseResult.TooShort(off + 32 + 32 + 1184 + 1952 + 2, raw.size)
+        }
         val edPub = raw.copyOfRange(off, off + 32); off += 32
         val xPub = raw.copyOfRange(off, off + 32); off += 32
         val kemPub = raw.copyOfRange(off, off + 1184); off += 1184
         val dsaPub = raw.copyOfRange(off, off + 1952); off += 1952
         val addrLen = readU16(raw, off); off += 2
-        if (addrLen < 0 || addrLen > 64 * 1024 || off + addrLen > raw.size) return null
+        if (addrLen < 0 || addrLen > 64 * 1024 || off + addrLen > raw.size) {
+            return InviteParseResult.BadAddressBlob(addrLen)
+        }
         val addrBlob = raw.copyOfRange(off, off + addrLen)
         off += addrLen
-        if (off + 64 + 3309 > raw.size) return null
+        if (off + 64 + DSA_SIG_LEN > raw.size) {
+            return InviteParseResult.TooShort(off + 64 + DSA_SIG_LEN, raw.size)
+        }
         val edSig = raw.copyOfRange(off, off + 64); off += 64
-        val dsaSig = raw.copyOfRange(off, off + 3309); off += 3309
+        val dsaSig = raw.copyOfRange(off, off + DSA_SIG_LEN); off += DSA_SIG_LEN
 
-        val tbs = raw.copyOfRange(0, raw.size - 64 - 3309)
-        // Hibrit doğrulama: İKİ İMZA DA geçmek zorunda.
-        if (!crypto.verify(edPub, tbs, edSig)) return null
-        if (!pq.verifyMlDsa(dsaPub, tbs, dsaSig)) return null
+        if (off != raw.size) return InviteParseResult.TrailingBytes(raw.size - off)
+
+        val tbs = raw.copyOfRange(0, raw.size - 64 - DSA_SIG_LEN)
+        if (!crypto.verify(edPub, tbs, edSig)) return InviteParseResult.EdVerifyFail
+        if (!pq.verifyMlDsa(dsaPub, tbs, dsaSig)) return InviteParseResult.MlDsaVerifyFail
 
         val addrs = if (addrLen == 0) emptyList()
         else addrBlob.decodeToString().split('\n').filter { it.isNotBlank() }
         val stadeId = StadeId.derive(edPub, dsaPub, crypto::hash)
-        return InvitePayload(
-            stadeId = stadeId,
-            nickname = nickname,
-            signingPublicKey = edPub,
-            handshakePublicKey = xPub,
-            mlkemPublicKey = kemPub,
-            mldsaPublicKey = dsaPub,
-            addresses = addrs
+        return InviteParseResult.Ok(
+            InvitePayload(
+                stadeId = stadeId,
+                nickname = nickname,
+                signingPublicKey = edPub,
+                handshakePublicKey = xPub,
+                mlkemPublicKey = kemPub,
+                mldsaPublicKey = dsaPub,
+                addresses = addrs
+            )
         )
+    }
+
+    companion object {
+        /** ML-DSA-65 (Dilithium3) imza uzunluğu — BC 1.78.x deterministik 3309 üretir. */
+        const val DSA_SIG_LEN: Int = 3309
     }
 
     // ── PQXDH hibrit anahtar türetimi ─────────────────────────────────────────

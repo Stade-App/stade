@@ -100,6 +100,23 @@ class ConnectionManager(
 
     suspend fun stop() = mutex.withLock { stopInternal() }
 
+    /**
+     * Tek bir taşıma katmanını durdurup yeniden başlatır. Config değişikliğinin
+     * (örn. Tor SOCKS portu) hemen geçerli olması için Settings ekranı bunu
+     * çağırır. Genel start() çalışmıyorsa hiçbir şey yapmaz.
+     */
+    suspend fun restart(type: TransportType) = mutex.withLock {
+        val owner = ownerRef ?: return@withLock
+        val plugin = registry.get(type) ?: return@withLock
+        runCatching { plugin.stop() }
+        if (!scope.isActive) scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        tasks += scope.launch {
+            runCatching {
+                plugin.start { connection -> sync.handleConnection(owner, connection) }
+            }
+        }
+    }
+
     private suspend fun stopInternal() {
         ownerRef = null
         tasks.forEach { it.cancel() }

@@ -45,7 +45,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
+import app.stade.contact.InviteParseResult
 import app.stade.identity.LocalIdentity
+import app.stade.share.InviteShare
 import app.stade.ui.components.StadeIdCard
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -61,11 +63,12 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
     var alias by remember { mutableStateOf("") }
     var pastedCode by remember { mutableStateOf("") }
     var status by remember { mutableStateOf<String?>(null) }
+    var statusSticky by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
 
-    LaunchedEffect(status) {
-        if (status != null) {
-            delay(3000)
+    LaunchedEffect(status, statusSticky) {
+        if (status != null && !statusSticky) {
+            delay(8000)
             status = null
         }
     }
@@ -88,24 +91,45 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
         ) {
             // Adım 1: Stade ID + davet kodu
             StepCard(stepNumber = 1, title = "Kendi davetini paylaş") {
-                StadeIdCard(stadeId = owner.stadeId)
-                Spacer(Modifier.height(12.dp))
                 Text(
-                    "Davet kodu karşı tarafa ulaştığında bağlantı bilgileri otomatik aktarılır — " +
-                        "ağ adresi vb. teknik detayları manuel paylaşmana gerek yok.",
+                    "Bağlantı kurmak için aşağıdaki butona basıp davet kodunu paylaş. " +
+                        "Stade ID sadece kimlik etiketidir — davet kodunun yerine geçmez.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(8.dp))
-                TextButton(onClick = {
-                    clipboard.setText(AnnotatedString(invite.display))
-                    status = "Davet kodu kopyalandı"
-                }) {
+                Spacer(Modifier.height(12.dp))
+                FilledTonalButton(
+                    onClick = {
+                        clipboard.setText(AnnotatedString(invite.display))
+                        status = "Davet kodu kopyalandı (${invite.display.length} karakter) — karşı tarafa gönder"
+                        statusSticky = false
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
+                ) {
                     Icon(Icons.Default.ContentCopy, contentDescription = null,
                         modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Davet kodunu kopyala")
+                    Text("Davet kodunu kopyala (${invite.display.length} karakter)")
                 }
+                Spacer(Modifier.height(8.dp))
+                TextButton(
+                    onClick = {
+                        status = InviteShare.share(invite.display, owner.nickname)
+                        statusSticky = false
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Dosya olarak paylaş")
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Stade kimliğin:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                StadeIdCard(stadeId = owner.stadeId)
             }
 
             // Adım 2
@@ -116,8 +140,12 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                     label = { Text("Davet kodu") },
                     placeholder = { Text("STADE2-…") },
                     modifier = Modifier.fillMaxWidth(),
-                    maxLines = 4,
-                    shape = MaterialTheme.shapes.medium
+                    minLines = 3,
+                    shape = MaterialTheme.shapes.medium,
+                    supportingText = {
+                        val n = pastedCode.replace(Regex("[^A-Za-z0-9]"), "").length
+                        Text("$n karakter (sağlam bir davet ~10500 karakter olmalı)")
+                    }
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
@@ -136,10 +164,61 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                     onClick = {
                         scope.launch {
                             try {
-                                val parsed = container.handshake.parseInvite(pastedCode.trim())
-                                if (parsed == null) {
-                                    status = "Davet kodu geçersiz veya bozuk"
+                                val trimmed = pastedCode.trim()
+                                // Sık yapılan hata: kullanıcı uzun davet kodu yerine
+                                // karşı tarafın Stade ID'sini (kısa etiket) yapıştırıyor.
+                                // Erken yakalayıp net mesaj göster.
+                                val looksLikeStadeId = Regex("^STADE-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}$")
+                                    .matches(trimmed.uppercase())
+                                if (looksLikeStadeId) {
+                                    status = "Bu bir Stade ID (kimlik etiketi), davet kodu değil. " +
+                                        "Karşı tarafın 'Davet kodunu kopyala' butonuna basıp " +
+                                        "gönderdiği uzun bloğu (STADE2-… ~10500 karakter) yapıştır."
                                     return@launch
+                                }
+                                val result = container.handshake.parseInviteDetailed(trimmed)
+                                val parsed = when (result) {
+                                    is InviteParseResult.Ok -> result.payload
+                                    is InviteParseResult.MissingPrefix -> {
+                                        status = "Davet 'STADE2-' ile başlamıyor (ilk: '${result.firstChars}')"
+                                        return@launch
+                                    }
+                                    is InviteParseResult.TooShort -> {
+                                        status = "Davet kodu eksik: ${result.actual} bayt, ${result.expected} gerekli — kopyalarken karakter düşmüş olabilir"
+                                        return@launch
+                                    }
+                                    is InviteParseResult.TrailingBytes -> {
+                                        status = "Davet kodu fazla ${result.extra} bayt içeriyor — yanlışlıkla iki kez yapıştırılmış olabilir"
+                                        return@launch
+                                    }
+                                    InviteParseResult.BadMagic -> {
+                                        status = "Davet kodu Stade formatında değil (magic uyuşmuyor)"
+                                        return@launch
+                                    }
+                                    is InviteParseResult.BadVersion -> {
+                                        status = "Davet kodu sürümü desteklenmiyor (v=${result.version})"
+                                        return@launch
+                                    }
+                                    is InviteParseResult.BadNickname -> {
+                                        status = "Davet kodu bozuk (nickname uzunluk=${result.length})"
+                                        return@launch
+                                    }
+                                    is InviteParseResult.BadAddressBlob -> {
+                                        status = "Davet kodu bozuk (adres bloğu uzunluk=${result.length})"
+                                        return@launch
+                                    }
+                                    InviteParseResult.EdVerifyFail -> {
+                                        status = "Davet kodu imzası geçersiz (Ed25519) — kopyalama sırasında bozulmuş olabilir"
+                                        return@launch
+                                    }
+                                    InviteParseResult.MlDsaVerifyFail -> {
+                                        status = "Davet kodu PQ imzası geçersiz (ML-DSA) — kopyalama sırasında bozulmuş olabilir"
+                                        return@launch
+                                    }
+                                    is InviteParseResult.DecodeError -> {
+                                        status = "Base32 çözme hatası: ${result.cause}"
+                                        return@launch
+                                    }
                                 }
                                 if (parsed.signingPublicKey.contentEquals(owner.publicSigningKey)) {
                                     status = "Bu senin kendi davetin"
@@ -157,9 +236,31 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                 val addrs = parsed.addresses
                                 if (addrs.isEmpty()) {
                                     status = "Davet kabul edildi — karşı tarafın çevrimiçi olmasını bekle"
+                                    statusSticky = true
                                 } else {
                                     container.connections.queueDial(addrs)
-                                    status = "Davet kabul edildi (${parsed.nickname}) — bağlanılıyor…"
+                                    status = "Davet kabul edildi (${parsed.nickname}) — bağlanılıyor… " +
+                                        "(${addrs.size} adres deneniyor; karşı taraf çevrimiçi olmalı)"
+                                    statusSticky = true
+                                    // Bağlantı kurulup contact eklenene kadar canlı izle.
+                                    // 90 sn sonra hâlâ yoksa kullanıcıya açık bir uyarı ver
+                                    // — sessizce kaybolmasın.
+                                    val targetId = parsed.stadeId
+                                    val deadline = kotlinx.datetime.Clock.System.now().toEpochMilliseconds() + 90_000L
+                                    while (kotlinx.datetime.Clock.System.now().toEpochMilliseconds() < deadline) {
+                                        if (container.contacts.findByStadeId(targetId) != null) {
+                                            status = "✓ ${parsed.nickname} eklendi — sohbete başlayabilirsin"
+                                            statusSticky = true
+                                            break
+                                        }
+                                        kotlinx.coroutines.delay(1500)
+                                    }
+                                    if (container.contacts.findByStadeId(targetId) == null) {
+                                        status = "Bağlanılamadı — karşı taraf çevrimdışı olabilir veya " +
+                                            "Tor/ağ erişimi yok. Uygulamayı açık bırak; bağlantı kurulunca " +
+                                            "kişi otomatik eklenir."
+                                        statusSticky = true
+                                    }
                                 }
                                 pastedCode = ""
                                 alias = ""

@@ -49,6 +49,20 @@ actual fun cancelMessagesNotification(contactId: String) {
         .getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     val notifId = (contactId.hashCode() and 0x7FFFFFFF) + 1000
     mgr.cancel(notifId)
+    mgr.cancel(NotificationIds.HIDDEN_MESSAGES)
+}
+
+actual fun clearAllMessageNotifications() {
+    val ctx = StadeApplication.instance
+    val mgr = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    runCatching {
+        mgr.activeNotifications.forEach { sbn ->
+            if (sbn.packageName == ctx.packageName && sbn.notification.channelId == "stade.messages") {
+                mgr.cancel(sbn.id)
+            }
+        }
+    }
+    mgr.cancel(NotificationIds.HIDDEN_MESSAGES)
 }
 
 

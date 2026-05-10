@@ -152,6 +152,9 @@ UPDATE Message SET read = 1 WHERE contactId = ?;
 countUnread:
 SELECT COUNT(*) FROM Message WHERE contactId = ? AND read = 0 AND direction = 'IN';
 
+countAllUnread:
+SELECT COUNT(*) FROM Message WHERE read = 0 AND direction = 'IN';
+
 messageExists:
 SELECT COUNT(*) FROM Message WHERE id = ?;
 

@@ -388,6 +388,13 @@ class SyncEngine(
                     val payload = runCatching {
                         json.decodeFromString(MessagePayload.serializer(), record.payload.decodeToString())
                     }.getOrNull() ?: return
+                    if (messages.exists(payload.messageId)) {
+                        val ack = AckPayload(payload.messageId)
+                        runCatching {
+                            connection.send(FrameCodec.encode(SyncRecord(RecordType.ACK, json.encodeToString(AckPayload.serializer(), ack).encodeToByteArray())))
+                        }
+                        return
+                    }
                     val plain = ratchet.open(owner, contact, payload.ratchetFrame)
                     if (plain == null) {
                         _events.tryEmit(SyncEvent.DecryptFailed(contact.id))

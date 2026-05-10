@@ -20,8 +20,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 class TorTransport(
-    private val socksHost: String = "127.0.0.1",
-    private val socksPort: Int = 9050,
+    private val defaultSocksHost: String = "127.0.0.1",
+    private val defaultSocksPort: Int = 9050,
     private val configProvider: () -> String = { "" }
 ) : BaseTransport(TransportType.TOR, "Tor") {
 
@@ -31,10 +31,38 @@ class TorTransport(
     @Volatile private var inboundOnion: String? = null
     @Volatile private var inboundPort: Int = 0
     @Volatile private var inboundServer: ServerSocket? = null
+    @Volatile private var socksHost: String = defaultSocksHost
+    @Volatile private var socksPort: Int = defaultSocksPort
 
     override suspend fun start(handler: suspend (Connection) -> Unit) = mutex.withLock {
-        val socksOk = checkSocks()
         val cfg = parseConfig(configProvider())
+        val cfgHost = cfg["socksHost"]?.takeIf { it.isNotBlank() } ?: defaultSocksHost
+        val cfgPort = cfg["socksPort"]?.toIntOrNull()?.takeIf { it in 1..65535 } ?: defaultSocksPort
+        // Önce kullanıcı yapılandırmasını dene; başarısızsa standart Tor (9050)
+        // ve Tor Browser (9150) portlarını otomatik tara. Hangisi cevap verirse
+        // onu kullan — kullanıcı manuel port denemek zorunda kalmasın.
+        val probeOrder = buildList {
+            add(cfgHost to cfgPort)
+            if (cfgHost == "127.0.0.1") {
+                if (cfgPort != 9050) add("127.0.0.1" to 9050)
+                if (cfgPort != 9150) add("127.0.0.1" to 9150)
+            }
+        }
+        var socksOk = false
+        var autoSwitched = false
+        for ((h, p) in probeOrder) {
+            if (probeSocks(h, p)) {
+                socksHost = h
+                socksPort = p
+                socksOk = true
+                autoSwitched = (h != cfgHost || p != cfgPort)
+                break
+            }
+        }
+        if (!socksOk) {
+            socksHost = cfgHost
+            socksPort = cfgPort
+        }
         inboundOnion = cfg["onion"]?.takeIf { it.isNotBlank() }
         val publicPort = cfg["port"]?.toIntOrNull() ?: 0
         val listenPort = cfg["listenPort"]?.toIntOrNull()?.takeIf { it > 0 } ?: publicPort
@@ -60,7 +88,12 @@ class TorTransport(
         }
 
         val msg = buildString {
-            if (socksOk) append("SOCKS5 ✓") else append("SOCKS5 yok")
+            if (socksOk) {
+                append("SOCKS5 ✓ ($socksHost:$socksPort)")
+                if (autoSwitched) append(" [auto]")
+            } else {
+                append("SOCKS5 yok — Tor/Orbot çalışmıyor (9050 ve 9150 tarandı)")
+            }
             when {
                 listening -> {
                     append(" · onion :$inboundPort ✓")
@@ -70,10 +103,13 @@ class TorTransport(
                 cfg["onion"].isNullOrBlank() -> append(" · onion adresi girilmedi")
             }
         }
+        // Yarı kanal da kullanılabilir: outbound varsa peer'lara erişebiliriz; sadece inbound varsa
+        // peer bize gelebilir. İkisi de yoksa transport gerçekten devre dışı.
+        val anyUp = socksOk || listening
         state.value = TransportInfo(
             type, "Tor",
-            available = socksOk,
-            running = socksOk,
+            available = anyUp,
+            running = anyUp,
             message = msg
         )
     }
@@ -175,9 +211,11 @@ class TorTransport(
             .toMap()
     }
 
-    private suspend fun checkSocks(): Boolean = withContext(Dispatchers.IO) {
+    private suspend fun checkSocks(): Boolean = probeSocks(socksHost, socksPort)
+
+    private suspend fun probeSocks(host: String, port: Int): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            java.net.Socket().use { it.connect(InetSocketAddress(socksHost, socksPort), 1500) }
+            java.net.Socket().use { it.connect(InetSocketAddress(host, port), 1500) }
             true
         }.getOrDefault(false)
     }

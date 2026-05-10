@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import app.stade.notification.clearAllMessageNotifications
 import app.stade.service.StadeService
 import app.stade.ui.StadeApp
 
@@ -31,6 +32,11 @@ class MainActivity : ComponentActivity() {
         startForegroundService(Intent(this, StadeService::class.java))
         askNotificationPermissionIfNeeded()
         setContent { StadeApp(container) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        clearAllMessageNotifications()
     }
 
     private fun askNotificationPermissionIfNeeded() {
