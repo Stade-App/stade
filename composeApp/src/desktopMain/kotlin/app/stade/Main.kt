@@ -3,9 +3,11 @@ package app.stade
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import java.awt.Dimension
@@ -18,6 +20,8 @@ import app.stade.transport.TransportSettings
 import app.stade.transport.TransportType
 import app.stade.ui.StadeApp
 import java.security.SecureRandom
+import androidx.compose.ui.Alignment
+
 
 fun main() = application {
     val container = remember {
@@ -30,11 +34,14 @@ fun main() = application {
             )
         }
     }
-    val state = rememberWindowState(size = DpSize(1024.dp, 680.dp))
+    val windowState = rememberWindowState(
+        position = WindowPosition.Aligned(Alignment.Center)
+    )
     Window(
         onCloseRequest = ::exitApplication,
-        state = state,
-        title = "Stade"
+        state = windowState,
+        title = "Stade",
+        icon = painterResource("app_icon_desktop.ico")
     ) {
         SideEffect { window.minimumSize = Dimension(700, 660) }
         Surface { StadeApp(container) }

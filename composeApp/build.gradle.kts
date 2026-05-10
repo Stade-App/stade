@@ -1,4 +1,5 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -98,10 +99,29 @@ android {
 compose.desktop {
     application {
         mainClass = "app.stade.MainKt"
+        // local.properties'ten java.home okunuyor. eğer bir hata alınırsa local.properties'te java yolunun doğru verildiğini doğrula.
+        val localProps = Properties()
+        rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { localProps.load(it) }
+        javaHome = localProps.getProperty("java.home") ?: System.getProperty("java.home")
         nativeDistributions {
             targetFormats(TargetFormat.Deb, TargetFormat.AppImage, TargetFormat.Exe, TargetFormat.Dmg)
+            modules(
+                "jdk.unsupported",       // BouncyCastle, Kotlin coroutines (sun.misc.Unsafe)
+                "java.sql",              // SQLDelight JDBC/SQLite driver
+                "java.naming",           // JNDI, required by many libs
+                "java.net.http",         // Ktor HTTP client
+                "java.management",       // JMX, required by some libs
+                "java.security.jgss",    // Security extensions
+                "jdk.crypto.cryptoki",   // Additional crypto support
+                "jdk.security.auth"      // Security auth
+            )
             packageName = "Stade"
             packageVersion = "0.1.0"
+            windows {
+                iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.ico"))
+                menuGroup = "Stade"
+                upgradeUuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            }
             macOS {
                 dmgPackageVersion = "1.0.0"
             }
