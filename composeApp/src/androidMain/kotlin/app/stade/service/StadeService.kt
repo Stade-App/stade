@@ -89,8 +89,10 @@ class StadeService : Service() {
                 when (event) {
                     is SyncEngine.SyncEvent.MessageReceived -> {
                         if (!getNotificationsEnabled().value) return@collect
-                        // Kullanıcı o sohbeti zaten açık görüyorsa bildirim basma
-                        if (container.activeContactId == event.contactId) return@collect
+                        // Kullanıcı o sohbeti açık görüyorsa VE uygulama ön plandaysa bildirim basma.
+                        // isAppInForeground=false (arka plan) olduğunda sohbet ekranı açık olsa bile
+                        // kullanıcı mesajı göremez, bu yüzden bildirim gönderilmeli.
+                        if (container.isAppInForeground && container.activeContactId == event.contactId) return@collect
                         if (getNotificationPrivacyEnabled().value) {
                             // Gizlilik modu: içerik gösterilmez, tek birleşik bildirimde sayaç artar
                             hiddenMsgCount++

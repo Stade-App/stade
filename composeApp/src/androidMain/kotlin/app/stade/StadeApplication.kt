@@ -1,9 +1,11 @@
 package app.stade
 
+import android.app.Activity
 import android.app.Application
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.os.Bundle
 import app.stade.crypto.Encoding
 import app.stade.db.DriverFactory
 import app.stade.db.StadeDb
@@ -30,6 +32,25 @@ class StadeApplication : Application() {
                 BluetoothTransport { bluetoothAdapter() }
             )
         }
+        // Ön plan / arka plan takibi — sıfır bağımlılık, saf Android API
+        var startedCount = 0
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityStarted(activity: Activity) {
+                startedCount++
+                container.isAppInForeground = true
+            }
+            override fun onActivityStopped(activity: Activity) {
+                if (--startedCount <= 0) {
+                    startedCount = 0
+                    container.isAppInForeground = false
+                }
+            }
+            override fun onActivityCreated(a: Activity, b: Bundle?) {}
+            override fun onActivityResumed(a: Activity) {}
+            override fun onActivityPaused(a: Activity) {}
+            override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
+            override fun onActivityDestroyed(a: Activity) {}
+        })
     }
 
     private fun bluetoothAdapter(): BluetoothAdapter? {

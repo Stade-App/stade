@@ -81,8 +81,12 @@ class AppContainer(
     /**
      * Şu an hangi kişinin sohbeti ekranda açık.
      * ChatScreen giriş/çıkışında set/clear edilir.
-     * StadeService bu değere bakarak zaten görülen
-     * sohbete bildirim basmaktan kaçınır.
      */
     @Volatile var activeContactId: String? = null
+
+    /**
+     * Uygulama ön planda mı? Android'de ActivityLifecycleCallbacks ile yönetilir.
+     * Arka plana geçildiğinde false olur → aktif sohbet için de bildirim gönderilir.
+     */
+    @Volatile var isAppInForeground: Boolean = true
 }

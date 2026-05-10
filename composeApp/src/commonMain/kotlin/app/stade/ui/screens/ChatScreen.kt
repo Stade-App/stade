@@ -155,12 +155,11 @@ fun ChatScreen(
         }
     }
 
-    // ── Sohbet açık olduğu süre aktif kişiyi işaretle ────────────────────────
-    // Bu sayede StadeService bu kişiye bildirim basmaz;
-    // ekrandan çıkınca (onDispose) işaret temizlenir.
+    // ── Sohbet ekranda açık olduğu süre aktif kişiyi işaretle ───────────────────
+    // Arka plana geçiş durumu AppContainer.isAppInForeground ile ayrıca izlenir.
     DisposableEffect(contactId) {
         container.activeContactId = contactId
-        cancelMessagesNotification(contactId)   // Varsa birikmiş bildirimi hemen sil
+        cancelMessagesNotification(contactId)
         onDispose { container.activeContactId = null }
     }
 
