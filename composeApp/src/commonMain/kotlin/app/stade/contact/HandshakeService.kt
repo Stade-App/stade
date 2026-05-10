@@ -182,8 +182,9 @@ class HandshakeService(
      *
      * Transcript downgrade attack koruması için içerir:
      *   "stade-pqxdh-v2" || min(ownerStadeId, peerStadeId) || max(...) ||
-     *   ownerEdPub || peerEdPub || ownerXPub || peerXPub ||
-     *   ownerKemPub || peerKemPub || kemCiphertext
+     *   loEdPub || hiEdPub || loXPub || hiXPub ||
+     *   loKemPub || hiKemPub || kemCiphertext
+     *   (lo/hi = stadeId leksikografik sırasına göre — her iki tarafta kanonik)
      */
     fun deriveRootKey(
         owner: LocalIdentity,
@@ -194,12 +195,23 @@ class HandshakeService(
         val dh = crypto.keyAgreement(owner.privateHandshakeKey, peer.handshakePublicKey)
         val ownerId = owner.stadeId.encodeToByteArray()
         val peerId = peer.stadeId.encodeToByteArray()
-        val (lo, hi) = if (compareLex(ownerId, peerId) <= 0) ownerId to peerId else peerId to ownerId
+        // Transkript her iki tarafta da aynı olsun: her şeyi stadeId sıralamasına göre kanonik hale getir.
+        val ownerIsLo = compareLex(ownerId, peerId) <= 0
+        val (lo, hi) = if (ownerIsLo) ownerId to peerId else peerId to ownerId
+        val (loSigningPub, hiSigningPub) =
+            if (ownerIsLo) owner.publicSigningKey to peer.signingPublicKey
+            else peer.signingPublicKey to owner.publicSigningKey
+        val (loHandshakePub, hiHandshakePub) =
+            if (ownerIsLo) owner.publicHandshakeKey to peer.handshakePublicKey
+            else peer.handshakePublicKey to owner.publicHandshakeKey
+        val (loMlKemPub, hiMlKemPub) =
+            if (ownerIsLo) owner.publicMlKemKey to peer.mlkemPublicKey
+            else peer.mlkemPublicKey to owner.publicMlKemKey
         val transcript = "stade-pqxdh-v2".encodeToByteArray() +
             lo + hi +
-            owner.publicSigningKey + peer.signingPublicKey +
-            owner.publicHandshakeKey + peer.handshakePublicKey +
-            owner.publicMlKemKey + peer.mlkemPublicKey +
+            loSigningPub + hiSigningPub +
+            loHandshakePub + hiHandshakePub +
+            loMlKemPub + hiMlKemPub +
             kemCiphertext
         val salt = crypto.hash(transcript)
         val secret = dh + kemSharedSecret

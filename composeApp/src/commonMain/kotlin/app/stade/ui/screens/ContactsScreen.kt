@@ -49,6 +49,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import app.stade.ui.theme.StadeColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -386,8 +387,27 @@ private fun ContactRow(
                 .padding(horizontal = 16.dp, vertical = 16.dp), // Dikey boşluğu artırdık
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar
-            Avatar(contact.nickname, size = 52.dp)
+            // Avatar + aktiflik noktası (TwoPanelLayout ile aynı şekilde)
+            Box {
+                Avatar(contact.nickname, size = 52.dp)
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(14.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                        .padding(2.dp)
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(
+                                if (connected) StadeColors.online else StadeColors.offline
+                            )
+                    )
+                }
+            }
 
             Spacer(Modifier.width(16.dp))
 
@@ -408,14 +428,6 @@ private fun ContactRow(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
-                    Spacer(Modifier.width(8.dp))
-                    // Durum Göstergesi (daha hafif bir renk)
-                    Box(
-                        Modifier.size(8.dp).clip(CircleShape).background(
-                            if (connected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outlineVariant
-                        )
-                    )
                 }
 
                 Spacer(Modifier.height(2.dp))

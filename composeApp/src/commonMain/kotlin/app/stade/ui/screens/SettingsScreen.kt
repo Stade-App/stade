@@ -26,14 +26,20 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SettingsEthernet
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -60,6 +66,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
+import app.stade.notification.getNotificationPrivacyEnabled
+import app.stade.notification.getNotificationsEnabled
+import app.stade.notification.isNotificationSupported
+import app.stade.notification.openNotificationSettings
+import app.stade.notification.setNotificationPrivacyEnabled
+import app.stade.notification.setNotificationsEnabled
 import app.stade.ui.components.Avatar
 import app.stade.ui.components.StadeIdCard
 import app.stade.ui.theme.getDynamicColorEnabled
@@ -78,6 +90,8 @@ fun SettingsScreen(
 ) {
     val fingerprint = remember(owner.id) { container.fingerprint.fingerprint(owner.publicSigningKey) }
     val dynamicColorEnabled by getDynamicColorEnabled()
+    val notificationsEnabled by getNotificationsEnabled()
+    val notificationPrivacyEnabled by getNotificationPrivacyEnabled()
     var showLogoutDialog by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
     var fingerprintCopied by remember { mutableStateOf(false) }
@@ -176,6 +190,54 @@ fun SettingsScreen(
                             subtitle = "Material You duvar kağıdı renklerini kullan",
                             checked = dynamicColorEnabled,
                             onCheckedChange = { setDynamicColorEnabled(it) }
+                        )
+                    }
+                }
+            }
+
+            // ── Bildirimler (yalnızca Android) ──────────────────
+            if (isNotificationSupported) {
+                item {
+                    SettingsSectionLabel("Bildirimler")
+                    SettingsGroup {
+                        SwitchSettingsRow(
+                            icon = if (notificationsEnabled) Icons.Default.Notifications
+                                   else Icons.Default.NotificationsOff,
+                            iconTint = if (notificationsEnabled) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                            title = "Mesaj bildirimleri",
+                            subtitle = if (notificationsEnabled) "Yeni mesajlarda bildirim gönder"
+                                       else "Bildirimler kapalı",
+                            checked = notificationsEnabled,
+                            onCheckedChange = { setNotificationsEnabled(it) }
+                        )
+                        if (notificationsEnabled) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                            SwitchSettingsRow(
+                                icon = Icons.Default.VisibilityOff,
+                                iconTint = MaterialTheme.colorScheme.tertiary,
+                                title = "Bildirim içeriğini gizle",
+                                subtitle = if (notificationPrivacyEnabled)
+                                    "\"X yeni mesajınız var\" şeklinde gösterilir"
+                                else
+                                    "Gönderici adı ve mesaj önizlenebilir",
+                                checked = notificationPrivacyEnabled,
+                                onCheckedChange = { setNotificationPrivacyEnabled(it) }
+                            )
+                        }
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        NavigationSettingsRow(
+                            icon = Icons.Default.OpenInNew,
+                            iconTint = MaterialTheme.colorScheme.secondary,
+                            title = "Sistem bildirim ayarları",
+                            subtitle = "Ses, titreşim ve kanal ayarları",
+                            onClick = { openNotificationSettings() }
                         )
                     }
                 }

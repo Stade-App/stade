@@ -21,6 +21,9 @@ import app.stade.transport.TransportType
 import app.stade.ui.StadeApp
 import java.security.SecureRandom
 import androidx.compose.ui.Alignment
+import stade.composeapp.generated.resources.Res
+import stade.composeapp.generated.resources.app_icon_desktop
+import org.jetbrains.compose.resources.painterResource
 
 
 fun main() = application {
@@ -41,7 +44,7 @@ fun main() = application {
         onCloseRequest = ::exitApplication,
         state = windowState,
         title = "Stade",
-        icon = painterResource("app_icon_desktop.ico")
+        icon = painterResource(Res.drawable.app_icon_desktop) // Otomatik üretilen kaynak
     ) {
         SideEffect { window.minimumSize = Dimension(700, 660) }
         Surface { StadeApp(container) }
