@@ -36,12 +36,12 @@ class StadeApplication : Application() {
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {
                 startedCount++
-                container.isAppInForeground = true
+                container.isAppInForeground.value = true
             }
             override fun onActivityStopped(activity: Activity) {
                 if (--startedCount <= 0) {
                     startedCount = 0
-                    container.isAppInForeground = false
+                    container.isAppInForeground.value = false
                 }
             }
             override fun onActivityCreated(a: Activity, b: Bundle?) {}

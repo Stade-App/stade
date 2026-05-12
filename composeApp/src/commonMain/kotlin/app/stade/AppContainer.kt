@@ -78,7 +78,8 @@ class AppContainer(
 
     @Volatile var activeContactId: String? = null
 
-    @Volatile var isAppInForeground: Boolean = true
+    /** Uygulama ön planda mı? MainActivity onStart/onStop tarafından güncellenir. */
+    var isAppInForeground = MutableStateFlow(true)
 
     val pendingInvite = MutableStateFlow<String?>(null)
 

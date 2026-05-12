@@ -9,21 +9,30 @@ class SecretStore(
 ) {
     private val passphraseKey = "passphrase.verifier"
     private val saltKey = "passphrase.salt"
+    private val iterationsKey = "passphrase.iterations"
+
+    // Yeni PIN kurulumlarında kullanılan iterasyon sayısı.
+    // Eski PIN'ler (20_000) hâlâ doğrulanabilir; iterationsKey yoksa 20_000 varsayılır.
+    private val currentIterations = 8_000
 
     fun isLockEnabled(): Boolean =
         db.stadeDbQueries.getKv(passphraseKey).executeAsOneOrNull() != null
 
     fun setupPassphrase(passphrase: String) {
         val salt = crypto.randomBytes(16)
-        val derived = derive(passphrase, salt)
+        val derived = derive(passphrase, salt, currentIterations)
         db.stadeDbQueries.putKv(saltKey, salt)
         db.stadeDbQueries.putKv(passphraseKey, derived)
+        db.stadeDbQueries.putKv(iterationsKey, currentIterations.toString().encodeToByteArray())
     }
 
     fun verifyPassphrase(passphrase: String): Boolean {
         val salt = db.stadeDbQueries.getKv(saltKey).executeAsOneOrNull() ?: return false
         val expected = db.stadeDbQueries.getKv(passphraseKey).executeAsOneOrNull() ?: return false
-        val derived = derive(passphrase, salt)
+        val iters = db.stadeDbQueries.getKv(iterationsKey).executeAsOneOrNull()
+            ?.let { runCatching { it.toString(Charsets.UTF_8).toInt() }.getOrNull() }
+            ?: 20_000 // eski PIN'ler için geriye dönük uyum
+        val derived = derive(passphrase, salt, iters)
         return derived.contentEquals(expected)
     }
 
@@ -36,9 +45,20 @@ class SecretStore(
     fun verifyPin(pin: String): Boolean = verifyPassphrase(pin)
     fun clearPin() = clearPassphrase()
 
-    private fun derive(passphrase: String, salt: ByteArray): ByteArray {
+    // ── Scramble keypad preference ──────────────────────────────────────────
+    private val scrambleKeypadKey = "ui.scramble_keypad"
+
+    fun isScrambleKeypadEnabled(): Boolean =
+        db.stadeDbQueries.getKv(scrambleKeypadKey).executeAsOneOrNull()
+            ?.let { it.isNotEmpty() && it[0] != 0.toByte() } ?: false
+
+    fun setScrambleKeypadEnabled(enabled: Boolean) {
+        db.stadeDbQueries.putKv(scrambleKeypadKey, byteArrayOf(if (enabled) 1 else 0))
+    }
+
+    private fun derive(passphrase: String, salt: ByteArray, iterations: Int): ByteArray {
         var current = passphrase.encodeToByteArray() + salt
-        repeat(20_000) { current = crypto.hash(current) }
+        repeat(iterations) { current = crypto.hash(current) }
         return current
     }
 }

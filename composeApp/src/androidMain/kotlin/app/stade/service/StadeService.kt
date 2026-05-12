@@ -84,7 +84,7 @@ class StadeService : Service() {
                 when (event) {
                     is SyncEngine.SyncEvent.MessageReceived -> {
                         if (!getNotificationsEnabled().value) return@collect
-                        if (container.isAppInForeground && container.activeContactId == event.contactId) return@collect
+                        if (container.isAppInForeground.value && container.activeContactId == event.contactId) return@collect
                         if (getNotificationPrivacyEnabled().value) {
                             val total = runCatching { container.messages.totalUnread() }.getOrDefault(0L).toInt()
                             if (total > 0) showPrivacyNotification(total)

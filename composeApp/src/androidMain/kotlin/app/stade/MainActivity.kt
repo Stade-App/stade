@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
         clearAllMessageNotifications()
     }
 
+
     private fun handleIncomingInvite(intent: Intent?) {
         if (intent == null) return
         val uri: Uri? = when (intent.action) {

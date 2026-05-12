@@ -1,7 +1,7 @@
 package app.stade.ui.screens
 
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,6 +23,7 @@ import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -35,44 +35,65 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.ui.components.BrandMark
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.withContext
 
 private const val PIN_MIN = 4
-private const val PIN_MAX = 4
+private const val PIN_MAX = 16
+private const val PIN_DOTS_MAX = 8
+
+// Hatalı PIN titreme animasyonu — Animatable ile doğrudan çalıştırılır, state flip yok.
+private suspend fun Animatable<Float, *>.shake() {
+    animateTo(0f, keyframes {
+        durationMillis = 420
+        0f   at 0
+        -12f at 55
+        12f  at 110
+        -10f at 165
+        10f  at 220
+        -6f  at 275
+        6f   at 330
+        0f   at 420
+    })
+}
 
 @Composable
 fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () -> Unit = {}) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    var shake by remember { mutableStateOf(false) }
     var showForgotDialog by remember { mutableStateOf(false) }
     var wiping by remember { mutableStateOf(false) }
+    var isVerifying by remember { mutableStateOf(false) }
+    val shakeOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
+    val scrambleEnabled = remember { container.secrets.isScrambleKeypadEnabled() }
 
-    LaunchedEffect(error) {
-        if (error != null) {
-            shake = true
-            delay(400)
-            shake = false
-        }
-    }
-
-    LaunchedEffect(pin) {
-        if (pin.length >= PIN_MIN && error == null) {
-            if (container.secrets.verifyPin(pin)) {
+    fun tryUnlock() {
+        if (pin.length < PIN_MIN || error != null || isVerifying) return
+        val currentPin = pin
+        isVerifying = true
+        scope.launch {
+            val correct = withContext(Dispatchers.Default) {
+                container.secrets.verifyPin(currentPin)
+            }
+            isVerifying = false
+            if (correct) {
                 onUnlocked()
-            } else if (pin.length >= PIN_MAX) {
+            } else {
                 error = "PIN hatalı"
+                launch { shakeOffset.shake() }   // titreme — ana akışı bloke etmez
                 delay(700)
                 pin = ""
                 error = null
@@ -97,7 +118,24 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () 
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(28.dp))
-            PinDots(filled = pin.length, total = PIN_MAX, shake = shake, error = error != null)
+
+            // Doğrulama süresince spinner; aksi halde noktalar
+            Box(modifier = Modifier.height(24.dp), contentAlignment = Alignment.Center) {
+                if (isVerifying) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.5.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    PinDots(
+                        filled = pin.length,
+                        shakeOffset = shakeOffset.value,
+                        error = error != null
+                    )
+                }
+            }
+
             Spacer(Modifier.height(10.dp))
             Box(modifier = Modifier.height(20.dp)) {
                 error?.let {
@@ -110,14 +148,21 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () 
             }
             Spacer(Modifier.height(20.dp))
             PinKeypad(
-                onDigit = { d -> if (pin.length < PIN_MAX && error == null) pin += d },
-                onBackspace = { if (pin.isNotEmpty()) pin = pin.dropLast(1) }
+                onDigit = { d ->
+                    if (pin.length < PIN_MAX && error == null && !isVerifying) {
+                        pin += d
+                        if (pin.length >= PIN_MAX) tryUnlock()
+                    }
+                },
+                onBackspace = {
+                    if (pin.isNotEmpty() && !isVerifying) pin = pin.dropLast(1)
+                },
+                actionIsCheck = pin.length >= PIN_MIN && error == null && !isVerifying,
+                onAction = { tryUnlock() },
+                scrambled = scrambleEnabled
             )
             Spacer(Modifier.height(16.dp))
-            TextButton(
-                onClick = { showForgotDialog = true },
-                enabled = !wiping
-            ) {
+            TextButton(onClick = { showForgotDialog = true }, enabled = !wiping) {
                 Text("Şifremi unuttum")
             }
         }
@@ -162,10 +207,9 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () 
                 ) { Text(if (wiping) "Siliniyor…" else "Sıfırla ve sil") }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { showForgotDialog = false },
-                    enabled = !wiping
-                ) { Text("Vazgeç") }
+                TextButton(onClick = { showForgotDialog = false }, enabled = !wiping) {
+                    Text("Vazgeç")
+                }
             }
         )
     }
@@ -184,15 +228,9 @@ fun PinSetupScreen(
     var newPin by remember { mutableStateOf("") }
     var confirmPin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    var shake by remember { mutableStateOf(false) }
-
-    LaunchedEffect(error) {
-        if (error != null) {
-            shake = true
-            delay(400)
-            shake = false
-        }
-    }
+    var isVerifying by remember { mutableStateOf(false) }
+    val shakeOffset = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
 
     val currentInput = when (phase) {
         Phase.Current -> currentPin
@@ -200,39 +238,40 @@ fun PinSetupScreen(
         Phase.Confirm -> confirmPin
     }
 
-    LaunchedEffect(currentPin, newPin, confirmPin, phase) {
-        when (phase) {
-            Phase.Current -> {
-                if (currentPin.length >= PIN_MAX) {
-                    if (container.secrets.verifyPin(currentPin)) {
-                        phase = Phase.New
-                        currentPin = ""
-                        error = null
-                    } else {
-                        error = "Mevcut PIN hatalı"
-                        delay(700)
-                        currentPin = ""
-                        error = null
-                    }
-                }
+    fun tryVerifyCurrent() {
+        if (currentPin.length < PIN_MIN || error != null || isVerifying) return
+        val snap = currentPin
+        isVerifying = true
+        scope.launch {
+            val correct = withContext(Dispatchers.Default) {
+                container.secrets.verifyPin(snap)
             }
-            Phase.New -> {
-                if (newPin.length >= PIN_MAX) {
-                    phase = Phase.Confirm
-                }
+            isVerifying = false
+            if (correct) {
+                phase = Phase.New
+                currentPin = ""
+                error = null
+            } else {
+                error = "Mevcut PIN hatalı"
+                launch { shakeOffset.shake() }
+                delay(700)
+                currentPin = ""
+                error = null
             }
-            Phase.Confirm -> {
-                if (confirmPin.length == newPin.length) {
-                    if (confirmPin == newPin) {
-                        container.secrets.setupPin(newPin)
-                        onDone()
-                    } else {
-                        error = "PIN'ler eşleşmiyor"
-                        delay(700)
-                        confirmPin = ""
-                        error = null
-                    }
-                }
+        }
+    }
+
+    LaunchedEffect(confirmPin, phase) {
+        if (phase == Phase.Confirm && confirmPin.length == newPin.length) {
+            if (confirmPin == newPin) {
+                withContext(Dispatchers.Default) { container.secrets.setupPin(newPin) }
+                onDone()
+            } else {
+                error = "PIN'ler eşleşmiyor"
+                launch { shakeOffset.shake() }
+                delay(700)
+                confirmPin = ""
+                error = null
             }
         }
     }
@@ -244,7 +283,7 @@ fun PinSetupScreen(
     }
     val sub = when (phase) {
         Phase.Current -> "Devam etmek için mevcut PIN'ini gir."
-        Phase.New -> "4 haneli bir PIN belirle."
+        Phase.New -> "4-16 haneli bir PIN belirle."
         Phase.Confirm -> "Aynı PIN'i tekrar gir."
     }
 
@@ -266,7 +305,21 @@ fun PinSetupScreen(
                 modifier = Modifier.widthIn(max = 360.dp)
             )
             Spacer(Modifier.height(24.dp))
-            PinDots(filled = currentInput.length, total = PIN_MAX, shake = shake, error = error != null)
+            Box(modifier = Modifier.height(24.dp), contentAlignment = Alignment.Center) {
+                if (isVerifying) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.5.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    PinDots(
+                        filled = currentInput.length,
+                        shakeOffset = shakeOffset.value,
+                        error = error != null
+                    )
+                }
+            }
             Spacer(Modifier.height(10.dp))
             Box(modifier = Modifier.height(20.dp)) {
                 error?.let {
@@ -281,23 +334,35 @@ fun PinSetupScreen(
             PinKeypad(
                 onDigit = { d ->
                     when (phase) {
-                        Phase.Current -> if (currentPin.length < PIN_MAX && error == null) currentPin += d
-                        Phase.New -> if (newPin.length < PIN_MAX) newPin += d
-                        Phase.Confirm -> if (confirmPin.length < PIN_MAX && error == null) confirmPin += d
+                        Phase.Current -> if (currentPin.length < PIN_MAX && error == null && !isVerifying) {
+                            currentPin += d
+                            if (currentPin.length >= PIN_MAX) tryVerifyCurrent()
+                        }
+                        Phase.New -> if (newPin.length < PIN_MAX) {
+                            newPin += d
+                            if (newPin.length >= PIN_MAX) phase = Phase.Confirm
+                        }
+                        Phase.Confirm -> if (confirmPin.length < newPin.length && error == null) confirmPin += d
                     }
                 },
                 onBackspace = {
                     when (phase) {
-                        Phase.Current -> if (currentPin.isNotEmpty()) currentPin = currentPin.dropLast(1)
+                        Phase.Current -> if (currentPin.isNotEmpty() && !isVerifying) currentPin = currentPin.dropLast(1)
                         Phase.New -> if (newPin.isNotEmpty()) newPin = newPin.dropLast(1)
                         Phase.Confirm -> if (confirmPin.isNotEmpty()) confirmPin = confirmPin.dropLast(1)
                     }
                 },
                 actionLabel = null,
-                actionIsCheck = phase == Phase.New && newPin.length >= PIN_MIN,
+                actionIsCheck = when (phase) {
+                    Phase.Current -> currentPin.length >= PIN_MIN && error == null && !isVerifying
+                    Phase.New -> newPin.length >= PIN_MIN
+                    Phase.Confirm -> false
+                },
                 onAction = {
-                    if (phase == Phase.New && newPin.length >= PIN_MIN) {
-                        phase = Phase.Confirm
+                    when (phase) {
+                        Phase.Current -> tryVerifyCurrent()
+                        Phase.New -> if (newPin.length >= PIN_MIN) phase = Phase.Confirm
+                        Phase.Confirm -> {}
                     }
                 },
                 cancelLabel = "İptal",
@@ -310,18 +375,16 @@ fun PinSetupScreen(
 private enum class Phase { Current, New, Confirm }
 
 @Composable
-private fun PinDots(filled: Int, total: Int, shake: Boolean, error: Boolean) {
-    val offsetX by animateDpAsState(
-        targetValue = if (shake) 6.dp else 0.dp,
-        animationSpec = tween(durationMillis = 80),
-        label = "shake"
-    )
-    val visible = (filled.coerceAtMost(total)).coerceAtLeast(PIN_MIN)
+private fun PinDots(filled: Int, shakeOffset: Float, error: Boolean) {
+    val visibleDots = filled.coerceIn(PIN_MIN, PIN_DOTS_MAX)
+    val overflow = (filled - PIN_DOTS_MAX).coerceAtLeast(0)
+
     Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.padding(start = offsetX)
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.graphicsLayer { translationX = shakeOffset }
     ) {
-        repeat(visible) { i ->
+        repeat(visibleDots) { i ->
             val isFilled = i < filled
             val color = when {
                 error -> MaterialTheme.colorScheme.error
@@ -335,6 +398,14 @@ private fun PinDots(filled: Int, total: Int, shake: Boolean, error: Boolean) {
                     .background(color)
             )
         }
+        if (overflow > 0) {
+            Text(
+                "+$overflow",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (error) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
 
@@ -346,13 +417,21 @@ private fun PinKeypad(
     actionIsCheck: Boolean = false,
     onAction: () -> Unit = {},
     cancelLabel: String? = null,
-    onCancel: () -> Unit = {}
+    onCancel: () -> Unit = {},
+    scrambled: Boolean = false
 ) {
+    val digits: List<String> = remember(scrambled) {
+        val all = (1..9).map { it.toString() } + "0"
+        if (scrambled) all.shuffled() else all
+    }
+    val topDigits = digits.take(9)
+    val bottomMid = digits[9]
     val rows = listOf(
-        listOf("1", "2", "3"),
-        listOf("4", "5", "6"),
-        listOf("7", "8", "9")
+        topDigits.subList(0, 3),
+        topDigits.subList(3, 6),
+        topDigits.subList(6, 9)
     )
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -363,16 +442,13 @@ private fun PinKeypad(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (actionIsCheck) {
-                KeyButton(checkIcon = true, isAction = true) { onAction() }
-            } else if (actionLabel != null) {
-                KeyButton(label = actionLabel, isAction = true) { onAction() }
-            } else if (cancelLabel != null) {
-                KeyButton(label = cancelLabel, isAction = false, small = true) { onCancel() }
-            } else {
-                Spacer(Modifier.width(72.dp).height(72.dp))
+            when {
+                actionIsCheck -> KeyButton(checkIcon = true, isAction = true) { onAction() }
+                actionLabel != null -> KeyButton(label = actionLabel, isAction = true) { onAction() }
+                cancelLabel != null -> KeyButton(label = cancelLabel, isAction = false, small = true) { onCancel() }
+                else -> Spacer(Modifier.width(72.dp).height(72.dp))
             }
-            KeyButton(label = "0") { onDigit("0") }
+            KeyButton(label = bottomMid) { onDigit(bottomMid) }
             KeyButton(icon = true) { onBackspace() }
         }
     }
@@ -387,14 +463,10 @@ private fun KeyButton(
     small: Boolean = false,
     onClick: () -> Unit
 ) {
-    val bg = when {
-        isAction -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh
-    }
-    val fg = when {
-        isAction -> MaterialTheme.colorScheme.onPrimary
-        else -> MaterialTheme.colorScheme.onSurface
-    }
+    val bg = if (isAction) MaterialTheme.colorScheme.primary
+             else MaterialTheme.colorScheme.surfaceContainerHigh
+    val fg = if (isAction) MaterialTheme.colorScheme.onPrimary
+             else MaterialTheme.colorScheme.onSurface
     Surface(
         modifier = Modifier
             .size(72.dp)
@@ -405,16 +477,8 @@ private fun KeyButton(
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             when {
-                checkIcon -> Icon(
-                    Icons.Filled.Check,
-                    contentDescription = "Onayla",
-                    tint = fg
-                )
-                icon -> Icon(
-                    Icons.AutoMirrored.Filled.Backspace,
-                    contentDescription = "Sil",
-                    tint = fg
-                )
+                checkIcon -> Icon(Icons.Filled.Check, contentDescription = "Onayla", tint = fg)
+                icon -> Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Sil", tint = fg)
                 else -> Text(
                     label,
                     style = if (small) MaterialTheme.typography.labelLarge

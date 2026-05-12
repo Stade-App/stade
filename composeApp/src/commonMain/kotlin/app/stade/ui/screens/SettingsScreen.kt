@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Grid3x3
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Notifications
@@ -98,6 +99,9 @@ fun SettingsScreen(
     var showDisableLockDialog by remember { mutableStateOf(false) }
     var lockRefreshTick by remember { mutableStateOf(0) }
     val lockEnabled = remember(lockRefreshTick) { container.secrets.isLockEnabled() }
+    var scrambleEnabled by remember(lockRefreshTick) {
+        mutableStateOf(container.secrets.isScrambleKeypadEnabled())
+    }
     val clipboardManager = LocalClipboardManager.current
     var fingerprintCopied by remember { mutableStateOf(false) }
 
@@ -327,8 +331,25 @@ fun SettingsScreen(
                             icon = Icons.Default.Fingerprint,
                             iconTint = MaterialTheme.colorScheme.secondary,
                             title = "PIN'i değiştir",
-                            subtitle = "Önce mevcut PIN sorulur",
                             onClick = { onOpenPinSetup(true) }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        SwitchSettingsRow(
+                            icon = Icons.Default.Grid3x3,
+                            iconTint = MaterialTheme.colorScheme.tertiary,
+                            title = "Tuş takımını karıştır",
+                            subtitle = if (scrambleEnabled)
+                                "Her girişte rakamlar rastgele sıralanır"
+                            else
+                                "Rakamlar standart sırada gösterilir",
+                            checked = scrambleEnabled,
+                            onCheckedChange = { enabled ->
+                                scrambleEnabled = enabled
+                                container.secrets.setScrambleKeypadEnabled(enabled)
+                            }
                         )
                     }
                 }
@@ -482,7 +503,7 @@ private fun SwitchSettingsRow(
     icon: ImageVector,
     iconTint: Color,
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
@@ -497,11 +518,13 @@ private fun SwitchSettingsRow(
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         Spacer(Modifier.width(8.dp))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
@@ -514,7 +537,7 @@ private fun NavigationSettingsRow(
     icon: ImageVector,
     iconTint: Color,
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -528,11 +551,13 @@ private fun NavigationSettingsRow(
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         Icon(
             Icons.Default.ChevronRight,

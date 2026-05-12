@@ -47,6 +47,20 @@ fun StadeApp(container: AppContainer) {
         var identity by remember { mutableStateOf<LocalIdentity?>(null) }
         var screen by remember { mutableStateOf<Screen>(if (unlocked) Screen.Onboarding else Screen.Lock) }
 
+        // ── Arka plan → ön plan geçişinde yeniden kilitleme ─────────────────
+        val isInForeground by container.isAppInForeground.collectAsState()
+        var wentToBackground by remember { mutableStateOf(false) }
+        LaunchedEffect(isInForeground) {
+            if (!isInForeground && unlocked && container.secrets.isLockEnabled()) {
+                wentToBackground = true
+            }
+            if (isInForeground && wentToBackground) {
+                wentToBackground = false
+                unlocked = false
+                screen = Screen.Lock
+            }
+        }
+
         val pendingInvite by container.pendingInvite.collectAsState()
         LaunchedEffect(pendingInvite, unlocked, identity?.id) {
             if (pendingInvite != null && unlocked && identity != null &&
