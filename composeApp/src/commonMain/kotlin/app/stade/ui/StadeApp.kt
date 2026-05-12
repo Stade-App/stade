@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,6 +19,7 @@ import app.stade.ui.screens.ChatScreen
 import app.stade.ui.screens.ContactsScreen
 import app.stade.ui.screens.LockScreen
 import app.stade.ui.screens.OnboardingScreen
+import app.stade.ui.screens.PinSetupScreen
 import app.stade.ui.screens.SettingsScreen
 import app.stade.ui.screens.TransportsScreen
 import app.stade.ui.screens.VerifyContactScreen
@@ -33,6 +35,7 @@ sealed interface Screen {
     data object Settings : Screen
     data object Transports : Screen
     data object AddContact : Screen
+    data class PinSetup(val requireCurrent: Boolean, val returnTo: Screen) : Screen
 }
 
 @Suppress("UnusedBoxWithConstraintsScope")
@@ -43,6 +46,14 @@ fun StadeApp(container: AppContainer) {
         var unlocked by remember { mutableStateOf(!container.secrets.isLockEnabled()) }
         var identity by remember { mutableStateOf<LocalIdentity?>(null) }
         var screen by remember { mutableStateOf<Screen>(if (unlocked) Screen.Onboarding else Screen.Lock) }
+
+        val pendingInvite by container.pendingInvite.collectAsState()
+        LaunchedEffect(pendingInvite, unlocked, identity?.id) {
+            if (pendingInvite != null && unlocked && identity != null &&
+                screen !is Screen.AddContact && screen !is Screen.PinSetup) {
+                screen = Screen.AddContact
+            }
+        }
 
         LaunchedEffect(unlocked, identity?.id) {
             val current = identity
@@ -56,7 +67,8 @@ fun StadeApp(container: AppContainer) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isWideScreen = maxWidth >= 600.dp
             val showTwoPanel = isWideScreen && unlocked && identity != null &&
-                screen != Screen.Lock && screen != Screen.Onboarding
+                screen != Screen.Lock && screen != Screen.Onboarding &&
+                screen !is Screen.PinSetup
 
             PlatformBackHandler(
                 enabled = !showTwoPanel &&
@@ -64,12 +76,13 @@ fun StadeApp(container: AppContainer) {
                     screen !is Screen.Onboarding &&
                     screen !is Screen.Contacts
             ) {
-                when (screen) {
+                when (val s = screen) {
                     is Screen.Chat    -> screen = Screen.Contacts
                     is Screen.Verify  -> screen = Screen.Contacts
                     Screen.Settings   -> screen = Screen.Contacts
                     Screen.Transports -> screen = Screen.Settings
                     Screen.AddContact -> screen = Screen.Contacts
+                    is Screen.PinSetup -> screen = s.returnTo
                     else -> {}
                 }
             }
@@ -79,6 +92,15 @@ fun StadeApp(container: AppContainer) {
                     container = container,
                     onUnlocked = { unlocked = true; screen = Screen.Onboarding }
                 )
+                screen is Screen.PinSetup -> {
+                    val s = screen as Screen.PinSetup
+                    PinSetupScreen(
+                        container = container,
+                        requireCurrent = s.requireCurrent,
+                        onDone = { screen = s.returnTo },
+                        onCancel = { screen = s.returnTo }
+                    )
+                }
                 screen == Screen.Onboarding -> OnboardingScreen(
                     container = container,
                     onReady = { identity = it; screen = Screen.Contacts }
@@ -97,6 +119,9 @@ fun StadeApp(container: AppContainer) {
                     owner = identity!!,
                     onBack = { screen = Screen.Contacts },
                     onOpenTransports = { screen = Screen.Transports },
+                    onOpenPinSetup = { requireCurrent ->
+                        screen = Screen.PinSetup(requireCurrent, Screen.Settings)
+                    },
                     onLogout = {
                         scope.launch { container.connections.stop() }
                         identity = null
@@ -110,7 +135,10 @@ fun StadeApp(container: AppContainer) {
                 screen == Screen.AddContact -> AddContactScreen(
                     container = container,
                     owner = identity!!,
-                    onBack = { screen = Screen.Contacts }
+                    onBack = {
+                        container.pendingInvite.value = null
+                        screen = Screen.Contacts
+                    }
                 )
                 screen is Screen.Verify -> VerifyContactScreen(
                     container = container,

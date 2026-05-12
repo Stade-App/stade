@@ -26,7 +26,7 @@ import stade.composeapp.generated.resources.app_icon_desktop
 import org.jetbrains.compose.resources.painterResource
 
 
-fun main() = application {
+fun main(args: Array<String>) = application {
     val container = remember {
         AppContainer(DriverFactory()) { db ->
             val nodeId = deriveNodeId(db)
@@ -36,6 +36,16 @@ fun main() = application {
                 TorTransport(configProvider = { settings.get(TransportType.TOR).config })
             )
         }
+    }
+    remember(args) {
+        val path = args.firstOrNull { it.endsWith(".stadeid", ignoreCase = true) }
+        if (path != null) {
+            runCatching {
+                val text = java.io.File(path).readText().trim()
+                if (text.startsWith("STADE2-")) container.pendingInvite.value = text
+            }
+        }
+        Unit
     }
     val windowState = rememberWindowState(
         position = WindowPosition.Aligned(Alignment.Center)

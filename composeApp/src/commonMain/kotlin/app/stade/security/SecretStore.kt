@@ -32,6 +32,10 @@ class SecretStore(
         db.stadeDbQueries.deleteKv(saltKey)
     }
 
+    fun setupPin(pin: String) = setupPassphrase(pin)
+    fun verifyPin(pin: String): Boolean = verifyPassphrase(pin)
+    fun clearPin() = clearPassphrase()
+
     private fun derive(passphrase: String, salt: ByteArray): ByteArray {
         var current = passphrase.encodeToByteArray() + salt
         repeat(20_000) { current = crypto.hash(current) }

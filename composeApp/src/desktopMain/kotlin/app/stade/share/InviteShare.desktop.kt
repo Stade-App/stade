@@ -8,15 +8,14 @@ actual object InviteShare {
         return runCatching {
             val safeNick = ownerNickname.filter { it.isLetterOrDigit() }.take(16).ifBlank { "stade" }
             val home = System.getProperty("user.home") ?: "."
-            val file = File(home, "stade-invite-$safeNick.txt")
+            val file = File(home, "stade-$safeNick.stadeid")
             file.writeText(invite)
             runCatching {
                 if (Desktop.isDesktopSupported()) {
                     Desktop.getDesktop().open(file.parentFile ?: file)
                 }
             }
-            "Davet kodu dosyaya kaydedildi: ${file.absolutePath}"
+            "Davet dosyası kaydedildi: ${file.absolutePath}"
         }.getOrElse { "Dosya yazılamadı: ${it.message}" }
     }
 }
-

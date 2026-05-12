@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.OpenInNew
@@ -85,6 +87,7 @@ fun SettingsScreen(
     owner: LocalIdentity,
     onBack: () -> Unit,
     onOpenTransports: () -> Unit,
+    onOpenPinSetup: (requireCurrent: Boolean) -> Unit = {},
     onLogout: () -> Unit
 ) {
     val fingerprint = remember(owner.id) { container.fingerprint.fingerprint(owner.publicSigningKey) }
@@ -92,8 +95,15 @@ fun SettingsScreen(
     val notificationsEnabled by getNotificationsEnabled()
     val notificationPrivacyEnabled by getNotificationPrivacyEnabled()
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showDisableLockDialog by remember { mutableStateOf(false) }
+    var lockRefreshTick by remember { mutableStateOf(0) }
+    val lockEnabled = remember(lockRefreshTick) { container.secrets.isLockEnabled() }
     val clipboardManager = LocalClipboardManager.current
     var fingerprintCopied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        lockRefreshTick++
+    }
 
     LaunchedEffect(fingerprintCopied) {
         if (fingerprintCopied) {
@@ -130,6 +140,43 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showLogoutDialog = false }) { Text("İptal") }
+            }
+        )
+    }
+
+    if (showDisableLockDialog) {
+        AlertDialog(
+            onDismissRequest = { showDisableLockDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.LockOpen,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text("Uygulama kilidi kaldırılsın mı?") },
+            text = {
+                Text(
+                    "Kilidi kaldırırsan uygulama her açılışta doğrudan açılır. Cihazına erişen biri " +
+                        "tüm sohbetlerini görebilir.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        container.secrets.clearPin()
+                        lockRefreshTick++
+                        showDisableLockDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) { Text("Kaldır") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisableLockDialog = false }) { Text("İptal") }
             }
         )
     }
@@ -248,6 +295,41 @@ fun SettingsScreen(
                         subtitle = "LAN, Tor ve diğer ağ ayarları",
                         onClick = onOpenTransports
                     )
+                }
+            }
+
+            item {
+                SettingsSectionLabel("Güvenlik")
+                SettingsGroup {
+                    SwitchSettingsRow(
+                        icon = if (lockEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
+                        iconTint = if (lockEnabled) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.onSurfaceVariant,
+                        title = "Uygulama kilidi",
+                        subtitle = if (lockEnabled) "PIN her açılışta sorulur"
+                                   else "Uygulama doğrudan açılır",
+                        checked = lockEnabled,
+                        onCheckedChange = { wantEnabled ->
+                            if (wantEnabled) {
+                                onOpenPinSetup(false)
+                            } else {
+                                showDisableLockDialog = true
+                            }
+                        }
+                    )
+                    if (lockEnabled) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        NavigationSettingsRow(
+                            icon = Icons.Default.Fingerprint,
+                            iconTint = MaterialTheme.colorScheme.secondary,
+                            title = "PIN'i değiştir",
+                            subtitle = "Önce mevcut PIN sorulur",
+                            onClick = { onOpenPinSetup(true) }
+                        )
+                    }
                 }
             }
 

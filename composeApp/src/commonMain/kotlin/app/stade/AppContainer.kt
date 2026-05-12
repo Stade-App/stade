@@ -22,6 +22,7 @@ import app.stade.transport.ConnectionManager
 import app.stade.transport.ConnectionRegistry
 import app.stade.transport.TransportPlugin
 import app.stade.transport.TransportSettings
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class AppContainer(
     driverFactory: DriverFactory,
@@ -78,4 +79,6 @@ class AppContainer(
     @Volatile var activeContactId: String? = null
 
     @Volatile var isAppInForeground: Boolean = true
+
+    val pendingInvite = MutableStateFlow<String?>(null)
 }

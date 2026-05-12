@@ -46,6 +46,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,6 +76,7 @@ import app.stade.ui.components.BrandMark
 import app.stade.ui.components.formatChatTime
 import app.stade.ui.screens.AddContactScreen
 import app.stade.ui.screens.ChatScreen
+import app.stade.ui.screens.PinSetupScreen
 import app.stade.ui.screens.SettingsScreen
 import app.stade.ui.screens.TransportsScreen
 import app.stade.ui.screens.VerifyContactScreen
@@ -88,6 +90,7 @@ private sealed class PanelRight {
     data object Transports : PanelRight()
     data object AddContact : PanelRight()
     data class Verify(val contactId: String) : PanelRight()
+    data class PinSetup(val requireCurrent: Boolean, val ret: PanelRight) : PanelRight()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,6 +105,13 @@ fun TwoPanelLayout(
     val connectedSet by container.sync.connectedContacts.collectAsState()
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
     var query by remember { mutableStateOf("") }
+
+    val pendingInvite by container.pendingInvite.collectAsState()
+    LaunchedEffect(pendingInvite) {
+        if (pendingInvite != null && right !is PanelRight.AddContact && right !is PanelRight.PinSetup) {
+            right = PanelRight.AddContact
+        }
+    }
 
     var deleteTargetContact by remember { mutableStateOf<Contact?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -380,7 +390,17 @@ fun TwoPanelLayout(
                     owner = owner,
                     onBack = { right = PanelRight.Empty },
                     onOpenTransports = { right = PanelRight.Transports },
+                    onOpenPinSetup = { requireCurrent ->
+                        right = PanelRight.PinSetup(requireCurrent, PanelRight.Settings)
+                    },
                     onLogout = onLogout
+                )
+
+                is PanelRight.PinSetup -> PinSetupScreen(
+                    container = container,
+                    requireCurrent = rp.requireCurrent,
+                    onDone = { right = rp.ret },
+                    onCancel = { right = rp.ret }
                 )
 
                 is PanelRight.Transports -> TransportsScreen(
@@ -391,7 +411,10 @@ fun TwoPanelLayout(
                 is PanelRight.AddContact -> AddContactScreen(
                     container = container,
                     owner = owner,
-                    onBack = { right = PanelRight.Empty }
+                    onBack = {
+                        container.pendingInvite.value = null
+                        right = PanelRight.Empty
+                    }
                 )
 
                 is PanelRight.Verify -> VerifyContactScreen(

@@ -32,6 +32,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +66,17 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
     var status by remember { mutableStateOf<String?>(null) }
     var statusSticky by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
+
+    val pendingInvite by container.pendingInvite.collectAsState()
+    LaunchedEffect(pendingInvite) {
+        val p = pendingInvite
+        if (!p.isNullOrBlank() && pastedCode.isBlank()) {
+            pastedCode = p
+            status = "Davet dosyası açıldı — bu kişiye bir isim ver ve \"Daveti kabul et\""
+            statusSticky = true
+            container.pendingInvite.value = null
+        }
+    }
 
     LaunchedEffect(status, statusSticky) {
         if (status != null && !statusSticky) {

@@ -12,7 +12,7 @@ actual object InviteShare {
             val ctx: Context = StadeApplication.instance
             val safeNick = ownerNickname.filter { it.isLetterOrDigit() }.take(16).ifBlank { "stade" }
             val dir = File(ctx.cacheDir, "invites").apply { mkdirs() }
-            val file = File(dir, "stade-invite-$safeNick.txt")
+            val file = File(dir, "stade-$safeNick.stadeid")
             file.writeText(invite)
             val uri = FileProvider.getUriForFile(
                 ctx,
@@ -20,17 +20,15 @@ actual object InviteShare {
                 file
             )
             val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
+                type = "application/octet-stream"
                 putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_TEXT, invite)
                 putExtra(Intent.EXTRA_SUBJECT, "Stade davet kodu")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            val chooser = Intent.createChooser(intent, "Davet kodunu paylaş")
+            val chooser = Intent.createChooser(intent, "Davet dosyasını paylaş")
                 .apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
             ctx.startActivity(chooser)
-            "Paylaşım açıldı"
+            "Paylaşım açıldı (stade-$safeNick.stadeid)"
         }.getOrElse { "Paylaşım açılamadı: ${it.message}" }
     }
 }
-
