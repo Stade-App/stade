@@ -475,7 +475,7 @@ private fun KeyButton(
             .size(72.dp)
             .clip(CircleShape)
             .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onClick()
             },
         color = bg,
