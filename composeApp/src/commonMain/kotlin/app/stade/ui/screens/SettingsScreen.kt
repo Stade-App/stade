@@ -125,7 +125,8 @@ fun SettingsScreen(
             title = { Text("Oturumu Kapat") },
             text = {
                 Text(
-                    "Yerel veriler korunur; bir sonraki açılışta kimliğin hazır olacak.",
+                    "Bu cihazdaki kimliğin, kişilerin, sohbet geçmişin ve taşıma " +
+                        "ayarların kalıcı olarak silinir. Bu işlem geri alınamaz.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -136,7 +137,7 @@ fun SettingsScreen(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError
                     )
-                ) { Text("Çıkış Yap") }
+                ) { Text("Sil ve çıkış yap") }
             },
             dismissButton = {
                 TextButton(onClick = { showLogoutDialog = false }) { Text("İptal") }

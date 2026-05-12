@@ -19,11 +19,17 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,15 +44,20 @@ import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.ui.components.BrandMark
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 private const val PIN_MIN = 4
-private const val PIN_MAX = 8
+private const val PIN_MAX = 4
 
 @Composable
-fun LockScreen(container: AppContainer, onUnlocked: () -> Unit) {
+fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () -> Unit = {}) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var shake by remember { mutableStateOf(false) }
+    var showForgotDialog by remember { mutableStateOf(false) }
+    var wiping by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(error) {
         if (error != null) {
@@ -102,7 +113,61 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit) {
                 onDigit = { d -> if (pin.length < PIN_MAX && error == null) pin += d },
                 onBackspace = { if (pin.isNotEmpty()) pin = pin.dropLast(1) }
             )
+            Spacer(Modifier.height(16.dp))
+            TextButton(
+                onClick = { showForgotDialog = true },
+                enabled = !wiping
+            ) {
+                Text("Şifremi unuttum")
+            }
         }
+    }
+
+    if (showForgotDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!wiping) showForgotDialog = false },
+            icon = {
+                Icon(
+                    Icons.Filled.WarningAmber,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text("PIN'i sıfırla") },
+            text = {
+                Text(
+                    "PIN'in cihazından kurtarılamaz. Devam edersen tüm yerel veriler " +
+                        "(kimliğin, kişilerin, sohbet geçmişin ve taşıma ayarların) kalıcı " +
+                        "olarak silinir ve uygulama sıfırlanır.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (wiping) return@Button
+                        wiping = true
+                        scope.launch {
+                            container.wipeAllData()
+                            showForgotDialog = false
+                            wiping = false
+                            onForgotPin()
+                        }
+                    },
+                    enabled = !wiping,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) { Text(if (wiping) "Siliniyor…" else "Sıfırla ve sil") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showForgotDialog = false },
+                    enabled = !wiping
+                ) { Text("Vazgeç") }
+            }
+        )
     }
 }
 
@@ -152,7 +217,8 @@ fun PinSetupScreen(
                 }
             }
             Phase.New -> {
-                if (newPin.length in PIN_MIN..PIN_MAX) {
+                if (newPin.length >= PIN_MAX) {
+                    phase = Phase.Confirm
                 }
             }
             Phase.Confirm -> {
@@ -178,7 +244,7 @@ fun PinSetupScreen(
     }
     val sub = when (phase) {
         Phase.Current -> "Devam etmek için mevcut PIN'ini gir."
-        Phase.New -> "$PIN_MIN ila $PIN_MAX hane. \"Onayla\" tuşuyla bir sonraki adıma geç."
+        Phase.New -> "4 haneli bir PIN belirle."
         Phase.Confirm -> "Aynı PIN'i tekrar gir."
     }
 
@@ -227,10 +293,8 @@ fun PinSetupScreen(
                         Phase.Confirm -> if (confirmPin.isNotEmpty()) confirmPin = confirmPin.dropLast(1)
                     }
                 },
-                actionLabel = when (phase) {
-                    Phase.New -> if (newPin.length >= PIN_MIN) "Onayla" else null
-                    else -> null
-                },
+                actionLabel = null,
+                actionIsCheck = phase == Phase.New && newPin.length >= PIN_MIN,
                 onAction = {
                     if (phase == Phase.New && newPin.length >= PIN_MIN) {
                         phase = Phase.Confirm
@@ -279,6 +343,7 @@ private fun PinKeypad(
     onDigit: (String) -> Unit,
     onBackspace: () -> Unit,
     actionLabel: String? = null,
+    actionIsCheck: Boolean = false,
     onAction: () -> Unit = {},
     cancelLabel: String? = null,
     onCancel: () -> Unit = {}
@@ -298,7 +363,9 @@ private fun PinKeypad(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (actionLabel != null) {
+            if (actionIsCheck) {
+                KeyButton(checkIcon = true, isAction = true) { onAction() }
+            } else if (actionLabel != null) {
                 KeyButton(label = actionLabel, isAction = true) { onAction() }
             } else if (cancelLabel != null) {
                 KeyButton(label = cancelLabel, isAction = false, small = true) { onCancel() }
@@ -315,6 +382,7 @@ private fun PinKeypad(
 private fun KeyButton(
     label: String = "",
     icon: Boolean = false,
+    checkIcon: Boolean = false,
     isAction: Boolean = false,
     small: Boolean = false,
     onClick: () -> Unit
@@ -336,14 +404,18 @@ private fun KeyButton(
         shape = CircleShape
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-            if (icon) {
-                Icon(
+            when {
+                checkIcon -> Icon(
+                    Icons.Filled.Check,
+                    contentDescription = "Onayla",
+                    tint = fg
+                )
+                icon -> Icon(
                     Icons.AutoMirrored.Filled.Backspace,
                     contentDescription = "Sil",
                     tint = fg
                 )
-            } else {
-                Text(
+                else -> Text(
                     label,
                     style = if (small) MaterialTheme.typography.labelLarge
                             else MaterialTheme.typography.headlineSmall,

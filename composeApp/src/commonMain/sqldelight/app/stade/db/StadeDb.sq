@@ -193,3 +193,25 @@ SELECT value FROM KeyValue WHERE key = ?;
 
 deleteKv:
 DELETE FROM KeyValue WHERE key = ?;
+
+wipeMessages:
+DELETE FROM Message;
+
+wipeOutbox:
+DELETE FROM Outbox;
+
+wipeContacts:
+DELETE FROM Contact;
+
+wipePending:
+DELETE FROM PendingContact;
+
+wipeIdentities:
+DELETE FROM LocalIdentity;
+
+wipeTransports:
+DELETE FROM TransportSetting;
+
+wipeKeyValue:
+DELETE FROM KeyValue;
+

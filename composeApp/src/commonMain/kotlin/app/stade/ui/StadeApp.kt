@@ -90,7 +90,12 @@ fun StadeApp(container: AppContainer) {
             when {
                 screen == Screen.Lock -> LockScreen(
                     container = container,
-                    onUnlocked = { unlocked = true; screen = Screen.Onboarding }
+                    onUnlocked = { unlocked = true; screen = Screen.Onboarding },
+                    onForgotPin = {
+                        identity = null
+                        unlocked = true
+                        screen = Screen.Onboarding
+                    }
                 )
                 screen is Screen.PinSetup -> {
                     val s = screen as Screen.PinSetup
@@ -109,9 +114,13 @@ fun StadeApp(container: AppContainer) {
                     container = container,
                     owner = identity!!,
                     onLogout = {
-                        scope.launch { container.connections.stop() }
-                        identity = null
-                        screen = Screen.Onboarding
+                        scope.launch {
+                            container.connections.stop()
+                            container.wipeAllData()
+                            identity = null
+                            unlocked = !container.secrets.isLockEnabled()
+                            screen = if (unlocked) Screen.Onboarding else Screen.Lock
+                        }
                     }
                 )
                 screen == Screen.Settings -> SettingsScreen(
@@ -123,9 +132,13 @@ fun StadeApp(container: AppContainer) {
                         screen = Screen.PinSetup(requireCurrent, Screen.Settings)
                     },
                     onLogout = {
-                        scope.launch { container.connections.stop() }
-                        identity = null
-                        screen = Screen.Onboarding
+                        scope.launch {
+                            container.connections.stop()
+                            container.wipeAllData()
+                            identity = null
+                            unlocked = !container.secrets.isLockEnabled()
+                            screen = if (unlocked) Screen.Onboarding else Screen.Lock
+                        }
                     }
                 )
                 screen == Screen.Transports -> TransportsScreen(

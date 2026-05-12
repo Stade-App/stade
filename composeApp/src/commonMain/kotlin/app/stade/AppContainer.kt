@@ -81,4 +81,28 @@ class AppContainer(
     @Volatile var isAppInForeground: Boolean = true
 
     val pendingInvite = MutableStateFlow<String?>(null)
+
+    /**
+     * Bütün yerel veriyi siler: kimlik, kişiler, mesajlar, outbox, taşımalar ve
+     * tüm anahtar/değer kayıtları (PIN doğrulayıcısı dahil). "Şifremi unuttum"
+     * akışı için kullanılır; PIN veriyi şifrelemediğinden tek güvenli kurtarma
+     * yolu sıfırlamadır.
+     */
+    suspend fun wipeAllData() {
+        runCatching { connections.stop() }
+        pendingInvite.value = null
+        activeContactId = null
+        db.stadeDbQueries.transaction {
+            db.stadeDbQueries.wipeOutbox()
+            db.stadeDbQueries.wipeMessages()
+            db.stadeDbQueries.wipePending()
+            db.stadeDbQueries.wipeContacts()
+            db.stadeDbQueries.wipeIdentities()
+            db.stadeDbQueries.wipeTransports()
+            db.stadeDbQueries.wipeKeyValue()
+        }
+        runCatching {
+            db.stadeDbQueries.putKv("schema.version", "2".encodeToByteArray())
+        }
+    }
 }
