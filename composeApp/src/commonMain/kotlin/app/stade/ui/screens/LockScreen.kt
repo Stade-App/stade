@@ -41,6 +41,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
@@ -463,6 +465,7 @@ private fun KeyButton(
     small: Boolean = false,
     onClick: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     val bg = if (isAction) MaterialTheme.colorScheme.primary
              else MaterialTheme.colorScheme.surfaceContainerHigh
     val fg = if (isAction) MaterialTheme.colorScheme.onPrimary
@@ -471,7 +474,10 @@ private fun KeyButton(
         modifier = Modifier
             .size(72.dp)
             .clip(CircleShape)
-            .clickable(onClick = onClick),
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            },
         color = bg,
         shape = CircleShape
     ) {

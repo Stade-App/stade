@@ -1,12 +1,13 @@
 package app.stade.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,8 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
@@ -39,6 +42,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -114,6 +118,8 @@ fun ChatScreen(
     var draft by remember { mutableStateOf(TextFieldValue("")) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+    // Diagnostics paneli varsayılan kapalı — klavye açıkken mesaj alanını tıklamaz
+    var diagnosticsExpanded by remember(contactId) { mutableStateOf(false) }
 
     var notification by remember { mutableStateOf<NotificationData?>(null) }
     var notificationKey by remember { mutableStateOf(0) }
@@ -287,6 +293,8 @@ fun ChatScreen(
                     DiagnosticsCard(
                         addresses = contact.addresses,
                         perAddr = diagnostics[contactId].orEmpty(),
+                        expanded = diagnosticsExpanded,
+                        onToggleExpanded = { diagnosticsExpanded = !diagnosticsExpanded },
                         onApplyInvite = { code ->
                             scope.launch {
                                 try {
@@ -453,105 +461,139 @@ private fun DiagnosticsCard(
     addresses: List<String>,
     perAddr: Map<String, DialAttempt>,
     onApplyInvite: (String) -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
 ) {
     var refreshLink by remember { mutableStateOf("") }
+
+    // Tek bir Card — tam genişlik, üst köşeler keskin (AppBar'a yapışık), alt köşeler yuvarlak
     Card(
-        modifier = Modifier.fillMaxWidth().padding(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(),
+        shape = RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(
+        // ── Başlık satırı — her zaman görünür, tıklanabilir ──────────────
+        Row(
             modifier = Modifier
-                .border(
-                    1.dp,
-                    MaterialTheme.colorScheme.outlineVariant,
-                    MaterialTheme.shapes.medium
-                )
-                .padding(14.dp)
+                .fillMaxWidth()
+                .clickable { onToggleExpanded() }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Bağlantı kurulamadı", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.height(6.dp))
-            if (addresses.isEmpty()) {
-                Text(
-                    "Bu kişinin kayıtlı bağlantı bilgisi yok. Karşı taraftan yeni bir davet kodu iste " +
-                        "ve aşağıya yapıştır.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Text(
-                    "Bağlantı kanalları",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                addresses.forEachIndexed { idx, addr ->
-                    val a = perAddr[addr]
-                    val (icon, label, color) = when (a?.status) {
-                        DialAttempt.Status.TRYING ->
-                            Triple("…", "deneniyor", MaterialTheme.colorScheme.onSurfaceVariant)
-                        DialAttempt.Status.CONNECT_OK ->
-                            Triple("•", "kanal hazır, doğrulama…", MaterialTheme.colorScheme.tertiary)
-                        DialAttempt.Status.HANDSHAKE_OK ->
-                            Triple("✓", "bağlı", StadeColors.online)
-                        DialAttempt.Status.CONNECT_FAIL ->
-                            Triple("✗", "ulaşılamıyor", MaterialTheme.colorScheme.error)
-                        DialAttempt.Status.HANDSHAKE_FAIL ->
-                            Triple("✗", "doğrulama başarısız", MaterialTheme.colorScheme.error)
-                        null ->
-                            Triple("·", "henüz denenmedi", MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Text(icon, color = color, style = MaterialTheme.typography.bodySmall)
-                        Spacer(Modifier.size(8.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Kanal #${idx + 1} • ${maskAddress(addr)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.error)
+            )
+            Text(
+                "Bağlantı kurulamadı",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = if (expanded) "Daralt" else "Genişlet",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        // ── Genişletilmiş içerik — şeffaf, aynı Card yüzeyinde ──────────
+        if (expanded) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                if (addresses.isEmpty()) {
+                    Text(
+                        "Bu kişinin kayıtlı bağlantı bilgisi yok. Karşı taraftan yeni bir davet kodu iste " +
+                            "ve aşağıya yapıştır.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        "Bağlantı kanalları",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    addresses.forEachIndexed { idx, addr ->
+                        val a = perAddr[addr]
+                        val (icon, label, color) = when (a?.status) {
+                            DialAttempt.Status.TRYING ->
+                                Triple("…", "deneniyor", MaterialTheme.colorScheme.onSurfaceVariant)
+                            DialAttempt.Status.CONNECT_OK ->
+                                Triple("•", "kanal hazır, doğrulama…", MaterialTheme.colorScheme.tertiary)
+                            DialAttempt.Status.HANDSHAKE_OK ->
+                                Triple("✓", "bağlı", StadeColors.online)
+                            DialAttempt.Status.CONNECT_FAIL ->
+                                Triple("✗", "ulaşılamıyor", MaterialTheme.colorScheme.error)
+                            DialAttempt.Status.HANDSHAKE_FAIL ->
+                                Triple("✗", "doğrulama başarısız", MaterialTheme.colorScheme.error)
+                            null ->
+                                Triple("·", "henüz denenmedi", MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Text(icon, color = color, style = MaterialTheme.typography.bodySmall)
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "Kanal #${idx + 1} • ${maskAddress(addr)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+                            }
                         }
                     }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Bağlantı uzaktan kuruluyorsa karşı tarafın çevrimiçi olması ve " +
+                            "ağ kanallarının hazır olması birkaç dakika sürebilir.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Bağlantı uzaktan kuruluyorsa karşı tarafın çevrimiçi olması ve " +
-                        "ağ kanallarının hazır olması birkaç dakika sürebilir.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = refreshLink,
+                    onValueChange = { refreshLink = it },
+                    label = { Text("Yeni davet kodu") },
+                    placeholder = { Text("STADE2-…") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 4,
+                    shape = MaterialTheme.shapes.medium
                 )
-            }
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = refreshLink,
-                onValueChange = { refreshLink = it },
-                label = { Text("Yeni davet kodu") },
-                placeholder = { Text("STADE2-…") },
-                modifier = Modifier.fillMaxWidth(),
-                maxLines = 4,
-                shape = MaterialTheme.shapes.medium
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    enabled = refreshLink.isNotBlank(),
-                    onClick = { onApplyInvite(refreshLink); refreshLink = "" },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Davet kodunu uygula") }
-                OutlinedButton(
-                    enabled = addresses.isNotEmpty(),
-                    onClick = onClear
-                ) { Text("Temizle") }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        enabled = refreshLink.isNotBlank(),
+                        onClick = { onApplyInvite(refreshLink); refreshLink = "" },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Davet kodunu uygula") }
+                    OutlinedButton(
+                        enabled = addresses.isNotEmpty(),
+                        onClick = onClear
+                    ) { Text("Temizle") }
+                }
             }
         }
     }
