@@ -16,6 +16,7 @@ import app.stade.message.ChatService
 import app.stade.message.FingerprintService
 import app.stade.message.MessageManager
 import app.stade.security.SecretStore
+import app.stade.security.Vault
 import app.stade.sync.Outbox
 import app.stade.sync.SyncEngine
 import app.stade.transport.ConnectionManager
@@ -26,13 +27,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 class AppContainer(
     driverFactory: DriverFactory,
+    val vault: Vault,
     transportFactory: (StadeDb) -> List<TransportPlugin> = { emptyList() }
 ) {
     val crypto: CryptoApi = platformCrypto()
     val pq: PqCrypto = platformPq()
 
     val db: StadeDb = run {
-        val driver = driverFactory.create()
+        val driver = driverFactory.create(vault.plaintextDbPath())
         val schemaOk = runCatching {
             driver.executeQuery(
                 identifier = null,
@@ -74,21 +76,14 @@ class AppContainer(
     val connections = ConnectionManager(transports, contacts, sync).also {
         sync.selfAddressesProvider = { it.selfAddresses() }
     }
-    val secrets = SecretStore(db, crypto)
+    val secrets = SecretStore(db, crypto, vault)
 
     @Volatile var activeContactId: String? = null
 
-    /** Uygulama ön planda mı? MainActivity onStart/onStop tarafından güncellenir. */
     var isAppInForeground = MutableStateFlow(true)
 
     val pendingInvite = MutableStateFlow<String?>(null)
 
-    /**
-     * Bütün yerel veriyi siler: kimlik, kişiler, mesajlar, outbox, taşımalar ve
-     * tüm anahtar/değer kayıtları (PIN doğrulayıcısı dahil). "Şifremi unuttum"
-     * akışı için kullanılır; PIN veriyi şifrelemediğinden tek güvenli kurtarma
-     * yolu sıfırlamadır.
-     */
     suspend fun wipeAllData() {
         runCatching { connections.stop() }
         pendingInvite.value = null
@@ -105,5 +100,6 @@ class AppContainer(
         runCatching {
             db.stadeDbQueries.putKv("schema.version", "2".encodeToByteArray())
         }
+        runCatching { vault.wipe() }
     }
 }

@@ -45,7 +45,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import app.stade.AppContainer
+import app.stade.security.UnlockOutcome
+import app.stade.security.Vault
 import app.stade.ui.components.BrandMark
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -56,49 +57,86 @@ private const val PIN_MIN = 4
 private const val PIN_MAX = 16
 private const val PIN_DOTS_MAX = 8
 
-// Hatalı PIN titreme animasyonu — Animatable ile doğrudan çalıştırılır, state flip yok.
 private suspend fun Animatable<Float, *>.shake() {
     animateTo(0f, keyframes {
         durationMillis = 420
-        0f   at 0
+        0f at 0
         -12f at 55
-        12f  at 110
+        12f at 110
         -10f at 165
-        10f  at 220
-        -6f  at 275
-        6f   at 330
-        0f   at 420
+        10f at 220
+        -6f at 275
+        6f at 330
+        0f at 420
     })
 }
 
 @Composable
-fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () -> Unit = {}) {
+fun LockScreen(
+    vault: Vault,
+    onUnlocked: () -> Unit,
+    onForgotPin: () -> Unit = {}
+) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var showForgotDialog by remember { mutableStateOf(false) }
     var wiping by remember { mutableStateOf(false) }
     var isVerifying by remember { mutableStateOf(false) }
+    var lockoutUntil by remember { mutableStateOf(vault.lockoutUntilMillis()) }
+    var nowTick by remember { mutableStateOf(vault.nowMillis()) }
     val shakeOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
-    val scrambleEnabled = remember { container.secrets.isScrambleKeypadEnabled() }
+    val scrambleEnabled = remember { vault.isScrambleKeypadEnabled() }
+
+    LaunchedEffect(lockoutUntil) {
+        while (lockoutUntil > vault.nowMillis()) {
+            nowTick = vault.nowMillis()
+            delay(500)
+        }
+        nowTick = vault.nowMillis()
+    }
+
+    val lockedNow = lockoutUntil > nowTick
 
     fun tryUnlock() {
-        if (pin.length < PIN_MIN || error != null || isVerifying) return
+        if (pin.length < PIN_MIN || error != null || isVerifying || lockedNow) return
         val currentPin = pin
         isVerifying = true
         scope.launch {
-            val correct = withContext(Dispatchers.Default) {
-                container.secrets.verifyPin(currentPin)
-            }
+            val outcome = withContext(Dispatchers.Default) { vault.unlock(currentPin) }
             isVerifying = false
-            if (correct) {
-                onUnlocked()
-            } else {
-                error = "PIN hatalı"
-                launch { shakeOffset.shake() }   // titreme — ana akışı bloke etmez
-                delay(700)
-                pin = ""
-                error = null
+            when (outcome) {
+                UnlockOutcome.Success -> onUnlocked()
+                is UnlockOutcome.Wrong -> {
+                    error = if (outcome.remainingBeforeLockout > 0) {
+                        "Şifre hatalı (${outcome.remainingBeforeLockout} hak kaldı)"
+                    } else {
+                        "Şifre hatalı"
+                    }
+                    launch { shakeOffset.shake() }
+                    lockoutUntil = vault.lockoutUntilMillis()
+                    delay(700)
+                    pin = ""
+                    error = null
+                }
+                is UnlockOutcome.LockedOut -> {
+                    lockoutUntil = outcome.untilMillis
+                    error = null
+                    pin = ""
+                }
+                UnlockOutcome.NotInitialized -> {
+                    error = "Kasa başlatılmamış"
+                    delay(700)
+                    pin = ""
+                    error = null
+                }
+                is UnlockOutcome.Error -> {
+                    error = outcome.message
+                    launch { shakeOffset.shake() }
+                    delay(900)
+                    pin = ""
+                    error = null
+                }
             }
         }
     }
@@ -114,14 +152,13 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () 
             Text("Kilidi aç", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(6.dp))
             Text(
-                "Devam etmek için PIN'ini gir.",
+                if (lockedNow) "Çok fazla hatalı giriş. Bekleyin." else "Devam etmek için şifreni gir.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(28.dp))
 
-            // Doğrulama süresince spinner; aksi halde noktalar
             Box(modifier = Modifier.height(24.dp), contentAlignment = Alignment.Center) {
                 if (isVerifying) {
                     CircularProgressIndicator(
@@ -140,9 +177,17 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () 
 
             Spacer(Modifier.height(10.dp))
             Box(modifier = Modifier.height(20.dp)) {
-                error?.let {
-                    Text(
-                        it,
+                when {
+                    lockedNow -> {
+                        val remaining = ((lockoutUntil - nowTick) / 1000L).coerceAtLeast(0L)
+                        Text(
+                            "Yeniden denemek için ${formatRemaining(remaining)}",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                    error != null -> Text(
+                        error!!,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.labelMedium
                     )
@@ -151,7 +196,7 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () 
             Spacer(Modifier.height(20.dp))
             PinKeypad(
                 onDigit = { d ->
-                    if (pin.length < PIN_MAX && error == null && !isVerifying) {
+                    if (!lockedNow && pin.length < PIN_MAX && error == null && !isVerifying) {
                         pin += d
                         if (pin.length >= PIN_MAX) tryUnlock()
                     }
@@ -159,7 +204,7 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () 
                 onBackspace = {
                     if (pin.isNotEmpty() && !isVerifying) pin = pin.dropLast(1)
                 },
-                actionIsCheck = pin.length >= PIN_MIN && error == null && !isVerifying,
+                actionIsCheck = pin.length >= PIN_MIN && error == null && !isVerifying && !lockedNow,
                 onAction = { tryUnlock() },
                 scrambled = scrambleEnabled
             )
@@ -180,12 +225,10 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () 
                     tint = MaterialTheme.colorScheme.error
                 )
             },
-            title = { Text("PIN'i sıfırla") },
+            title = { Text("Şifreyi sıfırla") },
             text = {
                 Text(
-                    "PIN'in cihazından kurtarılamaz. Devam edersen tüm yerel veriler " +
-                        "(kimliğin, kişilerin, sohbet geçmişin ve taşıma ayarların) kalıcı " +
-                        "olarak silinir ve uygulama sıfırlanır.",
+                    "Şifre cihazından kurtarılamaz. Devam edersen tüm yerel veriler kalıcı olarak silinir ve uygulama sıfırlanır.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -195,7 +238,7 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () 
                         if (wiping) return@Button
                         wiping = true
                         scope.launch {
-                            container.wipeAllData()
+                            withContext(Dispatchers.Default) { vault.wipe() }
                             showForgotDialog = false
                             wiping = false
                             onForgotPin()
@@ -217,16 +260,22 @@ fun LockScreen(container: AppContainer, onUnlocked: () -> Unit, onForgotPin: () 
     }
 }
 
+private fun formatRemaining(seconds: Long): String = when {
+    seconds < 60 -> "${seconds}s"
+    seconds < 3600 -> "${seconds / 60}dk ${seconds % 60}s"
+    else -> "${seconds / 3600}sa ${(seconds % 3600) / 60}dk"
+}
+
 @Composable
 fun PinSetupScreen(
-    container: AppContainer,
-    title: String = "PIN belirle",
+    vault: Vault,
     requireCurrent: Boolean = false,
     onDone: () -> Unit,
     onCancel: () -> Unit
 ) {
     var phase by remember { mutableStateOf(if (requireCurrent) Phase.Current else Phase.New) }
     var currentPin by remember { mutableStateOf("") }
+    var savedCurrent by remember { mutableStateOf("") }
     var newPin by remember { mutableStateOf("") }
     var confirmPin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -240,21 +289,22 @@ fun PinSetupScreen(
         Phase.Confirm -> confirmPin
     }
 
-    fun tryVerifyCurrent() {
+    fun verifyCurrentAndAdvance() {
         if (currentPin.length < PIN_MIN || error != null || isVerifying) return
         val snap = currentPin
         isVerifying = true
         scope.launch {
-            val correct = withContext(Dispatchers.Default) {
-                container.secrets.verifyPin(snap)
+            val ok = withContext(Dispatchers.Default) {
+                vault.unlock(snap) is UnlockOutcome.Success
             }
             isVerifying = false
-            if (correct) {
+            if (ok) {
+                savedCurrent = snap
                 phase = Phase.New
                 currentPin = ""
                 error = null
             } else {
-                error = "Mevcut PIN hatalı"
+                error = "Mevcut şifre hatalı"
                 launch { shakeOffset.shake() }
                 delay(700)
                 currentPin = ""
@@ -266,10 +316,26 @@ fun PinSetupScreen(
     LaunchedEffect(confirmPin, phase) {
         if (phase == Phase.Confirm && confirmPin.length == newPin.length) {
             if (confirmPin == newPin) {
-                withContext(Dispatchers.Default) { container.secrets.setupPin(newPin) }
-                onDone()
+                isVerifying = true
+                val ok = withContext(Dispatchers.Default) {
+                    if (requireCurrent) {
+                        vault.changePassword(savedCurrent, newPin)
+                    } else {
+                        runCatching { vault.setup(newPin) }.isSuccess
+                    }
+                }
+                isVerifying = false
+                if (ok) {
+                    onDone()
+                } else {
+                    error = "Şifre değiştirilemedi"
+                    launch { shakeOffset.shake() }
+                    delay(800)
+                    confirmPin = ""
+                    error = null
+                }
             } else {
-                error = "PIN'ler eşleşmiyor"
+                error = "Şifreler eşleşmiyor"
                 launch { shakeOffset.shake() }
                 delay(700)
                 confirmPin = ""
@@ -279,14 +345,14 @@ fun PinSetupScreen(
     }
 
     val heading = when (phase) {
-        Phase.Current -> "Mevcut PIN'i gir"
-        Phase.New -> "Yeni PIN belirle"
-        Phase.Confirm -> "PIN'i doğrula"
+        Phase.Current -> "Mevcut şifreyi gir"
+        Phase.New -> "Yeni şifre belirle"
+        Phase.Confirm -> "Şifreyi doğrula"
     }
     val sub = when (phase) {
-        Phase.Current -> "Devam etmek için mevcut PIN'ini gir."
-        Phase.New -> "4-16 haneli bir PIN belirle."
-        Phase.Confirm -> "Aynı PIN'i tekrar gir."
+        Phase.Current -> "Devam etmek için mevcut şifreni gir."
+        Phase.New -> "$PIN_MIN-$PIN_MAX haneli bir şifre belirle."
+        Phase.Confirm -> "Aynı şifreyi tekrar gir."
     }
 
     Scaffold { padding ->
@@ -338,7 +404,7 @@ fun PinSetupScreen(
                     when (phase) {
                         Phase.Current -> if (currentPin.length < PIN_MAX && error == null && !isVerifying) {
                             currentPin += d
-                            if (currentPin.length >= PIN_MAX) tryVerifyCurrent()
+                            if (currentPin.length >= PIN_MAX) verifyCurrentAndAdvance()
                         }
                         Phase.New -> if (newPin.length < PIN_MAX) {
                             newPin += d
@@ -362,12 +428,12 @@ fun PinSetupScreen(
                 },
                 onAction = {
                     when (phase) {
-                        Phase.Current -> tryVerifyCurrent()
+                        Phase.Current -> verifyCurrentAndAdvance()
                         Phase.New -> if (newPin.length >= PIN_MIN) phase = Phase.Confirm
                         Phase.Confirm -> {}
                     }
                 },
-                cancelLabel = "İptal",
+                cancelLabel = if (requireCurrent) "İptal" else null,
                 onCancel = onCancel
             )
         }
@@ -405,7 +471,7 @@ private fun PinDots(filled: Int, shakeOffset: Float, error: Boolean) {
                 "+$overflow",
                 style = MaterialTheme.typography.labelMedium,
                 color = if (error) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -467,9 +533,9 @@ private fun KeyButton(
 ) {
     val haptic = LocalHapticFeedback.current
     val bg = if (isAction) MaterialTheme.colorScheme.primary
-             else MaterialTheme.colorScheme.surfaceContainerHigh
+    else MaterialTheme.colorScheme.surfaceContainerHigh
     val fg = if (isAction) MaterialTheme.colorScheme.onPrimary
-             else MaterialTheme.colorScheme.onSurface
+    else MaterialTheme.colorScheme.onSurface
     Surface(
         modifier = Modifier
             .size(72.dp)
@@ -488,7 +554,7 @@ private fun KeyButton(
                 else -> Text(
                     label,
                     style = if (small) MaterialTheme.typography.labelLarge
-                            else MaterialTheme.typography.headlineSmall,
+                    else MaterialTheme.typography.headlineSmall,
                     color = fg
                 )
             }

@@ -7,3 +7,5 @@ local.properties
 captures/
 out/
 .DS_Store
+
+*_out.log

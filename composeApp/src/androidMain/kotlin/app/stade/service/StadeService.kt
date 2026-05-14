@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
@@ -78,35 +79,40 @@ class StadeService : Service() {
 
 
     private fun observeMessages() {
-        val container = (application as StadeApplication).container
+        val app = (application as StadeApplication)
         scope.launch {
-            container.sync.events.collect { event ->
-                when (event) {
-                    is SyncEngine.SyncEvent.MessageReceived -> {
-                        if (!getNotificationsEnabled().value) return@collect
-                        if (container.isAppInForeground.value && container.activeContactId == event.contactId) return@collect
-                        if (getNotificationPrivacyEnabled().value) {
-                            val total = runCatching { container.messages.totalUnread() }.getOrDefault(0L).toInt()
-                            if (total > 0) showPrivacyNotification(total)
-                        } else {
-                            val contact = container.contacts.get(event.contactId)
-                            val senderName = contact?.nickname ?: "Bilinmeyen"
-                            val preview = container.messages.lastMessage(event.contactId)?.body
-                                ?: "Yeni mesaj"
-                            showMessageNotification(event.contactId, senderName, preview)
+            app.containerFlow.collectLatest { container ->
+                if (container == null) return@collectLatest
+                launch {
+                    container.sync.events.collect { event ->
+                        when (event) {
+                            is SyncEngine.SyncEvent.MessageReceived -> {
+                                if (!getNotificationsEnabled().value) return@collect
+                                if (container.isAppInForeground.value && container.activeContactId == event.contactId) return@collect
+                                if (getNotificationPrivacyEnabled().value) {
+                                    val total = runCatching { container.messages.totalUnread() }.getOrDefault(0L).toInt()
+                                    if (total > 0) showPrivacyNotification(total)
+                                } else {
+                                    val contact = container.contacts.get(event.contactId)
+                                    val senderName = contact?.nickname ?: "Bilinmeyen"
+                                    val preview = container.messages.lastMessage(event.contactId)?.body
+                                        ?: "Yeni mesaj"
+                                    showMessageNotification(event.contactId, senderName, preview)
+                                }
+                            }
+                            else -> Unit
                         }
                     }
-                    else -> Unit
                 }
-            }
-        }
-        scope.launch {
-            val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            container.messages.observeTotalUnread().distinctUntilChanged().collect { count ->
-                if (count == 0L) {
-                    mgr.cancel(hiddenNotifId)
-                } else if (getNotificationPrivacyEnabled().value && getNotificationsEnabled().value) {
-                    showPrivacyNotification(count.toInt())
+                launch {
+                    val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                    container.messages.observeTotalUnread().distinctUntilChanged().collect { count ->
+                        if (count == 0L) {
+                            mgr.cancel(hiddenNotifId)
+                        } else if (getNotificationPrivacyEnabled().value && getNotificationsEnabled().value) {
+                            showPrivacyNotification(count.toInt())
+                        }
+                    }
                 }
             }
         }

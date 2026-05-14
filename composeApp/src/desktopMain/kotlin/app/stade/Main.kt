@@ -14,6 +14,8 @@ import java.awt.Dimension
 import app.stade.crypto.Encoding
 import app.stade.db.DriverFactory
 import app.stade.db.StadeDb
+import app.stade.security.Vault
+import app.stade.security.VaultFactory
 import app.stade.transport.LanTransport
 import app.stade.transport.TorTransport
 import app.stade.transport.TransportSettings
@@ -27,22 +29,35 @@ import org.jetbrains.compose.resources.painterResource
 
 
 fun main(args: Array<String>) = application {
-    val container = remember {
-        AppContainer(DriverFactory()) { db ->
-            val nodeId = deriveNodeId(db)
-            val settings = TransportSettings(db)
-            listOf(
-                LanTransport(nodeId = nodeId),
-                TorTransport(configProvider = { settings.get(TransportType.TOR).config })
-            )
-        }
+    val boot = remember {
+        val vault: Vault = VaultFactory().create()
+        Runtime.getRuntime().addShutdownHook(Thread {
+            runCatching { vault.flushAndClose() }
+        })
+        BootContext(
+            vault = vault,
+            driverFactory = DriverFactory(),
+            transportFactory = { db ->
+                val nodeId = deriveNodeId(db)
+                val settings = TransportSettings(db)
+                listOf(
+                    LanTransport(nodeId = nodeId),
+                    TorTransport(configProvider = { settings.get(TransportType.TOR).config })
+                )
+            },
+            onContainerCreated = { c ->
+                pendingInviteAtBoot?.let { c.pendingInvite.value = it }
+            }
+        )
     }
     remember(args) {
         val path = args.firstOrNull { it.endsWith(".stadeid", ignoreCase = true) }
         if (path != null) {
             runCatching {
                 val text = java.io.File(path).readText().trim()
-                if (text.startsWith("STADE2-")) container.pendingInvite.value = text
+                if (text.startsWith("STADE2-")) {
+                    pendingInviteAtBoot = text
+                }
             }
         }
         Unit
@@ -57,9 +72,11 @@ fun main(args: Array<String>) = application {
         icon = painterResource(Res.drawable.app_icon_desktop)
     ) {
         SideEffect { window.minimumSize = Dimension(700, 660) }
-        Surface { StadeApp(container) }
+        Surface { StadeApp(boot) }
     }
 }
+
+private var pendingInviteAtBoot: String? = null
 
 private fun deriveNodeId(db: StadeDb): String {
     val key = "node.id"

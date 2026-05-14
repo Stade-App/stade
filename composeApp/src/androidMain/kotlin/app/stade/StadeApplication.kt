@@ -9,6 +9,8 @@ import android.os.Bundle
 import app.stade.crypto.Encoding
 import app.stade.db.DriverFactory
 import app.stade.db.StadeDb
+import app.stade.security.Vault
+import app.stade.security.VaultFactory
 import app.stade.transport.BluetoothTransport
 import app.stade.transport.LanTransport
 import app.stade.transport.TorTransport
@@ -16,32 +18,51 @@ import app.stade.transport.TransportSettings
 import app.stade.transport.TransportType
 
 class StadeApplication : Application() {
-    lateinit var container: AppContainer
+    lateinit var boot: BootContext
+        private set
+
+    val container: AppContainer?
+        get() = activeContainer
+
+    private var activeContainer: AppContainer? = null
+
+    val containerFlow = kotlinx.coroutines.flow.MutableStateFlow<AppContainer?>(null)
+
+    lateinit var vault: Vault
         private set
 
     override fun onCreate() {
         super.onCreate()
         instance = this
+        vault = VaultFactory(this).create()
         val driver = DriverFactory(this)
-        container = AppContainer(driver) { db ->
-            val nodeId = deriveNodeId(db)
-            val settings = TransportSettings(db)
-            listOf(
-                LanTransport(nodeId = nodeId),
-                TorTransport(configProvider = { settings.get(TransportType.TOR).config }),
-                BluetoothTransport { bluetoothAdapter() }
-            )
-        }
+        boot = BootContext(
+            vault = vault,
+            driverFactory = driver,
+            transportFactory = { db ->
+                val nodeId = deriveNodeId(db)
+                val settings = TransportSettings(db)
+                listOf(
+                    LanTransport(nodeId = nodeId),
+                    TorTransport(configProvider = { settings.get(TransportType.TOR).config }),
+                    BluetoothTransport { bluetoothAdapter() }
+                )
+            },
+            onContainerCreated = { c ->
+                activeContainer = c
+                containerFlow.value = c
+            }
+        )
         var startedCount = 0
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityStarted(activity: Activity) {
                 startedCount++
-                container.isAppInForeground.value = true
+                activeContainer?.isAppInForeground?.value = true
             }
             override fun onActivityStopped(activity: Activity) {
                 if (--startedCount <= 0) {
                     startedCount = 0
-                    container.isAppInForeground.value = false
+                    activeContainer?.isAppInForeground?.value = false
                 }
             }
             override fun onActivityCreated(a: Activity, b: Bundle?) {}
@@ -50,6 +71,14 @@ class StadeApplication : Application() {
             override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
             override fun onActivityDestroyed(a: Activity) {}
         })
+        Runtime.getRuntime().addShutdownHook(Thread {
+            runCatching { vault.flushAndClose() }
+        })
+    }
+
+    override fun onTerminate() {
+        runCatching { vault.flushAndClose() }
+        super.onTerminate()
     }
 
     private fun bluetoothAdapter(): BluetoothAdapter? {

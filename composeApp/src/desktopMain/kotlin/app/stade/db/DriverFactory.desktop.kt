@@ -6,11 +6,10 @@ import java.io.File
 import java.util.Properties
 
 actual class DriverFactory {
-    actual fun create(): SqlDriver {
-        val home = System.getProperty("user.home")
-        val dir = File(home, ".stade").apply { mkdirs() }
-        val dbFile = File(dir, "stade.db")
-        val fresh = !dbFile.exists()
+    actual fun create(dbFilePath: String): SqlDriver {
+        val dbFile = File(dbFilePath)
+        dbFile.parentFile?.mkdirs()
+        val fresh = !dbFile.exists() || dbFile.length() == 0L
         val driver = JdbcSqliteDriver("jdbc:sqlite:${dbFile.absolutePath}", Properties())
         if (fresh) {
             StadeDb.Schema.create(driver)

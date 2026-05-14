@@ -1,15 +1,18 @@
 package app.stade.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -36,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.transport.TransportType
+import app.stade.ui.components.PlatformVerticalScrollbar
 import app.stade.ui.components.maskAddress
 import kotlinx.coroutines.launch
 
@@ -57,72 +61,80 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
             )
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(configs, key = { it.type.name }) { cfg ->
-                val plugin = container.transports.get(cfg.type)
-                val info by (plugin?.info?.collectAsState(initial = null) ?: remember { mutableStateOf(null) })
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(label(cfg.type), style = MaterialTheme.typography.titleSmall)
+        val listState = rememberLazyListState()
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(configs, key = { it.type.name }) { cfg ->
+                    val plugin = container.transports.get(cfg.type)
+                    val info by (plugin?.info?.collectAsState(initial = null) ?: remember { mutableStateOf(null) })
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(label(cfg.type), style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        when {
+                                            info == null -> "kayıtlı değil"
+                                            info!!.running -> "çalışıyor · ${info!!.message}"
+                                            info!!.available -> "hazır"
+                                            else -> "uygun değil · ${info!!.message}"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = cfg.enabled,
+                                    onCheckedChange = {
+                                        container.transportSettings.setEnabled(cfg.type, it)
+                                        configs = container.transportSettings.all()
+                                    }
+                                )
+                            }
+                            plugin?.selfAddress()?.let {
+                                Spacer(Modifier.height(8.dp))
                                 Text(
-                                    when {
-                                        info == null -> "kayıtlı değil"
-                                        info!!.running -> "çalışıyor · ${info!!.message}"
-                                        info!!.available -> "hazır"
-                                        else -> "uygun değil · ${info!!.message}"
-                                    },
+                                    "Durum: ${maskAddress(it)} hazır",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            Switch(
-                                checked = cfg.enabled,
-                                onCheckedChange = {
-                                    container.transportSettings.setEnabled(cfg.type, it)
-                                    configs = container.transportSettings.all()
-                                }
-                            )
-                        }
-                        plugin?.selfAddress()?.let {
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "Durum: ${maskAddress(it)} hazır",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        val allAddrs = plugin?.let { runCatching { it.selfAddresses() }.getOrDefault(emptyList()) } ?: emptyList()
-                        if (allAddrs.size > 1) {
-                            Text(
-                                "${allAddrs.size} kanal hazır",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        if (cfg.type == TransportType.TOR) {
-                            Spacer(Modifier.height(12.dp))
-                            TorConfigEditor(
-                                initial = cfg.config,
-                                onSave = { newCfg ->
-                                    container.transportSettings.setConfig(TransportType.TOR, newCfg)
-                                    configs = container.transportSettings.all()
-                                    scope.launch {
-                                        runCatching { container.connections.restart(TransportType.TOR) }
+                            val allAddrs = plugin?.let { runCatching { it.selfAddresses() }.getOrDefault(emptyList()) } ?: emptyList()
+                            if (allAddrs.size > 1) {
+                                Text(
+                                    "${allAddrs.size} kanal hazır",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (cfg.type == TransportType.TOR) {
+                                Spacer(Modifier.height(12.dp))
+                                TorConfigEditor(
+                                    initial = cfg.config,
+                                    onSave = { newCfg ->
+                                        container.transportSettings.setConfig(TransportType.TOR, newCfg)
+                                        configs = container.transportSettings.all()
+                                        scope.launch {
+                                            runCatching { container.connections.restart(TransportType.TOR) }
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
             }
+            PlatformVerticalScrollbar(
+                state = listState,
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
+            )
         }
     }
 }

@@ -12,12 +12,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -75,6 +77,7 @@ import app.stade.notification.openNotificationSettings
 import app.stade.notification.setNotificationPrivacyEnabled
 import app.stade.notification.setNotificationsEnabled
 import app.stade.ui.components.Avatar
+import app.stade.ui.components.PlatformVerticalScrollbar
 import app.stade.ui.components.StadeIdCard
 import app.stade.ui.theme.getDynamicColorEnabled
 import app.stade.ui.theme.isDynamicColorSupported
@@ -88,7 +91,7 @@ fun SettingsScreen(
     owner: LocalIdentity,
     onBack: () -> Unit,
     onOpenTransports: () -> Unit,
-    onOpenPinSetup: (requireCurrent: Boolean) -> Unit = {},
+    onOpenSecurity: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     val fingerprint = remember(owner.id) { container.fingerprint.fingerprint(owner.publicSigningKey) }
@@ -96,18 +99,9 @@ fun SettingsScreen(
     val notificationsEnabled by getNotificationsEnabled()
     val notificationPrivacyEnabled by getNotificationPrivacyEnabled()
     var showLogoutDialog by remember { mutableStateOf(false) }
-    var showDisableLockDialog by remember { mutableStateOf(false) }
-    var lockRefreshTick by remember { mutableStateOf(0) }
-    val lockEnabled = remember(lockRefreshTick) { container.secrets.isLockEnabled() }
-    var scrambleEnabled by remember(lockRefreshTick) {
-        mutableStateOf(container.secrets.isScrambleKeypadEnabled())
-    }
     val clipboardManager = LocalClipboardManager.current
     var fingerprintCopied by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        lockRefreshTick++
-    }
 
     LaunchedEffect(fingerprintCopied) {
         if (fingerprintCopied) {
@@ -149,42 +143,6 @@ fun SettingsScreen(
         )
     }
 
-    if (showDisableLockDialog) {
-        AlertDialog(
-            onDismissRequest = { showDisableLockDialog = false },
-            icon = {
-                Icon(
-                    Icons.Default.LockOpen,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error
-                )
-            },
-            title = { Text("Uygulama kilidi kaldırılsın mı?") },
-            text = {
-                Text(
-                    "Kilidi kaldırırsan uygulama her açılışta doğrudan açılır. Cihazına erişen biri " +
-                        "tüm sohbetlerini görebilir.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        container.secrets.clearPin()
-                        lockRefreshTick++
-                        showDisableLockDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
-                    )
-                ) { Text("Kaldır") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDisableLockDialog = false }) { Text("İptal") }
-            }
-        )
-    }
 
     Scaffold(
         topBar = {
@@ -203,10 +161,13 @@ fun SettingsScreen(
             )
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(bottom = 32.dp)
-        ) {
+        val listState = rememberLazyListState()
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                state = listState,
+                contentPadding = PaddingValues(bottom = 32.dp)
+            ) {
 
             item {
                 ProfileHeader(
@@ -306,52 +267,13 @@ fun SettingsScreen(
             item {
                 SettingsSectionLabel("Güvenlik")
                 SettingsGroup {
-                    SwitchSettingsRow(
-                        icon = if (lockEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
-                        iconTint = if (lockEnabled) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.onSurfaceVariant,
-                        title = "Uygulama kilidi",
-                        subtitle = if (lockEnabled) "PIN her açılışta sorulur"
-                                   else "Uygulama doğrudan açılır",
-                        checked = lockEnabled,
-                        onCheckedChange = { wantEnabled ->
-                            if (wantEnabled) {
-                                onOpenPinSetup(false)
-                            } else {
-                                showDisableLockDialog = true
-                            }
-                        }
+                    NavigationSettingsRow(
+                        icon = Icons.Default.Lock,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        title = "Güvenlik ayarları",
+                        subtitle = "Şifre, otomatik kilit ve diğerleri.",
+                        onClick = onOpenSecurity
                     )
-                    if (lockEnabled) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        NavigationSettingsRow(
-                            icon = Icons.Default.Fingerprint,
-                            iconTint = MaterialTheme.colorScheme.secondary,
-                            title = "PIN'i değiştir",
-                            onClick = { onOpenPinSetup(true) }
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        SwitchSettingsRow(
-                            icon = Icons.Default.Grid3x3,
-                            iconTint = MaterialTheme.colorScheme.tertiary,
-                            title = "Tuş takımını karıştır",
-                            subtitle = if (scrambleEnabled)
-                                "Her girişte rakamlar rastgele sıralanır"
-                            else
-                                "Rakamlar standart sırada gösterilir",
-                            checked = scrambleEnabled,
-                            onCheckedChange = { enabled ->
-                                scrambleEnabled = enabled
-                                container.secrets.setScrambleKeypadEnabled(enabled)
-                            }
-                        )
-                    }
                 }
             }
 
@@ -368,6 +290,11 @@ fun SettingsScreen(
                     )
                 }
             }
+            }
+            PlatformVerticalScrollbar(
+                state = listState,
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
+            )
         }
     }
 }

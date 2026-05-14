@@ -80,6 +80,7 @@ import app.stade.ui.screens.PinSetupScreen
 import app.stade.ui.screens.SettingsScreen
 import app.stade.ui.screens.TransportsScreen
 import app.stade.ui.screens.VerifyContactScreen
+import app.stade.ui.screens.SecuritySettingsScreen
 import app.stade.ui.theme.StadeColors
 import kotlinx.coroutines.launch
 
@@ -87,6 +88,7 @@ private sealed class PanelRight {
     data object Empty : PanelRight()
     data class Chat(val contactId: String) : PanelRight()
     data object Settings : PanelRight()
+    data object Security : PanelRight()
     data object Transports : PanelRight()
     data object AddContact : PanelRight()
     data class Verify(val contactId: String) : PanelRight()
@@ -390,14 +392,20 @@ fun TwoPanelLayout(
                     owner = owner,
                     onBack = { right = PanelRight.Empty },
                     onOpenTransports = { right = PanelRight.Transports },
-                    onOpenPinSetup = { requireCurrent ->
-                        right = PanelRight.PinSetup(requireCurrent, PanelRight.Settings)
-                    },
+                    onOpenSecurity = { right = PanelRight.Security },
                     onLogout = onLogout
                 )
 
-                is PanelRight.PinSetup -> PinSetupScreen(
+                is PanelRight.Security -> SecuritySettingsScreen(
                     container = container,
+                    onBack = { right = PanelRight.Settings },
+                    onOpenPinSetup = { requireCurrent ->
+                        right = PanelRight.PinSetup(requireCurrent, PanelRight.Security)
+                    }
+                )
+
+                is PanelRight.PinSetup -> PinSetupScreen(
+                    vault = container.vault,
                     requireCurrent = rp.requireCurrent,
                     onDone = { right = rp.ret },
                     onCancel = { right = rp.ret }

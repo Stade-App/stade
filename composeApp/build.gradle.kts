@@ -70,6 +70,7 @@ kotlin {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.sqldelight.sqlite.driver)
+                runtimeOnly(libs.slf4j.nop)
             }
         }
     }

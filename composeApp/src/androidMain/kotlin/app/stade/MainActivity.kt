@@ -29,11 +29,11 @@ class MainActivity : ComponentActivity() {
             )
         )
         super.onCreate(savedInstanceState)
-        val container = (application as StadeApplication).container
+        val app = (application as StadeApplication)
         startForegroundService(Intent(this, StadeService::class.java))
         askNotificationPermissionIfNeeded()
         handleIncomingInvite(intent)
-        setContent { StadeApp(container) }
+        setContent { StadeApp(app.boot) }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -47,7 +47,6 @@ class MainActivity : ComponentActivity() {
         clearAllMessageNotifications()
     }
 
-
     private fun handleIncomingInvite(intent: Intent?) {
         if (intent == null) return
         val uri: Uri? = when (intent.action) {
@@ -58,7 +57,7 @@ class MainActivity : ComponentActivity() {
             }
             else -> null
         }
-        val container = (application as StadeApplication).container
+        val app = (application as StadeApplication)
         val text = when {
             uri != null -> runCatching {
                 contentResolver.openInputStream(uri)?.use { stream ->
@@ -69,7 +68,7 @@ class MainActivity : ComponentActivity() {
             else -> null
         }?.trim()?.takeIf { it.isNotEmpty() }
         if (text != null && text.startsWith("STADE2-")) {
-            container.pendingInvite.value = text
+            app.container?.pendingInvite?.value = text
         }
     }
 
