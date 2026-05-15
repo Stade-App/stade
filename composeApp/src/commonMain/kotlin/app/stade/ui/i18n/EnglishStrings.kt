@@ -151,6 +151,8 @@ object EnglishStrings : AppStrings() {
     override val connectionTimeout =
         "Could not connect — the other party may be offline or Tor/network unavailable. " +
         "Leave the app open; the contact will be added automatically when a connection is established."
+    override val torStartingInviteHint =
+        "Tor is still starting — wait until it is fully ready before sharing this invite code."
     override fun error(msg: String) = "Error: $msg"
 
     override val settingsTitle = "Settings"

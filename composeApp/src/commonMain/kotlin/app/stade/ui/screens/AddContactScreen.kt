@@ -49,6 +49,7 @@ import app.stade.AppContainer
 import app.stade.contact.InviteParseResult
 import app.stade.identity.LocalIdentity
 import app.stade.share.InviteShare
+import app.stade.transport.TransportType
 import app.stade.ui.components.StadeIdCard
 import app.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.delay
@@ -60,8 +61,17 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
-    val invite = remember(owner.id) {
-        container.handshake.createInvite(owner, container.connections.selfAddresses())
+
+    val torPlugin = remember { container.transports.get(TransportType.TOR) }
+    val torInfo by remember(torPlugin) {
+        torPlugin?.info ?: kotlinx.coroutines.flow.MutableStateFlow(null)
+    }.collectAsState(initial = null)
+
+    var invite by remember {
+        mutableStateOf(container.handshake.createInvite(owner, container.connections.selfAddresses()))
+    }
+    LaunchedEffect(torInfo?.running) {
+        invite = container.handshake.createInvite(owner, container.connections.selfAddresses())
     }
     var alias by remember { mutableStateOf("") }
     var pastedCode by remember { mutableStateOf("") }
@@ -109,6 +119,14 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (torInfo?.running != true) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        strings.torStartingInviteHint,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
                 FilledTonalButton(
                     onClick = {

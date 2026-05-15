@@ -121,6 +121,7 @@ abstract class AppStrings {
     abstract fun inviteAccepted(name: String, count: Int): String
     abstract fun contactAdded(name: String): String
     abstract val connectionTimeout: String
+    abstract val torStartingInviteHint: String
     abstract fun error(msg: String): String
 
     abstract val settingsTitle: String

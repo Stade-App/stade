@@ -153,6 +153,8 @@ object TurkishStrings : AppStrings() {
     override val connectionTimeout =
         "Bağlanılamadı — karşı taraf çevrimdışı olabilir veya Tor/ağ erişimi yok. " +
         "Uygulamayı açık bırak; bağlantı kurulunca kişi otomatik eklenir."
+    override val torStartingInviteHint =
+        "Tor henüz başlatılıyor — bu davet kodunu paylaşmadan önce tam olarak hazır olmasını bekle."
     override fun error(msg: String) = "Hata: $msg"
 
     override val settingsTitle = "Ayarlar"
