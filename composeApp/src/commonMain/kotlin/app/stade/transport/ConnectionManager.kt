@@ -10,11 +10,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.onTimeout
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -39,9 +42,22 @@ class ConnectionManager(
     private val backoff = mutableMapOf<String, Long>()
     private val dialing = mutableSetOf<String>()
     private val pendingDial = mutableSetOf<String>()
+    private val pendingAttempts = mutableMapOf<String, Int>()
+    private val pendingWake = Channel<Unit>(capacity = Channel.CONFLATED)
 
     private val _diagnostics = MutableStateFlow<Map<String, Map<String, DialAttempt>>>(emptyMap())
     val diagnostics: StateFlow<Map<String, Map<String, DialAttempt>>> = _diagnostics.asStateFlow()
+
+    private val _pendingDials = MutableStateFlow<Map<String, DialAttempt>>(emptyMap())
+    val pendingDials: StateFlow<Map<String, DialAttempt>> = _pendingDials.asStateFlow()
+
+    private fun recordPending(attempt: DialAttempt) {
+        _pendingDials.value = _pendingDials.value + (attempt.address to attempt)
+    }
+
+    private fun clearPending(addr: String) {
+        _pendingDials.value = _pendingDials.value - addr
+    }
 
     private fun recordAttempt(contactId: String, attempt: DialAttempt) {
         val cur = _diagnostics.value
@@ -59,16 +75,26 @@ class ConnectionManager(
         val selfSet = runCatching { selfAddresses().toSet() }.getOrDefault(emptySet())
         synchronized(pendingDial) {
             for (a in addresses) {
-                if (a.isNotBlank() && a !in selfSet) pendingDial.add(a)
+                if (a.isNotBlank() && a !in selfSet) {
+                    pendingDial.add(a)
+                    pendingAttempts.remove(a)
+                    recordPending(DialAttempt(a, nowMs(), DialAttempt.Status.TRYING, "kuyrukta…"))
+                }
             }
         }
+        backoff.keys.removeAll { it.startsWith("pending|") }
+        pendingWake.trySend(Unit)
     }
 
     private fun snapshotPendingAddresses(): List<String> =
         synchronized(pendingDial) { pendingDial.toList() }
 
     private fun consumePendingAddress(addr: String) {
-        synchronized(pendingDial) { pendingDial.remove(addr) }
+        synchronized(pendingDial) {
+            pendingDial.remove(addr)
+            pendingAttempts.remove(addr)
+        }
+        clearPending(addr)
     }
 
     suspend fun start(owner: LocalIdentity) = mutex.withLock {
@@ -84,6 +110,7 @@ class ConnectionManager(
             }
         }
         tasks += scope.launch { dialerLoop(owner) }
+        tasks += scope.launch { pendingDialLoop(owner) }
     }
 
     suspend fun stop() = mutex.withLock { stopInternal() }
@@ -106,7 +133,11 @@ class ConnectionManager(
         tasks.clear()
         backoff.clear()
         dialing.clear()
-        synchronized(pendingDial) { pendingDial.clear() }
+        synchronized(pendingDial) {
+            pendingDial.clear()
+            pendingAttempts.clear()
+        }
+        _pendingDials.value = emptyMap()
         for (plugin in registry.all()) runCatching { plugin.stop() }
         scope.cancel()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -123,8 +154,20 @@ class ConnectionManager(
                     backoff[contact.id] = now + 10_000L
                 }
             }
-            tryDialPending(owner, now)
             delay(5_000)
+        }
+    }
+
+    /** Bekleyen davet adreslerini mevcut kişi bağlantı döngüsünden bağımsız olarak dener. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private suspend fun pendingDialLoop(owner: LocalIdentity) {
+        while (scope.isActive) {
+            val now = nowMs()
+            tryDialPending(owner, now)
+            select<Unit> {
+                pendingWake.onReceive { }
+                onTimeout(3_000) { }
+            }
         }
     }
 
@@ -142,18 +185,60 @@ class ConnectionManager(
             }
             val key = "pending|$addr"
             if ((backoff[key] ?: 0L) > now) continue
-            val plugin = pluginForAddress(addr) ?: continue
-            val conn = runCatching { plugin.connect(addr) }.getOrNull()
-            if (conn == null) {
-                backoff[key] = nowMs() + 30_000L
+            val plugin = pluginForAddress(addr)
+            if (plugin == null) {
+                recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, "taşıma hazır değil — bekleniyor"))
+                backoff[key] = nowMs() + 4_000L
                 continue
             }
-            scope.launch {
-                runCatching { sync.handleConnection(owner, conn) }
-                consumePendingAddress(addr)
+            val pluginInfo = plugin.info.value
+            if (!pluginInfo.running) {
+                recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.TRYING, "taşıma başlatılıyor (${pluginInfo.message ?: ""})"))
+                backoff[key] = nowMs() + 4_000L
+                continue
             }
-            return
+            val attemptIdx = (pendingAttempts[addr] ?: 0) + 1
+            synchronized(pendingDial) { pendingAttempts[addr] = attemptIdx }
+            val transportLabel = when (plugin.type) {
+                TransportType.TOR -> "Tor"
+                TransportType.LAN -> "LAN"
+                TransportType.BLUETOOTH -> "Bluetooth"
+                TransportType.REMOVABLE -> "Removable"
+            }
+            recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.TRYING, "$transportLabel üzerinden bağlanılıyor (deneme #$attemptIdx)…"))
+            // Bağlantı denemesi çalışırken aynı adrese paralel deneme açılmasın
+            backoff[key] = nowMs() + 180_000L
+            scope.launch {
+                val connResult = runCatching { plugin.connect(addr) }
+                val conn = connResult.getOrNull()
+                if (conn == null) {
+                    val err = connResult.exceptionOrNull()?.message?.take(120) ?: "bağlanılamadı"
+                    recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, "$err — yeniden denenecek"))
+                    backoff[key] = nowMs() + nextPendingBackoffMs(attemptIdx)
+                    pendingWake.trySend(Unit)
+                    return@launch
+                }
+                recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, "handshake yapılıyor…"))
+                val handshakeOk = runCatching { sync.handleConnection(owner, conn) }.isSuccess
+                if (handshakeOk) {
+                    recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_OK, "bağlandı ✓"))
+                    consumePendingAddress(addr)
+                } else {
+                    recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, "handshake başarısız — yeniden denenecek"))
+                    backoff[key] = nowMs() + nextPendingBackoffMs(attemptIdx)
+                    pendingWake.trySend(Unit)
+                }
+            }
+            // Diğer adresleri de paralel dene; her birinin kendi backoff'u var.
         }
+    }
+
+    private fun nextPendingBackoffMs(attemptIdx: Int): Long = when {
+        attemptIdx <= 2 -> 3_000L
+        attemptIdx <= 4 -> 6_000L
+        attemptIdx <= 7 -> 10_000L
+        attemptIdx <= 12 -> 20_000L
+        else -> 40_000L
     }
 
     private suspend fun tryDial(owner: LocalIdentity, contact: Contact, now: Long): Boolean {

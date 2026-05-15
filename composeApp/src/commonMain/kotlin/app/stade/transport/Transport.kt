@@ -1,7 +1,7 @@
 package app.stade.transport
 
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 enum class TransportType { TOR, BLUETOOTH, LAN, REMOVABLE }
@@ -27,7 +27,7 @@ interface IncomingConnections {
 
 interface TransportPlugin {
     val type: TransportType
-    val info: Flow<TransportInfo>
+    val info: StateFlow<TransportInfo>
     suspend fun start(handler: suspend (Connection) -> Unit)
     suspend fun stop()
     suspend fun connect(address: String): Connection?
@@ -41,7 +41,7 @@ interface DiscoverableTransport {
 
 abstract class BaseTransport(override val type: TransportType, displayName: String) : TransportPlugin {
     protected val state = MutableStateFlow(TransportInfo(type, displayName, available = false, running = false))
-    override val info: Flow<TransportInfo> = state.asStateFlow()
+    override val info: StateFlow<TransportInfo> = state.asStateFlow()
 }
 
 class ConnectionRegistry {

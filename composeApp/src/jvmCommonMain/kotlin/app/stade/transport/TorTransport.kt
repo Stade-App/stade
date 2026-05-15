@@ -11,7 +11,6 @@ import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -38,12 +37,12 @@ class TorTransport(
     @Volatile private var socksHost: String = defaultSocksHost
     @Volatile private var socksPort: Int = defaultSocksPort
 
-    override suspend fun start(handler: suspend (Connection) -> Unit) = mutex.withLock {
+    override suspend fun start(handler: suspend (Connection) -> Unit) {
         if (embedded != null) {
             startEmbedded(handler)
-            return@withLock
+            return
         }
-        startExternal(handler)
+        mutex.withLock { startExternal(handler) }
     }
 
     private suspend fun startEmbedded(handler: suspend (Connection) -> Unit) {
@@ -61,46 +60,69 @@ class TorTransport(
                 }
             }
         }
-        scope.launch {
-            var boundPort = 0
-            var preBoundServer: ServerSocket? = null
-            var bindError: String? = null
-            runCatching {
-                val s = aSocket(selector).tcp().bind(hostname = "127.0.0.1", port = 0)
-                preBoundServer = s
-                boundPort = (s.localAddress as io.ktor.network.sockets.InetSocketAddress).port
-            }.onFailure { err ->
-                bindError = err.message ?: err::class.simpleName
-            }
+        // Süreç ölümünü / SOCKS port düşmesini izle ve otomatik kurtar
+        scope.launch { runHealthMonitor(handler) }
+        bringUpEmbedded(handler)
+    }
 
-            val ready = runCatching { embedded!!.ensureReady(boundPort) }.getOrElse { err ->
-                runCatching { preBoundServer?.close() }
-                state.value = TransportInfo(type, "Tor", available = false, running = false, message = "failed to start: ${err.message ?: err::class.simpleName}")
-                return@launch
+    private suspend fun bringUpEmbedded(handler: suspend (Connection) -> Unit) {
+        var boundPort = 0
+        var preBoundServer: ServerSocket? = null
+        var bindError: String? = null
+        runCatching {
+            val s = aSocket(selector).tcp().bind(hostname = "127.0.0.1", port = 0)
+            preBoundServer = s
+            boundPort = (s.localAddress as io.ktor.network.sockets.InetSocketAddress).port
+        }.onFailure { err ->
+            bindError = err.message ?: err::class.simpleName
+        }
+
+        val ready = runCatching { embedded!!.ensureReady(boundPort) }.getOrElse { err ->
+            runCatching { preBoundServer?.close() }
+            state.value = TransportInfo(type, "Tor", available = false, running = false, message = "failed to start: ${err.message ?: err::class.simpleName}")
+            return
+        }
+        mutex.withLock {
+            socksHost = ready.socksHost
+            socksPort = ready.socksPort
+            inboundOnion = ready.onionHostname
+            inboundPort = ready.onionVirtualPort
+            val listenError: String? = bindError
+            if (preBoundServer != null && bindError == null) {
+                runCatching { inboundServer?.close() }
+                inboundServer = preBoundServer
+                scope.launch { runAccept(preBoundServer!!, handler) }
+            } else {
+                inboundOnion = null
+                inboundPort = 0
             }
-            mutex.withLock {
-                socksHost = ready.socksHost
-                socksPort = ready.socksPort
-                inboundOnion = ready.onionHostname
-                inboundPort = ready.onionVirtualPort
-                var listenError: String? = bindError
-                if (preBoundServer != null && bindError == null) {
-                    inboundServer = preBoundServer
-                    scope.launch { runAccept(preBoundServer!!, handler) }
-                } else {
-                    inboundOnion = null
-                    inboundPort = 0
+            val msg = buildString {
+                append("SOCKS5 ✓ ($socksHost:$socksPort)")
+                if (inboundOnion != null) {
+                    append(" · onion :$inboundPort ✓")
+                } else if (listenError != null) {
+                    append(" · onion NOT LISTENING ($listenError)")
                 }
-                val msg = buildString {
-                    append("SOCKS5 ✓ ($socksHost:$socksPort)")
-                    if (inboundOnion != null) {
-                        append(" · onion :$inboundPort ✓")
-                    } else if (listenError != null) {
-                        append(" · onion NOT LISTENING ($listenError)")
-                    }
-                }
-                state.value = TransportInfo(type, "Tor", available = true, running = true, message = msg)
             }
+            state.value = TransportInfo(type, "Tor", available = true, running = true, message = msg)
+        }
+    }
+
+    private suspend fun runHealthMonitor(handler: suspend (Connection) -> Unit) {
+        var lastRestartAt = 0L
+        while (scope.isActive) {
+            kotlinx.coroutines.delay(10_000)
+            val emb = embedded ?: return
+            if (!state.value.running) continue
+            if (emb.isAlive()) continue
+            val now = System.currentTimeMillis()
+            if (now - lastRestartAt < 30_000) continue
+            lastRestartAt = now
+            state.value = state.value.copy(running = false, available = false, message = "Tor process exited — restarting…")
+            runCatching { inboundServer?.close() }
+            inboundServer = null
+            runCatching { emb.invalidate() }
+            runCatching { bringUpEmbedded(handler) }
         }
     }
 
@@ -190,10 +212,17 @@ class TorTransport(
         val parts = onion.split(":", limit = 2)
         val host = parts[0]
         val port = parts.getOrNull(1)?.toIntOrNull() ?: 80
-        return withTimeoutOrNull(90_000) {
+        val sHost = socksHost
+        val sPort = socksPort
+        if (sPort <= 0) throw IllegalStateException("Tor SOCKS not ready yet (port=$sPort)")
+        return withTimeoutOrNull(120_000) {
             var socket: io.ktor.network.sockets.Socket? = null
             try {
-                socket = aSocket(selector).tcp().connect(hostname = socksHost, port = socksPort)
+                socket = try {
+                    aSocket(selector).tcp().connect(hostname = sHost, port = sPort)
+                } catch (t: Throwable) {
+                    throw IllegalStateException("Tor SOCKS unreachable at $sHost:$sPort (${t.message ?: t::class.simpleName})", t)
+                }
                 val reader = socket.openReadChannel()
                 val writer = socket.openWriteChannel(autoFlush = true)
 

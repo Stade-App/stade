@@ -53,7 +53,9 @@ import app.stade.transport.TransportType
 import app.stade.ui.components.StadeIdCard
 import app.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,6 +82,8 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
     val scroll = rememberScrollState()
 
     val pendingInvite by container.pendingInvite.collectAsState()
+    val pendingDials by container.connections.pendingDials.collectAsState()
+    var dialingTargetAddrs by remember { mutableStateOf<Set<String>>(emptySet()) }
     LaunchedEffect(pendingInvite) {
         val p = pendingInvite
         if (!p.isNullOrBlank() && pastedCode.isBlank()) {
@@ -258,19 +262,23 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                     statusSticky = true
                                 } else {
                                     container.connections.queueDial(addrs)
+                                    dialingTargetAddrs = addrs.toSet()
                                     status = strings.inviteAccepted(parsed.nickname, addrs.size)
                                     statusSticky = true
                                     val targetId = parsed.stadeId
-                                    val deadline = kotlinx.datetime.Clock.System.now().toEpochMilliseconds() + 90_000L
-                                    while (kotlinx.datetime.Clock.System.now().toEpochMilliseconds() < deadline) {
-                                        if (container.contacts.findByStadeId(targetId) != null) {
-                                            status = strings.contactAdded(parsed.nickname)
-                                            statusSticky = true
-                                            break
+
+                                    // 5 dakika boyunca bağlantı bekle (Tor descriptor yayılması + circuit + handshake)
+                                    val added = withTimeoutOrNull(5 * 60_000L) {
+                                        container.contacts.observeContacts(owner.id).first { list ->
+                                            list.any { it.id == targetId }
                                         }
-                                        kotlinx.coroutines.delay(1500)
-                                    }
-                                    if (container.contacts.findByStadeId(targetId) == null) {
+                                        true
+                                    } ?: false
+                                    if (added || container.contacts.findByStadeId(targetId) != null) {
+                                        status = strings.contactAdded(parsed.nickname)
+                                        statusSticky = true
+                                        dialingTargetAddrs = emptySet()
+                                    } else {
                                         status = strings.connectionTimeout
                                         statusSticky = true
                                     }
@@ -283,6 +291,21 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                         }
                     }
                 ) { Text(strings.acceptInvite) }
+                if (dialingTargetAddrs.isNotEmpty()) {
+                    val activeAttempts = pendingDials.filterKeys { it in dialingTargetAddrs }.values
+                    if (activeAttempts.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Column {
+                            for (a in activeAttempts.sortedByDescending { it.timestamp }) {
+                                Text(
+                                    "• ${a.address.take(40)}…  —  ${a.detail ?: a.status.name}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
                 status?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(

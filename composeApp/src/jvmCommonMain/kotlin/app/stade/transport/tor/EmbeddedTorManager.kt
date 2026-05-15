@@ -29,6 +29,7 @@ class EmbeddedTorManager(
     @Volatile private var ready: TorReady? = null
     @Volatile private var controlPort: Int = 0
     @Volatile private var socksPort: Int = 0
+    @Volatile private var controlClient: TorControlClient? = null
 
     override suspend fun ensureReady(localPort: Int): TorReady = mutex.withLock {
         ready?.let { return@withLock it }
@@ -48,7 +49,9 @@ class EmbeddedTorManager(
         val ctrl = pickFreePort()
         val localTarget = if (localPort > 0) localPort else pickFreePort()
         val cookieFile = File(layout.dataDir, "control_auth_cookie")
+        runCatching { cookieFile.delete() }
         val torrc = File(layout.dataDir, "torrc.runtime").apply {
+            val logFile = File(layout.dataDir, "tor.log").absolutePath.replace('\\', '/')
             writeText(buildString {
                 appendLine("DataDirectory ${layout.dataDir.absolutePath}")
                 appendLine("ClientOnly 1")
@@ -57,6 +60,14 @@ class EmbeddedTorManager(
                 appendLine("ControlPort 127.0.0.1:$ctrl")
                 appendLine("CookieAuthentication 1")
                 appendLine("CookieAuthFile ${cookieFile.absolutePath}")
+                appendLine("SafeLogging 0")
+                appendLine("Log notice stdout")
+                appendLine("Log [handshake,rend,circ,dir]info stdout")
+                // Hızlı circuit kurulumu + paralel
+                appendLine("LearnCircuitBuildTimeout 0")
+                appendLine("CircuitBuildTimeout 20")
+                appendLine("NumEntryGuards 3")
+                appendLine("NumDirectoryGuards 3")
                 val ownerPid = pidProvider()
                 if (ownerPid > 0) appendLine("__OwningControllerProcess $ownerPid")
                 layout.geoipFile?.let { appendLine("GeoIPFile ${it.absolutePath}") }
@@ -71,23 +82,35 @@ class EmbeddedTorManager(
             .directory(layout.torDir)
         val proc = pb.start()
         process = proc
+        val logFile = File(layout.dataDir, "tor.log")
         scope.launch {
-            proc.inputStream.bufferedReader().useLines { lines ->
-                lines.forEach { _ -> }
+            runCatching {
+                proc.inputStream.bufferedReader().use { reader ->
+                    logFile.bufferedWriter().use { writer ->
+                        reader.forEachLine { line ->
+                            runCatching {
+                                writer.write(line)
+                                writer.newLine()
+                                writer.flush()
+                            }
+                        }
+                    }
+                }
             }
         }
         Runtime.getRuntime().addShutdownHook(Thread { runCatching { proc.destroy() } })
 
         val cookieHex = waitForCookie(cookieFile)
         val client = waitForControl(ctrl)
+        var keepClient = false
         try {
             client.authenticate(cookieHex)
-            client.takeOwnership()
-            client.resetConfOwningPid()
             val ok = client.waitForBootstrap({ pct, summary ->
                 status.value = TorStatus.Bootstrapping(pct, summary)
             }, timeoutMillis = 180_000)
             if (!ok) error("Tor bootstrap timed out")
+            // HS_DESC event subscription'ını ADD_ONION'dan ÖNCE açıyoruz — UPLOADED event'i kaçmasın.
+            client.subscribeHsDescEvents()
             val keyStore = File(appRoot, "tor/onion.key")
             val existingKey = keyStore.takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotEmpty() }
             val onion = client.addOnion(existingKey, virtualPort, localTarget)
@@ -99,8 +122,8 @@ class EmbeddedTorManager(
                     java.nio.file.Files.setPosixFilePermissions(keyStore.toPath(), perms)
                 }
             }
-            status.value = TorStatus.Bootstrapping(100, "publishing onion descriptor…")
-            runCatching { client.waitForOnionPublished(onion.serviceId, timeoutMillis = 90_000) }
+            status.value = TorStatus.Bootstrapping(100, "publishing onion descriptor… (~30s)")
+            val published = runCatching { client.waitForOnionPublished(onion.serviceId, timeoutMillis = 60_000) }.getOrDefault(false)
             val result = TorReady(
                 socksHost = "127.0.0.1",
                 socksPort = socks,
@@ -109,16 +132,30 @@ class EmbeddedTorManager(
                 onionLocalPort = localTarget
             )
             ready = result
-            status.value = TorStatus.Ready(result.onionHostname)
+            controlClient = client
+            keepClient = true
+            if (published) {
+                runCatching { client.unsubscribeEvents() }
+                status.value = TorStatus.Ready(result.onionHostname)
+            } else {
+                // Descriptor henüz yayılmamış — Ready ilan ediyoruz ama arka planda izlemeye devam ediyoruz.
+                status.value = TorStatus.Ready(result.onionHostname)
+                scope.launch {
+                    runCatching { client.waitForOnionPublished(onion.serviceId, timeoutMillis = 240_000) }
+                    runCatching { client.unsubscribeEvents() }
+                }
+            }
             return result
         } finally {
-            runCatching { client.close() }
+            if (!keepClient) runCatching { client.close() }
         }
     }
 
     override suspend fun shutdown() = mutex.withLock {
         ready = null
         status.value = TorStatus.Idle
+        runCatching { controlClient?.close() }
+        controlClient = null
         process?.let { p ->
             runCatching { p.destroy() }
             if (!p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
@@ -126,6 +163,27 @@ class EmbeddedTorManager(
             }
         }
         process = null
+    }
+
+    override fun isAlive(): Boolean {
+        val p = process ?: return false
+        return p.isAlive
+    }
+
+    override fun invalidate() {
+        ready = null
+        runCatching { controlClient?.close() }
+        controlClient = null
+        process?.let { p ->
+            runCatching { p.destroy() }
+            runCatching {
+                if (!p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) p.destroyForcibly()
+            }
+        }
+        process = null
+        socksPort = 0
+        controlPort = 0
+        status.value = TorStatus.Idle
     }
 
     private fun waitForCookie(file: File): String {

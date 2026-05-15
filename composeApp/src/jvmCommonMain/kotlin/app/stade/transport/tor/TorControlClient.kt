@@ -61,8 +61,14 @@ internal class TorControlClient(host: String, port: Int, connectTimeoutMillis: I
         return OnionInfo(serviceId = sid, privateKey = newKey ?: privateKeyBlob)
     }
 
-    fun waitForOnionPublished(serviceId: String, timeoutMillis: Long = 60_000): Boolean {
+    fun subscribeHsDescEvents() {
         send("SETEVENTS HS_DESC").requireOk("SETEVENTS")
+    }
+
+    fun unsubscribeEvents() {
+        runCatching { send("SETEVENTS").requireOk("SETEVENTS") }
+    }
+    fun waitForOnionPublished(serviceId: String, timeoutMillis: Long = 60_000): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMillis
         val prevTimeout = socket.soTimeout
         try {
@@ -86,7 +92,6 @@ internal class TorControlClient(host: String, port: Int, connectTimeoutMillis: I
             return false
         } finally {
             socket.soTimeout = prevTimeout
-            runCatching { send("SETEVENTS").requireOk("SETEVENTS") }
         }
     }
 
@@ -103,9 +108,20 @@ internal class TorControlClient(host: String, port: Int, connectTimeoutMillis: I
         while (true) {
             val raw = reader.readLine() ?: error("Tor control connection closed")
             if (raw.length < 4) error("Malformed control reply: $raw")
-            statusCode = raw.substring(0, 3).toIntOrNull() ?: 0
+            val code = raw.substring(0, 3).toIntOrNull() ?: 0
             val sep = raw[3]
             val payload = raw.substring(4)
+            // 6xx async events; sync reply ararken atla (event payload'ı acc'a karışmasın)
+            if (code in 600..699 && statusCode == 0) {
+                if (sep == '+') {
+                    while (true) {
+                        val cont = reader.readLine() ?: error("Tor control connection closed mid-data")
+                        if (cont == ".") break
+                    }
+                }
+                continue
+            }
+            statusCode = code
             if (sep == '+') {
                 acc += payload
                 while (true) {

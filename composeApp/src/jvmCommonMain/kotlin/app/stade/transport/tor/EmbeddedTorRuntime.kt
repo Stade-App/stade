@@ -3,6 +3,8 @@ package app.stade.transport.tor
 interface EmbeddedTorRuntime {
     suspend fun ensureReady(localPort: Int): TorReady
     suspend fun shutdown()
+    fun isAlive(): Boolean
+    fun invalidate()
     val statusFlow: kotlinx.coroutines.flow.StateFlow<TorStatus>
 }
 

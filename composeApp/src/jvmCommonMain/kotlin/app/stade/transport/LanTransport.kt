@@ -80,10 +80,12 @@ class LanTransport(
         val (host, portStr) = address.removePrefix("lan://").split(":", limit = 2).let {
             it[0] to (it.getOrNull(1)?.toIntOrNull() ?: tcpPort)
         }
-        return runCatching {
-            val socket = aSocket(selector).tcp().connect(hostname = host, port = portStr)
-            TcpConnection(socket, "lan://$host:$portStr")
-        }.getOrNull()
+        return kotlinx.coroutines.withTimeoutOrNull(5_000) {
+            runCatching {
+                val socket = aSocket(selector).tcp().connect(hostname = host, port = portStr)
+                TcpConnection(socket, "lan://$host:$portStr") as Connection
+            }.getOrNull()
+        }
     }
 
     override fun selfAddress(): String? {
