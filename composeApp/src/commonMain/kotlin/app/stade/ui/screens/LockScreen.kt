@@ -40,8 +40,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -89,6 +97,9 @@ fun LockScreen(
     val scope = rememberCoroutineScope()
     val scrambleEnabled = remember { vault.isScrambleKeypadEnabled() }
     val strings = LocalStrings.current
+    val keyFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) { runCatching { keyFocusRequester.requestFocus() } }
 
     LaunchedEffect(lockoutUntil) {
         while (lockoutUntil > vault.nowMillis()) {
@@ -145,13 +156,51 @@ fun LockScreen(
 
     Scaffold { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp)
+                .focusRequester(keyFocusRequester)
+                .focusable()
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown) {
+                        val digit = when (keyEvent.key) {
+                            Key.Zero, Key.NumPad0 -> "0"
+                            Key.One, Key.NumPad1 -> "1"
+                            Key.Two, Key.NumPad2 -> "2"
+                            Key.Three, Key.NumPad3 -> "3"
+                            Key.Four, Key.NumPad4 -> "4"
+                            Key.Five, Key.NumPad5 -> "5"
+                            Key.Six, Key.NumPad6 -> "6"
+                            Key.Seven, Key.NumPad7 -> "7"
+                            Key.Eight, Key.NumPad8 -> "8"
+                            Key.Nine, Key.NumPad9 -> "9"
+                            else -> null
+                        }
+                        when {
+                            digit != null -> {
+                                if (!lockedNow && pin.length < PIN_MAX && error == null && !isVerifying) {
+                                    pin += digit
+                                    if (pin.length >= PIN_MAX) tryUnlock()
+                                }
+                                true
+                            }
+                            keyEvent.key == Key.Backspace -> {
+                                if (pin.isNotEmpty() && !isVerifying) pin = pin.dropLast(1)
+                                true
+                            }
+                            keyEvent.key == Key.Enter || keyEvent.key == Key.NumPadEnter -> {
+                                tryUnlock()
+                                true
+                            }
+                            else -> false
+                        }
+                    } else false
+                },
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             BrandMark(size = 72.dp)
-            Spacer(Modifier.height(16.dp))
-            Text(strings.unlockTitle, style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(6.dp))
             Text(
                 if (lockedNow) strings.tooManyAttemptsSubtitle else strings.unlockSubtitle,
@@ -279,6 +328,9 @@ fun PinSetupScreen(
     val shakeOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val strings = LocalStrings.current
+    val keyFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) { runCatching { keyFocusRequester.requestFocus() } }
 
     val currentInput = when (phase) {
         Phase.Current -> currentPin
@@ -354,7 +406,62 @@ fun PinSetupScreen(
 
     Scaffold { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp)
+                .focusRequester(keyFocusRequester)
+                .focusable()
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown) {
+                        val digit = when (keyEvent.key) {
+                            Key.Zero, Key.NumPad0 -> "0"
+                            Key.One, Key.NumPad1 -> "1"
+                            Key.Two, Key.NumPad2 -> "2"
+                            Key.Three, Key.NumPad3 -> "3"
+                            Key.Four, Key.NumPad4 -> "4"
+                            Key.Five, Key.NumPad5 -> "5"
+                            Key.Six, Key.NumPad6 -> "6"
+                            Key.Seven, Key.NumPad7 -> "7"
+                            Key.Eight, Key.NumPad8 -> "8"
+                            Key.Nine, Key.NumPad9 -> "9"
+                            else -> null
+                        }
+                        when {
+                            digit != null -> {
+                                when (phase) {
+                                    Phase.Current -> if (currentPin.length < PIN_MAX && error == null && !isVerifying) {
+                                        currentPin += digit
+                                        if (currentPin.length >= PIN_MAX) verifyCurrentAndAdvance()
+                                    }
+                                    Phase.New -> if (newPin.length < PIN_MAX) {
+                                        newPin += digit
+                                        if (newPin.length >= PIN_MAX) phase = Phase.Confirm
+                                    }
+                                    Phase.Confirm -> if (confirmPin.length < newPin.length && error == null) confirmPin += digit
+                                }
+                                true
+                            }
+                            keyEvent.key == Key.Backspace -> {
+                                when (phase) {
+                                    Phase.Current -> if (currentPin.isNotEmpty() && !isVerifying) currentPin = currentPin.dropLast(1)
+                                    Phase.New -> if (newPin.isNotEmpty()) newPin = newPin.dropLast(1)
+                                    Phase.Confirm -> if (confirmPin.isNotEmpty()) confirmPin = confirmPin.dropLast(1)
+                                }
+                                true
+                            }
+                            keyEvent.key == Key.Enter || keyEvent.key == Key.NumPadEnter -> {
+                                when (phase) {
+                                    Phase.Current -> verifyCurrentAndAdvance()
+                                    Phase.New -> if (newPin.length >= PIN_MIN) phase = Phase.Confirm
+                                    Phase.Confirm -> {}
+                                }
+                                true
+                            }
+                            else -> false
+                        }
+                    } else false
+                },
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

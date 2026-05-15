@@ -244,5 +244,7 @@ object TurkishStrings : AppStrings() {
     override val alreadyVerifiedLabel = "Doğrulandı ✓"
     override val verifiedLabel = "Doğrulandı"
     override val contactStadeId = "Karşı tarafın Stade ID'si"
+
+    override val selectContactHint = "Yeni bir sohbete başlamak için sol panelden bir kişi seç."
 }
 

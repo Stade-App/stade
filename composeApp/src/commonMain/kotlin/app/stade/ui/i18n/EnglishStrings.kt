@@ -245,5 +245,7 @@ object EnglishStrings : AppStrings() {
     override val alreadyVerifiedLabel = "Verified ✓"
     override val verifiedLabel = "Verified"
     override val contactStadeId = "Other party's Stade ID"
+
+    override val selectContactHint = "Select a contact from the left panel to start a new conversation."
 }
 

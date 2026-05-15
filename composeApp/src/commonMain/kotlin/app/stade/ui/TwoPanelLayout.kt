@@ -81,6 +81,7 @@ import app.stade.ui.screens.SettingsScreen
 import app.stade.ui.screens.TransportsScreen
 import app.stade.ui.screens.VerifyContactScreen
 import app.stade.ui.screens.SecuritySettingsScreen
+import app.stade.ui.i18n.LocalStrings
 import app.stade.ui.theme.StadeColors
 import kotlinx.coroutines.launch
 
@@ -102,6 +103,7 @@ fun TwoPanelLayout(
     owner: LocalIdentity,
     onLogout: () -> Unit
 ) {
+    val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
     val connectedSet by container.sync.connectedContacts.collectAsState()
@@ -140,12 +142,10 @@ fun TwoPanelLayout(
                     tint = MaterialTheme.colorScheme.error
                 )
             },
-            title = { Text("\"${c.nickname}\" silinsin mi?") },
+            title = { Text(strings.deleteContactTitle(c.nickname)) },
             text = {
                 Text(
-                    "Tüm mesajlar, bekleyen kayıtlar ve şifreleme anahtarları kalıcı olarak silinecek. " +
-                            "Yeniden konuşmak için her iki tarafın da kişiyi silip baştan eklemesi gerekir.\n\n" +
-                            "Bu işlem geri alınamaz.",
+                    strings.deleteContactBody,
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -176,7 +176,7 @@ fun TwoPanelLayout(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError
                     )
-                ) { Text("Sil") }
+                ) { Text(strings.delete) }
             },
             dismissButton = {
                 TextButton(
@@ -185,7 +185,7 @@ fun TwoPanelLayout(
                         showDeleteConfirm = false
                         deleteTargetContact = null
                     }
-                ) { Text("Vazgeç") }
+                ) { Text(strings.cancel) }
             }
         )
     }
@@ -209,7 +209,7 @@ fun TwoPanelLayout(
                                 Avatar(name = owner.nickname, size = 32.dp,shape = RoundedCornerShape(25))
                                 Spacer(Modifier.size(10.dp))
                                 Column {
-                                    Text("Stade", style = MaterialTheme.typography.titleMedium)
+                                    Text(strings.appTitle, style = MaterialTheme.typography.titleMedium)
                                     Text(
                                         owner.nickname,
                                         style = MaterialTheme.typography.labelSmall,
@@ -220,7 +220,7 @@ fun TwoPanelLayout(
                         },
                         actions = {
                             IconButton(onClick = { right = PanelRight.Settings }) {
-                                Icon(Icons.Default.Settings, contentDescription = "Ayarlar")
+                                Icon(Icons.Default.Settings, contentDescription = strings.settingsAction)
                             }
                         }
                     )
@@ -234,7 +234,7 @@ fun TwoPanelLayout(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 12.dp, vertical = 4.dp),
-                            placeholder = { Text("Ara…") },
+                            placeholder = { Text(strings.searchContactsPlaceholder) },
                             leadingIcon = {
                                 Icon(
                                     Icons.Default.Search, contentDescription = null,
@@ -267,9 +267,9 @@ fun TwoPanelLayout(
                                     modifier = Modifier.size(52.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Text("Henüz kişin yok", style = MaterialTheme.typography.titleMedium)
+                                Text(strings.noContactsTitle, style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    "Mesajlaşmaya başlamak için\nbir kişi ekle",
+                                    strings.noContactsHint,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
@@ -278,7 +278,7 @@ fun TwoPanelLayout(
                                 FilledTonalButton(onClick = { right = PanelRight.AddContact }) {
                                     Icon(Icons.Default.PersonAdd, null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(8.dp))
-                                    Text("Kişi ekle")
+                                    Text(strings.addContactAction)
                                 }
                             }
                         }
@@ -319,7 +319,7 @@ fun TwoPanelLayout(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                "Eşleşen kişi yok",
+                                                strings.noSearchResults,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -334,7 +334,7 @@ fun TwoPanelLayout(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             ) {
-                                Icon(Icons.Default.PersonAdd, contentDescription = "Kişi ekle")
+                                Icon(Icons.Default.PersonAdd, contentDescription = strings.addContactAction)
                             }
                         }
                     }
@@ -369,7 +369,7 @@ fun TwoPanelLayout(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    "Yeni bir sohbete başlamak için sol panelden bir kişi seç.",
+                                    strings.selectContactHint,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -451,6 +451,7 @@ private fun PanelContactRow(
     onDeleteRequest: () -> Unit
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
+    val strings = LocalStrings.current
 
     var showContextMenu by remember { mutableStateOf(false) }
     var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
@@ -585,7 +586,7 @@ private fun PanelContactRow(
             offset = menuOffset
         ) {
             DropdownMenuItem(
-                text = { Text("Doğrulama kodunu göster") },
+                text = { Text(strings.showVerificationCode) },
                 leadingIcon = {
                     Icon(
                         Icons.Default.Verified,
@@ -601,7 +602,7 @@ private fun PanelContactRow(
             HorizontalDivider()
             DropdownMenuItem(
                 text = {
-                    Text("Kişiyi sil", color = MaterialTheme.colorScheme.error)
+                    Text(strings.deleteContact, color = MaterialTheme.colorScheme.error)
                 },
                 leadingIcon = {
                     Icon(

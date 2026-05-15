@@ -196,6 +196,8 @@ abstract class AppStrings {
     abstract val alreadyVerifiedLabel: String
     abstract val verifiedLabel: String
     abstract val contactStadeId: String
+
+    abstract val selectContactHint: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }
