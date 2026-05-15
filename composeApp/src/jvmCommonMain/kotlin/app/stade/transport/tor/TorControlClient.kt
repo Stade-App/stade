@@ -61,6 +61,35 @@ internal class TorControlClient(host: String, port: Int, connectTimeoutMillis: I
         return OnionInfo(serviceId = sid, privateKey = newKey ?: privateKeyBlob)
     }
 
+    fun waitForOnionPublished(serviceId: String, timeoutMillis: Long = 60_000): Boolean {
+        send("SETEVENTS HS_DESC").requireOk("SETEVENTS")
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        val prevTimeout = socket.soTimeout
+        try {
+            while (System.currentTimeMillis() < deadline) {
+                val remaining = (deadline - System.currentTimeMillis()).toInt().coerceAtLeast(500)
+                socket.soTimeout = remaining
+                val line = try { reader.readLine() } catch (_: java.net.SocketTimeoutException) { null } ?: continue
+                if (line.length < 4) continue
+                val code = line.substring(0, 3).toIntOrNull() ?: continue
+                if (code != 650) continue
+                val payload = line.substring(4)
+                if (!payload.startsWith("HS_DESC ")) continue
+                val parts = payload.split(' ')
+                if (parts.size < 3) continue
+                val action = parts[1]
+                val sid = parts[2]
+                if (sid != serviceId) continue
+                if (action == "UPLOADED") return true
+                if (action == "FAILED") return false
+            }
+            return false
+        } finally {
+            socket.soTimeout = prevTimeout
+            runCatching { send("SETEVENTS").requireOk("SETEVENTS") }
+        }
+    }
+
     private fun send(cmd: String): Reply {
         writer.write(cmd)
         writer.write("\r\n")

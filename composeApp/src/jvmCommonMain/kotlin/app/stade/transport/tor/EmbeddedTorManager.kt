@@ -99,6 +99,8 @@ class EmbeddedTorManager(
                     java.nio.file.Files.setPosixFilePermissions(keyStore.toPath(), perms)
                 }
             }
+            status.value = TorStatus.Bootstrapping(100, "publishing onion descriptor…")
+            runCatching { client.waitForOnionPublished(onion.serviceId, timeoutMillis = 90_000) }
             val result = TorReady(
                 socksHost = "127.0.0.1",
                 socksPort = socks,
