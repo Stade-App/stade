@@ -62,7 +62,19 @@ class TorTransport(
             }
         }
         scope.launch {
-            val ready = runCatching { embedded!!.ensureReady() }.getOrElse { err ->
+            var boundPort = 0
+            var preBoundServer: ServerSocket? = null
+            var bindError: String? = null
+            runCatching {
+                val s = aSocket(selector).tcp().bind(hostname = "127.0.0.1", port = 0)
+                preBoundServer = s
+                boundPort = (s.localAddress as io.ktor.network.sockets.InetSocketAddress).port
+            }.onFailure { err ->
+                bindError = err.message ?: err::class.simpleName
+            }
+
+            val ready = runCatching { embedded!!.ensureReady(boundPort) }.getOrElse { err ->
+                runCatching { preBoundServer?.close() }
                 state.value = TransportInfo(type, "Tor", available = false, running = false, message = "failed to start: ${err.message ?: err::class.simpleName}")
                 return@launch
             }
@@ -71,13 +83,11 @@ class TorTransport(
                 socksPort = ready.socksPort
                 inboundOnion = ready.onionHostname
                 inboundPort = ready.onionVirtualPort
-                var listenError: String? = null
-                runCatching {
-                    val s = aSocket(selector).tcp().bind(hostname = "127.0.0.1", port = ready.onionLocalPort)
-                    inboundServer = s
-                    scope.launch { runAccept(s, handler) }
-                }.onFailure { err ->
-                    listenError = err.message ?: err::class.simpleName
+                var listenError: String? = bindError
+                if (preBoundServer != null && bindError == null) {
+                    inboundServer = preBoundServer
+                    scope.launch { runAccept(preBoundServer!!, handler) }
+                } else {
                     inboundOnion = null
                     inboundPort = 0
                 }

@@ -1,7 +1,7 @@
 package app.stade.transport.tor
 
 interface EmbeddedTorRuntime {
-    suspend fun ensureReady(): TorReady
+    suspend fun ensureReady(localPort: Int): TorReady
     suspend fun shutdown()
     val statusFlow: kotlinx.coroutines.flow.StateFlow<TorStatus>
 }
@@ -20,4 +20,3 @@ sealed interface TorStatus {
     data class Ready(val onion: String?) : TorStatus
     data class Failed(val reason: String) : TorStatus
 }
-

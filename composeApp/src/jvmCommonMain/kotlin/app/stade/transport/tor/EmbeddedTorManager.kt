@@ -30,10 +30,10 @@ class EmbeddedTorManager(
     @Volatile private var controlPort: Int = 0
     @Volatile private var socksPort: Int = 0
 
-    override suspend fun ensureReady(): TorReady = mutex.withLock {
+    override suspend fun ensureReady(localPort: Int): TorReady = mutex.withLock {
         ready?.let { return@withLock it }
         try {
-            withContext(Dispatchers.IO) { bootInternal() }
+            withContext(Dispatchers.IO) { bootInternal(localPort) }
         } catch (t: Throwable) {
             status.value = TorStatus.Failed(t.message ?: t::class.java.simpleName)
             throw t
@@ -41,12 +41,12 @@ class EmbeddedTorManager(
         ready ?: error("Tor failed to come up")
     }
 
-    private fun bootInternal(): TorReady {
+    private fun bootInternal(localPort: Int): TorReady {
         status.value = TorStatus.Bootstrapping(0, "preparing")
         val layout = layoutProvider()
         val socks = pickFreePort()
         val ctrl = pickFreePort()
-        val localTarget = pickFreePort()
+        val localTarget = if (localPort > 0) localPort else pickFreePort()
         val cookieFile = File(layout.dataDir, "control_auth_cookie")
         val torrc = File(layout.dataDir, "torrc.runtime").apply {
             writeText(buildString {

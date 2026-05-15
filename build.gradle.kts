@@ -7,6 +7,13 @@ plugins {
     alias(libs.plugins.sqldelight) apply false
 }
 
-allprojects {
-    layout.buildDirectory = File("C:/GradleBuilds/Stade/${project.name}/build")
+val rootPath = rootDir.absolutePath.replace('\\', '/')
+val isCloudSynced = listOf("OneDrive", "Dropbox", "Google Drive", "iCloudDrive", "pCloud", "Box Sync")
+    .any { rootPath.contains("/$it", ignoreCase = true) || rootPath.contains("/$it/", ignoreCase = true) }
+
+if (isCloudSynced) {
+    val safeRoot = File(System.getProperty("user.home"), ".stade-build/${rootDir.name}")
+    allprojects {
+        layout.buildDirectory = File(safeRoot, project.path.removePrefix(":").replace(':', '/').ifEmpty { "_root" } + "/build")
+    }
 }
