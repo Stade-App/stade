@@ -73,6 +73,7 @@ import app.stade.AppContainer
 import app.stade.contact.Contact
 import app.stade.identity.LocalIdentity
 import app.stade.ui.PlatformBackHandler
+import app.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,6 +89,7 @@ fun ContactsScreen(
     val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
     val connectedSet by container.sync.connectedContacts.collectAsState()
     val scope = rememberCoroutineScope()
+    val strings = LocalStrings.current
 
     var searchActive by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
@@ -123,7 +125,7 @@ fun ContactsScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Icon(Icons.Default.Verified, null, tint = MaterialTheme.colorScheme.primary)
-                        Text("Doğrulama kodunu göster", style = MaterialTheme.typography.bodyLarge)
+                        Text(strings.showVerificationCode, style = MaterialTheme.typography.bodyLarge)
                     }
                     HorizontalDivider()
                     Row(
@@ -136,7 +138,7 @@ fun ContactsScreen(
                     ) {
                         Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
                         Text(
-                            "Kişiyi sil",
+                            strings.deleteContact,
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -144,9 +146,9 @@ fun ContactsScreen(
                     HorizontalDivider()
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { actionContact = null }) { Text("Vazgeç") }
-            }
+                    confirmButton = {
+                        TextButton(onClick = { actionContact = null }) { Text(strings.cancel) }
+                    }
         )
     }
 
@@ -162,12 +164,10 @@ fun ContactsScreen(
             icon = {
                 Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
             },
-            title = { Text("\"${c.nickname}\" silinsin mi?") },
+            title = { Text(strings.deleteContactTitle(c.nickname)) },
             text = {
                 Text(
-                    "Tüm mesajlar, bekleyen kayıtlar ve şifreleme anahtarları kalıcı olarak silinecek. " +
-                            "Yeniden konuşmak için her iki tarafın da kişiyi silip baştan eklemesi gerekir.\n\n" +
-                            "Bu işlem geri alınamaz.",
+                    strings.deleteContactBody,
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -190,7 +190,7 @@ fun ContactsScreen(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError
                     )
-                ) { Text("Sil") }
+                ) { Text(strings.delete) }
             },
             dismissButton = {
                 TextButton(
@@ -199,7 +199,7 @@ fun ContactsScreen(
                         showDeleteConfirm = false
                         actionContact = null
                     }
-                ) { Text("Vazgeç") }
+                ) { Text(strings.cancel) }
             }
         )
     }
@@ -241,7 +241,7 @@ fun ContactsScreen(
                         exit = fadeOut()
                     ) {
                         IconButton(onClick = { searchActive = false; query = "" }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Aramayı kapat")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.closeSearch)
                         }
                     }
                 },
@@ -259,7 +259,7 @@ fun ContactsScreen(
                                     .focusRequester(focusRequester),
                                 placeholder = {
                                     Text(
-                                        "Kişi ara…",
+                                        strings.searchContactsPlaceholder,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 },
@@ -268,7 +268,7 @@ fun ContactsScreen(
                                 trailingIcon = {
                                     if (query.isNotEmpty()) {
                                         IconButton(onClick = { query = "" }) {
-                                            Icon(Icons.Default.Close, contentDescription = "Temizle")
+                                            Icon(Icons.Default.Close, contentDescription = strings.closeSearch)
                                         }
                                     }
                                 },
@@ -281,7 +281,7 @@ fun ContactsScreen(
                                 )
                             )
                         } else {
-                            Text("Stade")
+                            Text(strings.appTitle)
                         }
                     }
                 },
@@ -294,11 +294,11 @@ fun ContactsScreen(
                         Row {
                             if (contacts.size > 1) {
                                 IconButton(onClick = { searchActive = true }) {
-                                    Icon(Icons.Default.Search, contentDescription = "Ara")
+                                    Icon(Icons.Default.Search, contentDescription = strings.searchAction)
                                 }
                             }
                             IconButton(onClick = onOpenSettings) {
-                                Icon(Icons.Default.Settings, contentDescription = "Ayarlar")
+                                Icon(Icons.Default.Settings, contentDescription = strings.settingsAction)
                             }
                         }
                     }
@@ -307,7 +307,7 @@ fun ContactsScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onAddContact) {
-                Icon(Icons.Default.PersonAdd, contentDescription = "Kişi ekle")
+                Icon(Icons.Default.PersonAdd, contentDescription = strings.addContactAction)
             }
         }
     ) { padding ->
@@ -334,7 +334,7 @@ fun ContactsScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                "Eşleşen kişi yok",
+                                strings.noSearchResults,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -348,14 +348,15 @@ fun ContactsScreen(
 
 @Composable
 private fun EmptyContacts(modifier: Modifier) {
+    val strings = LocalStrings.current
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Henüz kişin yok", style = MaterialTheme.typography.titleMedium)
+        Text(strings.noContactsTitle, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.size(8.dp))
-        Text("Yeni bir kişi eklemek için sağ alttaki butona dokun.", style = MaterialTheme.typography.bodyMedium)
+        Text(strings.noContactsHint, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -370,6 +371,7 @@ private fun ContactRow(
     onLongPress: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
+    val strings = LocalStrings.current
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = Color.Transparent,
@@ -431,7 +433,7 @@ private fun ContactRow(
                 Spacer(Modifier.height(2.dp))
 
                 Text(
-                    lastMessage ?: "Henüz mesaj yok",
+                    lastMessage ?: strings.noMessages,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                     maxLines = 1

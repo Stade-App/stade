@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.security.SessionTimeout
 import app.stade.ui.components.PlatformVerticalScrollbar
+import app.stade.ui.i18n.LocalStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +60,7 @@ fun SecuritySettingsScreen(
     onBack: () -> Unit,
     onOpenPinSetup: (requireCurrent: Boolean) -> Unit
 ) {
+    val strings = LocalStrings.current
     var refreshTick by remember { mutableStateOf(0) }
     val scrambleEnabled = remember(refreshTick) { container.secrets.isScrambleKeypadEnabled() }
     val sessionTimeout = remember(refreshTick) { container.secrets.sessionTimeoutSeconds() }
@@ -68,10 +70,10 @@ fun SecuritySettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Güvenlik ayarları") },
+                title = { Text(strings.securitySettingsTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -89,13 +91,13 @@ fun SecuritySettingsScreen(
                 contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp)
             ) {
                 item {
-                    SecuritySectionLabel("Şifre")
+                    SecuritySectionLabel(strings.pinSection)
                     SecurityGroup {
                         SecurityNavRow(
                             icon = Icons.Default.Fingerprint,
                             tint = MaterialTheme.colorScheme.primary,
-                            title = "Şifreyi değiştir",
-                            subtitle = "Mevcut şifreyi doğrulayıp yeni bir şifre belirleyin",
+                            title = strings.changePinTitle,
+                            subtitle = strings.changePinSubtitle,
                             onClick = { onOpenPinSetup(true) }
                         )
                         HorizontalDivider(
@@ -105,11 +107,11 @@ fun SecuritySettingsScreen(
                         SecuritySwitchRow(
                             icon = Icons.Default.Grid3x3,
                             tint = MaterialTheme.colorScheme.tertiary,
-                            title = "Tuş takımını karıştır",
+                            title = strings.scrambleKeypadTitle,
                             subtitle = if (scrambleEnabled)
-                                "Her girişte rakamlar rastgele sıralanır"
+                                strings.scrambleKeypadOnSubtitle
                             else
-                                "Rakamlar standart sırada gösterilir",
+                                strings.scrambleKeypadOffSubtitle,
                             checked = scrambleEnabled,
                             onCheckedChange = {
                                 container.secrets.setScrambleKeypadEnabled(it)
@@ -120,14 +122,14 @@ fun SecuritySettingsScreen(
                 }
 
                 item {
-                    SecuritySectionLabel("Oturum")
+                    SecuritySectionLabel(strings.sessionSection)
                     SecurityGroup {
                         Box {
                             SecurityNavRow(
                                 icon = Icons.Default.Timer,
                                 tint = MaterialTheme.colorScheme.secondary,
-                                title = "Otomatik kilit",
-                                subtitle = "Arka plana geçildikten sonra: ${SessionTimeout.label(sessionTimeout)}",
+                                title = strings.autoLockTitle,
+                                subtitle = strings.autoLockSubtitle(strings.sessionTimeoutLabel(sessionTimeout)),
                                 onClick = { timeoutMenuOpen = true }
                             )
                             DropdownMenu(
@@ -136,7 +138,7 @@ fun SecuritySettingsScreen(
                             ) {
                                 SessionTimeout.OPTIONS.forEach { opt ->
                                     DropdownMenuItem(
-                                        text = { Text(SessionTimeout.label(opt)) },
+                                        text = { Text(strings.sessionTimeoutLabel(opt)) },
                                         trailingIcon = {
                                             if (opt == sessionTimeout) {
                                                 Icon(Icons.Default.Check, contentDescription = null)
@@ -243,4 +245,3 @@ private fun SecurityIconBox(icon: ImageVector, tint: Color) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
     }
 }
-

@@ -40,6 +40,7 @@ import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
 import app.stade.ui.components.Avatar
 import app.stade.ui.components.StadeIdCard
+import app.stade.ui.i18n.LocalStrings
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +50,7 @@ fun VerifyContactScreen(
     contactId: String,
     onBack: () -> Unit
 ) {
+    val strings = LocalStrings.current
     val contact = remember(contactId) { container.contacts.get(contactId) }
     val safety = remember(contact?.id) {
         contact?.let { container.fingerprint.safetyNumber(owner.publicSigningKey, it.publicSigningKey) }
@@ -58,10 +60,10 @@ fun VerifyContactScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Kişiyi doğrula") },
+                title = { Text(strings.verifyContactTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
                     }
                 }
             )
@@ -93,7 +95,7 @@ fun VerifyContactScreen(
                     Text(contact?.nickname ?: "", style = MaterialTheme.typography.titleMedium)
                     contact?.let {
                         Spacer(Modifier.height(10.dp))
-                        StadeIdCard(stadeId = it.stadeId, title = "Karşı tarafın Stade ID'si")
+                        StadeIdCard(stadeId = it.stadeId, title = strings.contactStadeId)
                     }
                     if (verified) {
                         Spacer(Modifier.height(4.dp))
@@ -106,7 +108,7 @@ fun VerifyContactScreen(
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                "Doğrulandı",
+                                strings.verifiedLabel,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -128,7 +130,7 @@ fun VerifyContactScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        "Güvenlik numarası",
+                        strings.safetyNumber,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -136,14 +138,13 @@ fun VerifyContactScreen(
                     SafetyNumberBlock(safety ?: "")
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "Bu numarayı yüz yüze veya başka bir güvenli kanaldan karşılaştır.",
+                        strings.safetyNumberNote,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
                 }
             }
-
 
             Button(
                 modifier = Modifier.fillMaxWidth(),
@@ -154,7 +155,7 @@ fun VerifyContactScreen(
                     verified = true
                 }
             ) {
-                Text(if (verified) "Doğrulandı ✓" else "Doğrulandı olarak işaretle")
+                Text(if (verified) strings.alreadyVerifiedLabel else strings.markAsVerified)
             }
         }
     }

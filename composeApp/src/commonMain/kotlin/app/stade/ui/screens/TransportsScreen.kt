@@ -42,21 +42,23 @@ import app.stade.transport.TransportType
 import app.stade.transport.isTorBuiltIn
 import app.stade.ui.components.PlatformVerticalScrollbar
 import app.stade.ui.components.maskAddress
+import app.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
+    val strings = LocalStrings.current
     var configs by remember { mutableStateOf(container.transportSettings.all()) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Taşıma katmanları") },
+                title = { Text(strings.transportsTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
                     }
                 }
             )
@@ -79,13 +81,13 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(label(cfg.type), style = MaterialTheme.typography.titleSmall)
+                                    Text(transportLabel(cfg.type, strings), style = MaterialTheme.typography.titleSmall)
                                     Text(
                                         when {
-                                            info == null -> "kayıtlı değil"
-                                            info!!.running -> "çalışıyor · ${info!!.message}"
-                                            info!!.available -> "hazır"
-                                            else -> "uygun değil · ${info!!.message}"
+                                            info == null -> strings.notRegistered
+                                            info!!.running -> strings.transportRunning(info!!.message)
+                                            info!!.available -> strings.transportReady
+                                            else -> strings.transportUnavailable(info!!.message)
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -102,7 +104,7 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                             plugin?.selfAddress()?.let {
                                 Spacer(Modifier.height(8.dp))
                                 Text(
-                                    "Durum: ${maskAddress(it)} hazır",
+                                    strings.transportStatus(maskAddress(it)),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -110,7 +112,7 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                             val allAddrs = plugin?.let { runCatching { it.selfAddresses() }.getOrDefault(emptyList()) } ?: emptyList()
                             if (allAddrs.size > 1) {
                                 Text(
-                                    "${allAddrs.size} kanal hazır",
+                                    strings.transportChannelsReady(allAddrs.size),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -119,7 +121,7 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                                 Spacer(Modifier.height(12.dp))
                                 if (isTorBuiltIn) {
                                     Text(
-                                        "Tor uygulamayla birlikte gelir, otomatik başlatılır. Onion adresiniz açılışta üretilip kalıcı olarak saklanır.",
+                                        strings.torBuiltinNote,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -150,6 +152,7 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
 
 @Composable
 private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
+    val strings = LocalStrings.current
     val initialMap = remember(initial) {
         initial.lineSequence()
             .map { it.trim() }
@@ -164,9 +167,7 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
 
     Column {
         Text(
-            "Hidden Service (gelişmiş — isteğe bağlı). Bağlantı kanalı kurmak için " +
-                "torrc'de uygun yapılandırmayı kurmanız ve elde edilen kimliği aşağıdaki " +
-                "alana girmeniz gerekir. Boş bırakırsanız bu kanal devre dışı kalır.",
+            strings.hiddenServiceDescription,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -174,7 +175,7 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
         OutlinedTextField(
             value = onion,
             onValueChange = { onion = it.trim() },
-            label = { Text("Hidden service kimliği") },
+            label = { Text(strings.hiddenServiceId) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -182,7 +183,7 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
         OutlinedTextField(
             value = port,
             onValueChange = { port = it.filter { c -> c.isDigit() }.take(5) },
-            label = { Text("Port (onion VIRTPORT)") },
+            label = { Text(strings.onionVirtport) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -190,14 +191,13 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
         OutlinedTextField(
             value = listenPort,
             onValueChange = { listenPort = it.filter { c -> c.isDigit() }.take(5) },
-            label = { Text("Yerel port (boşsa = Port)") },
+            label = { Text(strings.localPortLabel) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            "SOCKS5 (giden bağlantı için). Standart Tor: 9050. Tor Browser: 9150. Orbot: 9050. " +
-                "Bu çalışmazsa sistemde Tor yüklü değil veya farklı portta dinliyor demektir.",
+            strings.socks5Note,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -205,7 +205,7 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
         OutlinedTextField(
             value = socksHost,
             onValueChange = { socksHost = it.trim() },
-            label = { Text("SOCKS5 host") },
+            label = { Text(strings.socks5Host) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -213,7 +213,7 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
         OutlinedTextField(
             value = socksPort,
             onValueChange = { socksPort = it.filter { c -> c.isDigit() }.take(5) },
-            label = { Text("SOCKS5 port") },
+            label = { Text(strings.socks5Port) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -231,13 +231,13 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
                 onSave(cfg)
             },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Kaydet ve kanalı yeniden başlat") }
+        ) { Text(strings.saveAndRestart) }
     }
 }
 
-private fun label(type: TransportType): String = when (type) {
-    TransportType.LAN -> "Yerel ağ"
-    TransportType.TOR -> "Uzak ağ kanalı"
-    TransportType.BLUETOOTH -> "Bluetooth"
-    TransportType.REMOVABLE -> "Çıkarılabilir medya"
+private fun transportLabel(type: TransportType, strings: app.stade.ui.i18n.AppStrings): String = when (type) {
+    TransportType.LAN -> strings.lanLabel
+    TransportType.TOR -> strings.torLabel
+    TransportType.BLUETOOTH -> strings.bluetoothLabel
+    TransportType.REMOVABLE -> strings.removableLabel
 }

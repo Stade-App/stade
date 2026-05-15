@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
 import app.stade.ui.components.BrandMark
+import app.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -38,6 +39,7 @@ fun OnboardingScreen(container: AppContainer, onReady: (LocalIdentity) -> Unit) 
     val scope = rememberCoroutineScope()
     var nickname by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
+    val strings = LocalStrings.current
 
     LaunchedEffect(Unit) {
         val list = container.identities.observeIdentities().first()
@@ -58,17 +60,15 @@ fun OnboardingScreen(container: AppContainer, onReady: (LocalIdentity) -> Unit) 
             if (loading) {
                 BrandMark(size = 72.dp)
                 Spacer(Modifier.height(16.dp))
-                Text("Yükleniyor…", style = MaterialTheme.typography.titleMedium,
+                Text(strings.loading, style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 BrandMark(size = 96.dp)
                 Spacer(Modifier.height(20.dp))
-                Text("Stade'a hoş geldin",
-                    style = MaterialTheme.typography.titleLarge)
+                Text(strings.welcomeTitle, style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Uçtan uca şifreli, sunucusuz, post-quantum güvenli mesajlaşma.\n" +
-                        "Başlamak için bir takma ad seç — kalıcı bir Stade ID atanacak.",
+                    strings.welcomeDescription,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -78,7 +78,7 @@ fun OnboardingScreen(container: AppContainer, onReady: (LocalIdentity) -> Unit) 
                 OutlinedTextField(
                     value = nickname,
                     onValueChange = { nickname = it },
-                    label = { Text("Takma ad") },
+                    label = { Text(strings.nicknamePlaceholder) },
                     singleLine = true,
                     shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.widthIn(min = 280.dp, max = 420.dp)
@@ -94,7 +94,7 @@ fun OnboardingScreen(container: AppContainer, onReady: (LocalIdentity) -> Unit) 
                     },
                     modifier = Modifier.widthIn(min = 280.dp, max = 420.dp).fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium
-                ) { Text("Kimlik oluştur") }
+                ) { Text(strings.createIdentity) }
             }
         }
     }

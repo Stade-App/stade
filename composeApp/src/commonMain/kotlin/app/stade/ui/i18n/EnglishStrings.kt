@@ -1,0 +1,249 @@
+package app.stade.ui.i18n
+
+import app.stade.security.SessionTimeout
+
+object EnglishStrings : AppStrings() {
+    override val back = "Back"
+    override val cancel = "Cancel"
+    override val delete = "Delete"
+
+    override val loading = "Loading…"
+    override val welcomeTitle = "Welcome to Stade"
+    override val welcomeDescription =
+        "End-to-end encrypted, serverless, post-quantum secure messaging.\n" +
+        "Choose a nickname to get started — a permanent Stade ID will be assigned."
+    override val nicknamePlaceholder = "Nickname"
+    override val createIdentity = "Create identity"
+
+    override val unlockTitle = "Unlock"
+    override val unlockSubtitle = "Enter your PIN to continue."
+    override val tooManyAttemptsSubtitle = "Too many failed attempts. Please wait."
+    override val forgotPin = "Forgot PIN"
+    override val resetPinTitle = "Reset PIN"
+    override val resetPinBody =
+        "PIN cannot be recovered from this device. Continuing will permanently erase all local data and reset the app."
+    override val resetAndWipe = "Reset and wipe"
+    override val vaultNotInitialized = "Vault not initialized"
+    override fun wrongPinRemaining(remaining: Int) = "Wrong PIN ($remaining attempts left)"
+    override val wrongPin = "Wrong PIN"
+    override val wiping = "Wiping…"
+    override fun retryIn(formattedTime: String) = "Retry in $formattedTime"
+    override fun formatRemainingTime(seconds: Long) = when {
+        seconds < 60 -> "${seconds}s"
+        seconds < 3600 -> "${seconds / 60}m ${seconds % 60}s"
+        else -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
+    }
+
+    override val enterCurrentPinTitle = "Enter current PIN"
+    override val setNewPinTitle = "Set new PIN"
+    override val confirmPinTitle = "Confirm PIN"
+    override val enterCurrentPinSubtitle = "Enter your current PIN to continue."
+    override fun setPinSubtitle(min: Int, max: Int) = "Set a $min–$max digit PIN."
+    override val confirmPinSubtitle = "Enter the same PIN again."
+    override val wrongCurrentPin = "Current PIN is incorrect"
+    override val pinMismatch = "PINs do not match"
+    override val pinChangeFailed = "Failed to change PIN"
+    override val confirmAction = "Confirm"
+    override val backspaceAction = "Backspace"
+
+    override val appTitle = "Stade"
+    override val searchContactsPlaceholder = "Search contacts…"
+    override val closeSearch = "Close search"
+    override val searchAction = "Search"
+    override val settingsAction = "Settings"
+    override val addContactAction = "Add contact"
+    override val noContactsTitle = "No contacts yet"
+    override val noContactsHint = "Tap the button in the bottom right to add a new contact."
+    override val noSearchResults = "No matching contacts"
+    override val showVerificationCode = "Show verification code"
+    override val deleteContact = "Delete contact"
+    override val noMessages = "No messages yet"
+    override fun deleteContactTitle(name: String) = "Delete \"$name\"?"
+    override val deleteContactBody =
+        "All messages, pending records, and encryption keys will be permanently deleted. " +
+        "Both parties must delete and re-add each other to chat again.\n\nThis action cannot be undone."
+
+    override val online = "online"
+    override val offline = "offline"
+    override val deleteContactDialogTitle = "Delete contact?"
+    override fun deleteContactDialogBody(name: String) =
+        "\"$name\" contact, all messages, pending queue entries and encryption keys (ratchet) will be " +
+        "completely deleted. Both parties must delete and re-add each other to chat again.\n\nThis action cannot be undone."
+    override val noMessagesYet = "No messages yet"
+    override val sendFirstMessage = "Send the first message."
+    override val typeMessagePlaceholder = "Message…"
+    override val sendButton = "Send"
+    override val verifyAction = "Verify"
+    override val deleteContactIconDescription = "Delete contact"
+    override val connectionFailed = "Connection failed"
+    override val collapseAction = "Collapse"
+    override val expandAction = "Expand"
+    override val noConnectionInfo =
+        "No connection info for this contact. Request a new invite code and paste below."
+    override val connectionChannels = "Connection channels"
+    override val trying = "trying"
+    override val channelReadyVerifying = "channel ready, verifying…"
+    override val connectedLabel = "connected"
+    override val unreachable = "unreachable"
+    override val handshakeFailed = "handshake failed"
+    override val notYetTried = "not yet tried"
+    override fun channelLabel(index: Int, maskedAddr: String) = "Channel #$index • $maskedAddr"
+    override val connectionDelayNote =
+        "For remote connections, it may take a few minutes for both parties to be online and network channels to be ready."
+    override val newInviteCodeLabel = "New invite code"
+    override val applyInviteCode = "Apply invite code"
+    override val clearAddresses = "Clear"
+    override fun handshakeRejected(reason: String) = "Connection rejected: $reason"
+    override val contactConnected = "Connected ✓"
+    override val decryptFailed =
+        "Message could not be decrypted — delete and re-add the contact on both sides"
+    override fun sendFailed(reason: String) = "Failed to send message: $reason"
+    override val invalidInvite = "Invalid invite code"
+    override val inviteBelongsToDifferent = "This invite belongs to a different contact"
+    override val noConnectionInInvite = "No connection info in invite"
+    override val connectionInfoUpdated = "Connection info updated"
+    override val addressesCleared = "Addresses cleared"
+    override fun diagnosticError(msg: String) = "Error: $msg"
+
+    override val addContactTitle = "Add contact"
+    override val step1Title = "Share your own invite"
+    override val step1Description =
+        "Press the button below and share the invite code to establish a connection. " +
+        "Stade ID is only an identity label — it doesn't replace the invite code."
+    override fun copyInviteCode(length: Int) = "Copy invite code ($length characters)"
+    override fun inviteCodeCopied(length: Int) =
+        "Invite code copied ($length characters) — send to the other party"
+    override val shareAsFile = "Share as file"
+    override val yourStadeId = "Your Stade ID:"
+    override val step2Title = "Enter the other party's invite"
+    override val inviteCodeLabel = "Invite code"
+    override fun charCount(n: Int) = "$n characters (a valid invite should be ~10500 characters)"
+    override val contactNameLabel = "Name for this contact"
+    override val acceptInvite = "Accept invite"
+    override val pendingInviteOpened =
+        "Invite file opened — give this person a name and tap \"Accept invite\""
+    override val inviteCodeIsStadeId =
+        "This is a Stade ID (identity label), not an invite code. " +
+        "The other party should tap 'Copy invite code' and send you the long block (STADE2-… ~10500 characters)."
+    override fun inviteMissingPrefix(first: String) =
+        "Invite does not start with 'STADE2-' (first: '$first')"
+    override fun inviteTooShort(actual: Int, expected: Int) =
+        "Invite code incomplete: $actual bytes, $expected required — some characters may have been lost during copy"
+    override fun inviteTrailingBytes(extra: Int) =
+        "Invite code has $extra extra bytes — may have been pasted twice"
+    override val inviteBadMagic = "Invite code not in Stade format (magic mismatch)"
+    override fun inviteBadVersion(version: Int) = "Invite code version not supported (v=$version)"
+    override fun inviteBadNickname(length: Int) = "Invite code corrupted (nickname length=$length)"
+    override fun inviteBadAddressBlob(length: Int) =
+        "Invite code corrupted (address blob length=$length)"
+    override val inviteEdVerifyFail =
+        "Invite code signature invalid (Ed25519) — may have been corrupted during copy"
+    override val inviteMlDsaVerifyFail =
+        "Invite code PQ signature invalid (ML-DSA) — may have been corrupted during copy"
+    override fun inviteDecodeError(cause: String) = "Base32 decode error: $cause"
+    override val selfInviteError = "This is your own invite"
+    override fun alreadyAdded(stadeId: String) = "This contact is already added ($stadeId)"
+    override val inviteAcceptedNoAddr =
+        "Invite accepted — waiting for the other party to come online"
+    override fun inviteAccepted(name: String, count: Int) =
+        "Invite accepted ($name) — connecting… ($count addresses trying; other party must be online)"
+    override fun contactAdded(name: String) = "✓ $name added — you can start chatting"
+    override val connectionTimeout =
+        "Could not connect — the other party may be offline or Tor/network unavailable. " +
+        "Leave the app open; the contact will be added automatically when a connection is established."
+    override fun error(msg: String) = "Error: $msg"
+
+    override val settingsTitle = "Settings"
+    override val identitySection = "Identity"
+    override val appearanceSection = "Appearance"
+    override val dynamicColorTitle = "Dynamic color"
+    override val dynamicColorSubtitle = "Use Material You wallpaper colors"
+    override val notificationsSection = "Notifications"
+    override val messageNotificationsTitle = "Message notifications"
+    override val notificationsOnSubtitle = "Send notifications for new messages"
+    override val notificationsOffSubtitle = "Notifications are off"
+    override val hideNotificationTitle = "Hide notification content"
+    override val hiddenNotificationSubtitle = "Shown as \"You have X new messages\""
+    override val visibleNotificationSubtitle = "Sender name and message preview visible"
+    override val systemNotificationsTitle = "System notification settings"
+    override val systemNotificationsSubtitle = "Sound, vibration, and channel settings"
+    override val networkSection = "Network"
+    override val transportLayersTitle = "Transport layers"
+    override val transportLayersSubtitle = "LAN, Tor, and other network settings"
+    override val securitySection = "Security"
+    override val securitySettingsTitle = "Security settings"
+    override val securitySettingsSubtitle = "PIN, auto-lock, and more."
+    override val accountSection = "Account"
+    override val logoutTitle = "Sign out"
+    override val logoutSubtitle = "Local data is preserved"
+    override val localIdentity = "Local identity"
+    override val fingerprintLabel = "Identity fingerprint"
+    override val fingerprintCopied = "Copied!"
+    override val copyButton = "Copy"
+    override val logoutDialogTitle = "Sign out"
+    override val logoutDialogBody =
+        "Your identity, contacts, chat history, and transport settings on this device will be " +
+        "permanently deleted. This action cannot be undone."
+    override val deleteAndLogout = "Delete and sign out"
+    override val languageSection = "Language"
+    override val languageTitle = "Language"
+    override val languageSubtitle = "English"
+
+    override val pinSection = "PIN"
+    override val changePinTitle = "Change PIN"
+    override val changePinSubtitle = "Verify your current PIN and set a new one"
+    override val scrambleKeypadTitle = "Scramble keypad"
+    override val scrambleKeypadOnSubtitle = "Digits are shuffled randomly on each entry"
+    override val scrambleKeypadOffSubtitle = "Digits shown in standard order"
+    override val sessionSection = "Session"
+    override val autoLockTitle = "Auto-lock"
+    override fun autoLockSubtitle(label: String) = "After going to background: $label"
+    override fun sessionTimeoutLabel(seconds: Int) = when (seconds) {
+        SessionTimeout.IMMEDIATE -> "Immediately"
+        SessionTimeout.NEVER -> "Never"
+        30 -> "30 seconds"
+        60 -> "1 minute"
+        5 * 60 -> "5 minutes"
+        15 * 60 -> "15 minutes"
+        60 * 60 -> "1 hour"
+        else -> if (seconds < 60) "$seconds seconds" else "${seconds / 60} minutes"
+    }
+
+    override val transportsTitle = "Transport layers"
+    override val notRegistered = "not registered"
+    override fun transportRunning(msg: String) = "running · $msg"
+    override val transportReady = "ready"
+    override fun transportUnavailable(msg: String) = "unavailable · $msg"
+    override fun transportStatus(addr: String) = "Status: $addr ready"
+    override fun transportChannelsReady(n: Int) = "$n channels ready"
+    override val torBuiltinNote =
+        "Tor is automatically installed and started. Wait for the installation to complete, " +
+        "then use it seamlessly. This is a one-time setup."
+    override val hiddenServiceDescription =
+        "Hidden Service (advanced — optional). To establish a connection channel, you must configure " +
+        "the appropriate settings in torrc and enter the resulting identity in the field below. " +
+        "If left empty, this channel will be disabled."
+    override val hiddenServiceId = "Hidden service identity"
+    override val onionVirtport = "Port (onion VIRTPORT)"
+    override val localPortLabel = "Local port (leave empty to use Port)"
+    override val socks5Note =
+        "SOCKS5 (for outgoing connections). Standard Tor: 9050. Tor Browser: 9150. Orbot: 9050. " +
+        "If this doesn't work, Tor is not installed or listening on a different port."
+    override val socks5Host = "SOCKS5 host"
+    override val socks5Port = "SOCKS5 port"
+    override val saveAndRestart = "Save and restart channel"
+    override val lanLabel = "Local network"
+    override val torLabel = "Remote network channel"
+    override val bluetoothLabel = "Bluetooth"
+    override val removableLabel = "Removable media"
+
+    override val verifyContactTitle = "Verify contact"
+    override val safetyNumber = "Safety number"
+    override val safetyNumberNote =
+        "Compare this number in person or through another secure channel."
+    override val markAsVerified = "Mark as verified"
+    override val alreadyVerifiedLabel = "Verified ✓"
+    override val verifiedLabel = "Verified"
+    override val contactStadeId = "Other party's Stade ID"
+}
+

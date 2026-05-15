@@ -50,12 +50,14 @@ import app.stade.contact.InviteParseResult
 import app.stade.identity.LocalIdentity
 import app.stade.share.InviteShare
 import app.stade.ui.components.StadeIdCard
+import app.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -> Unit) {
+    val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     val invite = remember(owner.id) {
@@ -72,7 +74,7 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
         val p = pendingInvite
         if (!p.isNullOrBlank() && pastedCode.isBlank()) {
             pastedCode = p
-            status = "Davet dosyası açıldı — bu kişiye bir isim ver ve \"Daveti kabul et\""
+            status = strings.pendingInviteOpened
             statusSticky = true
             container.pendingInvite.value = null
         }
@@ -88,10 +90,10 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Kişi ekle") },
+                title = { Text(strings.addContactTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
                     }
                 }
             )
@@ -101,10 +103,9 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(scroll),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            StepCard(stepNumber = 1, title = "Kendi davetini paylaş") {
+            StepCard(stepNumber = 1, title = strings.step1Title) {
                 Text(
-                    "Bağlantı kurmak için aşağıdaki butona basıp davet kodunu paylaş. " +
-                        "Stade ID sadece kimlik etiketidir — davet kodunun yerine geçmez.",
+                    strings.step1Description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -112,7 +113,7 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                 FilledTonalButton(
                     onClick = {
                         clipboard.setText(AnnotatedString(invite.display))
-                        status = "Davet kodu kopyalandı (${invite.display.length} karakter) — karşı tarafa gönder"
+                        status = strings.inviteCodeCopied(invite.display.length)
                         statusSticky = false
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -121,7 +122,7 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                     Icon(Icons.Default.ContentCopy, contentDescription = null,
                         modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Davet kodunu kopyala (${invite.display.length} karakter)")
+                    Text(strings.copyInviteCode(invite.display.length))
                 }
                 Spacer(Modifier.height(8.dp))
                 TextButton(
@@ -131,11 +132,11 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Dosya olarak paylaş")
+                    Text(strings.shareAsFile)
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Stade kimliğin:",
+                    strings.yourStadeId,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -143,25 +144,25 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                 StadeIdCard(stadeId = owner.stadeId)
             }
 
-            StepCard(stepNumber = 2, title = "Karşı tarafın davetini gir") {
+            StepCard(stepNumber = 2, title = strings.step2Title) {
                 OutlinedTextField(
                     value = pastedCode,
                     onValueChange = { pastedCode = it },
-                    label = { Text("Davet kodu") },
+                    label = { Text(strings.inviteCodeLabel) },
                     placeholder = { Text("STADE2-…") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                     shape = MaterialTheme.shapes.medium,
                     supportingText = {
                         val n = pastedCode.replace(Regex("[^A-Za-z0-9]"), "").length
-                        Text("$n karakter (sağlam bir davet ~10500 karakter olmalı)")
+                        Text(strings.charCount(n))
                     }
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = alias,
                     onValueChange = { alias = it },
-                    label = { Text("Bu kişi için isim") },
+                    label = { Text(strings.contactNameLabel) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = MaterialTheme.shapes.medium
@@ -178,97 +179,92 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                 val looksLikeStadeId = Regex("^STADE-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}$")
                                     .matches(trimmed.uppercase())
                                 if (looksLikeStadeId) {
-                                    status = "Bu bir Stade ID (kimlik etiketi), davet kodu değil. " +
-                                        "Karşı tarafın 'Davet kodunu kopyala' butonuna basıp " +
-                                        "gönderdiği uzun bloğu (STADE2-… ~10500 karakter) yapıştır."
+                                    status = strings.inviteCodeIsStadeId
                                     return@launch
                                 }
                                 val result = container.handshake.parseInviteDetailed(trimmed)
                                 val parsed = when (result) {
                                     is InviteParseResult.Ok -> result.payload
                                     is InviteParseResult.MissingPrefix -> {
-                                        status = "Davet 'STADE2-' ile başlamıyor (ilk: '${result.firstChars}')"
+                                        status = strings.inviteMissingPrefix(result.firstChars)
                                         return@launch
                                     }
                                     is InviteParseResult.TooShort -> {
-                                        status = "Davet kodu eksik: ${result.actual} bayt, ${result.expected} gerekli — kopyalarken karakter düşmüş olabilir"
+                                        status = strings.inviteTooShort(result.actual, result.expected)
                                         return@launch
                                     }
                                     is InviteParseResult.TrailingBytes -> {
-                                        status = "Davet kodu fazla ${result.extra} bayt içeriyor — yanlışlıkla iki kez yapıştırılmış olabilir"
+                                        status = strings.inviteTrailingBytes(result.extra)
                                         return@launch
                                     }
                                     InviteParseResult.BadMagic -> {
-                                        status = "Davet kodu Stade formatında değil (magic uyuşmuyor)"
+                                        status = strings.inviteBadMagic
                                         return@launch
                                     }
                                     is InviteParseResult.BadVersion -> {
-                                        status = "Davet kodu sürümü desteklenmiyor (v=${result.version})"
+                                        status = strings.inviteBadVersion(result.version)
                                         return@launch
                                     }
                                     is InviteParseResult.BadNickname -> {
-                                        status = "Davet kodu bozuk (nickname uzunluk=${result.length})"
+                                        status = strings.inviteBadNickname(result.length)
                                         return@launch
                                     }
                                     is InviteParseResult.BadAddressBlob -> {
-                                        status = "Davet kodu bozuk (adres bloğu uzunluk=${result.length})"
+                                        status = strings.inviteBadAddressBlob(result.length)
                                         return@launch
                                     }
                                     InviteParseResult.EdVerifyFail -> {
-                                        status = "Davet kodu imzası geçersiz (Ed25519) — kopyalama sırasında bozulmuş olabilir"
+                                        status = strings.inviteEdVerifyFail
                                         return@launch
                                     }
                                     InviteParseResult.MlDsaVerifyFail -> {
-                                        status = "Davet kodu PQ imzası geçersiz (ML-DSA) — kopyalama sırasında bozulmuş olabilir"
+                                        status = strings.inviteMlDsaVerifyFail
                                         return@launch
                                     }
                                     is InviteParseResult.DecodeError -> {
-                                        status = "Base32 çözme hatası: ${result.cause}"
+                                        status = strings.inviteDecodeError(result.cause)
                                         return@launch
                                     }
                                 }
                                 if (parsed.signingPublicKey.contentEquals(owner.publicSigningKey)) {
-                                    status = "Bu senin kendi davetin"
+                                    status = strings.selfInviteError
                                     return@launch
                                 }
                                 if (container.contacts.findByStadeId(parsed.stadeId) != null) {
-                                    status = "Bu kişi zaten ekli (${parsed.stadeId})"
+                                    status = strings.alreadyAdded(parsed.stadeId)
                                     return@launch
                                 }
                                 val addrs = parsed.addresses
                                 if (addrs.isEmpty()) {
-                                    status = "Davet kabul edildi — karşı tarafın çevrimiçi olmasını bekle"
+                                    status = strings.inviteAcceptedNoAddr
                                     statusSticky = true
                                 } else {
                                     container.connections.queueDial(addrs)
-                                    status = "Davet kabul edildi (${parsed.nickname}) — bağlanılıyor… " +
-                                        "(${addrs.size} adres deneniyor; karşı taraf çevrimiçi olmalı)"
+                                    status = strings.inviteAccepted(parsed.nickname, addrs.size)
                                     statusSticky = true
                                     val targetId = parsed.stadeId
                                     val deadline = kotlinx.datetime.Clock.System.now().toEpochMilliseconds() + 90_000L
                                     while (kotlinx.datetime.Clock.System.now().toEpochMilliseconds() < deadline) {
                                         if (container.contacts.findByStadeId(targetId) != null) {
-                                            status = "✓ ${parsed.nickname} eklendi — sohbete başlayabilirsin"
+                                            status = strings.contactAdded(parsed.nickname)
                                             statusSticky = true
                                             break
                                         }
                                         kotlinx.coroutines.delay(1500)
                                     }
                                     if (container.contacts.findByStadeId(targetId) == null) {
-                                        status = "Bağlanılamadı — karşı taraf çevrimdışı olabilir veya " +
-                                            "Tor/ağ erişimi yok. Uygulamayı açık bırak; bağlantı kurulunca " +
-                                            "kişi otomatik eklenir."
+                                        status = strings.connectionTimeout
                                         statusSticky = true
                                     }
                                 }
                                 pastedCode = ""
                                 alias = ""
                             } catch (e: Exception) {
-                                status = "Hata: ${e.message ?: "Bilinmeyen hata"}"
+                                status = strings.error(e.message ?: "")
                             }
                         }
                     }
-                ) { Text("Daveti kabul et") }
+                ) { Text(strings.acceptInvite) }
                 status?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(

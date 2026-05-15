@@ -27,7 +27,11 @@ import app.stade.ui.screens.SecuritySettingsScreen
 import app.stade.ui.screens.SettingsScreen
 import app.stade.ui.screens.TransportsScreen
 import app.stade.ui.screens.VerifyContactScreen
+import app.stade.ui.i18n.LocalStrings
+import app.stade.ui.i18n.getLocalePreference
+import app.stade.ui.i18n.localeToStrings
 import app.stade.ui.theme.StadeTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -47,7 +51,9 @@ sealed interface Screen {
 @Composable
 fun StadeApp(boot: BootContext) {
     val vault = boot.vault
+    val locale by getLocalePreference()
     StadeTheme {
+        CompositionLocalProvider(LocalStrings provides localeToStrings(locale)) {
         var initialized by remember { mutableStateOf(vault.isInitialized()) }
         var unlocked by remember { mutableStateOf(vault.isUnlocked()) }
         var autoUnlockTried by remember { mutableStateOf(false) }
@@ -105,6 +111,7 @@ fun StadeApp(boot: BootContext) {
                     }
                 )
             }
+        }
         }
     }
 }

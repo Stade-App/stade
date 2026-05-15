@@ -42,6 +42,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -82,6 +84,10 @@ import app.stade.ui.components.StadeIdCard
 import app.stade.ui.theme.getDynamicColorEnabled
 import app.stade.ui.theme.isDynamicColorSupported
 import app.stade.ui.theme.setDynamicColorEnabled
+import app.stade.ui.i18n.AppLocale
+import app.stade.ui.i18n.LocalStrings
+import app.stade.ui.i18n.getLocalePreference
+import app.stade.ui.i18n.setLocalePreference
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,6 +100,7 @@ fun SettingsScreen(
     onOpenSecurity: () -> Unit = {},
     onLogout: () -> Unit
 ) {
+    val strings = LocalStrings.current
     val fingerprint = remember(owner.id) { container.fingerprint.fingerprint(owner.publicSigningKey) }
     val dynamicColorEnabled by getDynamicColorEnabled()
     val notificationsEnabled by getNotificationsEnabled()
@@ -101,7 +108,8 @@ fun SettingsScreen(
     var showLogoutDialog by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
     var fingerprintCopied by remember { mutableStateOf(false) }
-
+    val currentLocale by getLocalePreference()
+    var showLanguageMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(fingerprintCopied) {
         if (fingerprintCopied) {
@@ -120,11 +128,10 @@ fun SettingsScreen(
                     tint = MaterialTheme.colorScheme.error
                 )
             },
-            title = { Text("Oturumu Kapat") },
+            title = { Text(strings.logoutDialogTitle) },
             text = {
                 Text(
-                    "Bu cihazdaki kimliğin, kişilerin, sohbet geçmişin ve taşıma " +
-                        "ayarların kalıcı olarak silinir. Bu işlem geri alınamaz.",
+                    strings.logoutDialogBody,
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -135,22 +142,21 @@ fun SettingsScreen(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError
                     )
-                ) { Text("Sil ve çıkış yap") }
+                ) { Text(strings.deleteAndLogout) }
             },
             dismissButton = {
-                TextButton(onClick = { showLogoutDialog = false }) { Text("İptal") }
+                TextButton(onClick = { showLogoutDialog = false }) { Text(strings.cancel) }
             }
         )
     }
 
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Ayarlar") },
+                title = { Text(strings.settingsTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -182,7 +188,7 @@ fun SettingsScreen(
             }
 
             item {
-                SettingsSectionLabel("Kimlik")
+                SettingsSectionLabel(strings.identitySection)
                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                     StadeIdCard(stadeId = owner.stadeId)
                 }
@@ -190,13 +196,13 @@ fun SettingsScreen(
 
             if (isDynamicColorSupported) {
                 item {
-                    SettingsSectionLabel("Görünüm")
+                    SettingsSectionLabel(strings.appearanceSection)
                     SettingsGroup {
                         SwitchSettingsRow(
                             icon = Icons.Default.Palette,
                             iconTint = MaterialTheme.colorScheme.tertiary,
-                            title = "Dinamik renk",
-                            subtitle = "Material You duvar kağıdı renklerini kullan",
+                            title = strings.dynamicColorTitle,
+                            subtitle = strings.dynamicColorSubtitle,
                             checked = dynamicColorEnabled,
                             onCheckedChange = { setDynamicColorEnabled(it) }
                         )
@@ -204,18 +210,59 @@ fun SettingsScreen(
                 }
             }
 
+            item {
+                SettingsSectionLabel(strings.languageSection)
+                SettingsGroup {
+                    Box {
+                        NavigationSettingsRow(
+                            icon = Icons.Default.Grid3x3,
+                            iconTint = MaterialTheme.colorScheme.tertiary,
+                            title = strings.languageTitle,
+                            subtitle = strings.languageSubtitle,
+                            onClick = { showLanguageMenu = true }
+                        )
+                        DropdownMenu(
+                            expanded = showLanguageMenu,
+                            onDismissRequest = { showLanguageMenu = false }
+                        ) {
+                            AppLocale.entries.forEach { locale ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            when (locale) {
+                                                AppLocale.English -> "English"
+                                                AppLocale.Turkish -> "Türkçe"
+                                            }
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        if (locale == currentLocale) {
+                                            Icon(Icons.Default.Check, contentDescription = null)
+                                        }
+                                    },
+                                    onClick = {
+                                        setLocalePreference(locale)
+                                        showLanguageMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             if (isNotificationSupported) {
                 item {
-                    SettingsSectionLabel("Bildirimler")
+                    SettingsSectionLabel(strings.notificationsSection)
                     SettingsGroup {
                         SwitchSettingsRow(
                             icon = if (notificationsEnabled) Icons.Default.Notifications
                                    else Icons.Default.NotificationsOff,
                             iconTint = if (notificationsEnabled) MaterialTheme.colorScheme.primary
                                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                            title = "Mesaj bildirimleri",
-                            subtitle = if (notificationsEnabled) "Yeni mesajlarda bildirim gönder"
-                                       else "Bildirimler kapalı",
+                            title = strings.messageNotificationsTitle,
+                            subtitle = if (notificationsEnabled) strings.notificationsOnSubtitle
+                                       else strings.notificationsOffSubtitle,
                             checked = notificationsEnabled,
                             onCheckedChange = { setNotificationsEnabled(it) }
                         )
@@ -227,11 +274,11 @@ fun SettingsScreen(
                             SwitchSettingsRow(
                                 icon = Icons.Default.VisibilityOff,
                                 iconTint = MaterialTheme.colorScheme.tertiary,
-                                title = "Bildirim içeriğini gizle",
+                                title = strings.hideNotificationTitle,
                                 subtitle = if (notificationPrivacyEnabled)
-                                    "\"X yeni mesajınız var\" şeklinde gösterilir"
+                                    strings.hiddenNotificationSubtitle
                                 else
-                                    "Gönderici adı ve mesaj önizlenebilir",
+                                    strings.visibleNotificationSubtitle,
                                 checked = notificationPrivacyEnabled,
                                 onCheckedChange = { setNotificationPrivacyEnabled(it) }
                             )
@@ -243,8 +290,8 @@ fun SettingsScreen(
                         NavigationSettingsRow(
                             icon = Icons.Default.OpenInNew,
                             iconTint = MaterialTheme.colorScheme.secondary,
-                            title = "Sistem bildirim ayarları",
-                            subtitle = "Ses, titreşim ve kanal ayarları",
+                            title = strings.systemNotificationsTitle,
+                            subtitle = strings.systemNotificationsSubtitle,
                             onClick = { openNotificationSettings() }
                         )
                     }
@@ -252,39 +299,39 @@ fun SettingsScreen(
             }
 
             item {
-                SettingsSectionLabel("Ağ Bağlantısı")
+                SettingsSectionLabel(strings.networkSection)
                 SettingsGroup {
                     NavigationSettingsRow(
                         icon = Icons.Default.SettingsEthernet,
                         iconTint = MaterialTheme.colorScheme.secondary,
-                        title = "Taşıma katmanları",
-                        subtitle = "LAN, Tor ve diğer ağ ayarları",
+                        title = strings.transportLayersTitle,
+                        subtitle = strings.transportLayersSubtitle,
                         onClick = onOpenTransports
                     )
                 }
             }
 
             item {
-                SettingsSectionLabel("Güvenlik")
+                SettingsSectionLabel(strings.securitySection)
                 SettingsGroup {
                     NavigationSettingsRow(
                         icon = Icons.Default.Lock,
                         iconTint = MaterialTheme.colorScheme.primary,
-                        title = "Güvenlik ayarları",
-                        subtitle = "Şifre, otomatik kilit ve diğerleri.",
+                        title = strings.securitySettingsTitle,
+                        subtitle = strings.securitySettingsSubtitle,
                         onClick = onOpenSecurity
                     )
                 }
             }
 
             item {
-                SettingsSectionLabel("Hesap")
+                SettingsSectionLabel(strings.accountSection)
                 SettingsGroup {
                     ActionSettingsRow(
                         icon = Icons.AutoMirrored.Filled.Logout,
                         iconTint = MaterialTheme.colorScheme.error,
-                        title = "Oturumu kapat",
-                        subtitle = "Yerel veriler korunur",
+                        title = strings.logoutTitle,
+                        subtitle = strings.logoutSubtitle,
                         titleColor = MaterialTheme.colorScheme.error,
                         onClick = { showLogoutDialog = true }
                     )
@@ -307,6 +354,7 @@ private fun ProfileHeader(
     copied: Boolean,
     onCopyFingerprint: () -> Unit
 ) {
+    val strings = LocalStrings.current
     val cardShape = RoundedCornerShape(16.dp)
 
     Box(
@@ -332,7 +380,7 @@ private fun ProfileHeader(
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                "Yerel kimlik",
+                strings.localIdentity,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.65f)
             )
@@ -371,7 +419,7 @@ private fun ProfileHeader(
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            if (copied) "Kopyalandı!" else "Kimlik parmak izi",
+                            if (copied) strings.fingerprintCopied else strings.fingerprintLabel,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.65f)
                         )
@@ -388,7 +436,7 @@ private fun ProfileHeader(
                     Spacer(Modifier.width(8.dp))
                     Icon(
                         Icons.Default.ContentCopy,
-                        contentDescription = "Kopyala",
+                        contentDescription = strings.copyButton,
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
                     )

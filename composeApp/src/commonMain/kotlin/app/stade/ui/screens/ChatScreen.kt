@@ -91,6 +91,7 @@ import app.stade.transport.DialAttempt
 import app.stade.ui.components.Avatar
 import app.stade.ui.components.formatChatTime
 import app.stade.ui.components.maskAddress
+import app.stade.ui.i18n.LocalStrings
 import app.stade.ui.theme.StadeColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -108,6 +109,7 @@ fun ChatScreen(
     onVerify: () -> Unit,
     onContactDeleted: (() -> Unit)? = null
 ) {
+    val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     val contact = remember(contactId) { container.contacts.get(contactId) }
     val messages by container.messages.observeMessages(contactId).collectAsState(initial = emptyList())
@@ -118,7 +120,6 @@ fun ChatScreen(
     var draft by remember { mutableStateOf(TextFieldValue("")) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
-    // Diagnostics paneli varsayılan kapalı — klavye açıkken mesaj alanını tıklamaz
     var diagnosticsExpanded by remember(contactId) { mutableStateOf(false) }
 
     var notification by remember { mutableStateOf<NotificationData?>(null) }
@@ -140,19 +141,16 @@ fun ChatScreen(
         container.sync.events.collect { ev ->
             when (ev) {
                 is SyncEngine.SyncEvent.HandshakeRejected ->
-                    showNotification("Bağlantı reddedildi: ${ev.reason}", NotificationKind.Error)
+                    showNotification(strings.handshakeRejected(ev.reason), NotificationKind.Error)
                 is SyncEngine.SyncEvent.ContactConnected ->
                     if (ev.contactId == contactId)
-                        showNotification("Bağlandı ✓", NotificationKind.Success)
+                        showNotification(strings.contactConnected, NotificationKind.Success)
                 is SyncEngine.SyncEvent.DecryptFailed ->
                     if (ev.contactId == contactId)
-                        showNotification(
-                            "Mesaj şifresi çözülemedi — kişiyi her iki tarafta da silip yeniden ekleyin",
-                            NotificationKind.Error
-                        )
+                        showNotification(strings.decryptFailed, NotificationKind.Error)
                 is SyncEngine.SyncEvent.SendFailed ->
                     if (ev.contactId == contactId)
-                        showNotification("Mesaj gönderilemedi: ${ev.reason}", NotificationKind.Error)
+                        showNotification(strings.sendFailed(ev.reason), NotificationKind.Error)
                 else -> {}
             }
         }
@@ -175,13 +173,9 @@ fun ChatScreen(
     if (showDeleteDialog && contact != null) {
         AlertDialog(
             onDismissRequest = { if (!deleting) showDeleteDialog = false },
-            title = { Text("Kişiyi sil?") },
+            title = { Text(strings.deleteContactDialogTitle) },
             text = {
-                Text(
-                    "\"${contact.nickname}\" kişisi, tüm mesajlar, bekleyen kuyruk kayıtları ve şifreleme " +
-                            "anahtarları (ratchet) tamamen silinecek. Aynı kişiyle yeniden konuşmak için her iki " +
-                            "tarafın da kişiyi silip yeni davet linkiyle baştan eklemesi gerekir.\n\nBu işlem geri alınamaz."
-                )
+                Text(strings.deleteContactDialogBody(contact.nickname))
             },
             confirmButton = {
                 TextButton(
@@ -198,13 +192,13 @@ fun ChatScreen(
                             (onContactDeleted ?: onBack)?.invoke()
                         }
                     }
-                ) { Text("Sil", color = MaterialTheme.colorScheme.error) }
+                ) { Text(strings.delete, color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(
                     enabled = !deleting,
                     onClick = { showDeleteDialog = false }
-                ) { Text("Vazgeç") }
+                ) { Text(strings.cancel) }
             }
         )
     }
@@ -243,24 +237,24 @@ fun ChatScreen(
                                 )
                                 Spacer(Modifier.size(6.dp))
                                 Text(
-                                    if (isOnline) "çevrimiçi" else "çevrimdışı",
+                                    if (isOnline) strings.online else strings.offline,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            }
-                        }
                     }
+                }
+            }
                 },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Geri")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
                         }
                     }
                 },
                 actions = {
                     IconButton(onClick = onVerify) {
-                        Icon(Icons.Default.Verified, contentDescription = "Doğrula")
+                        Icon(Icons.Default.Verified, contentDescription = strings.verifyAction)
                     }
                     IconButton(
                         onClick = { showDeleteDialog = true },
@@ -268,7 +262,7 @@ fun ChatScreen(
                     ) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "Kişiyi sil",
+                            contentDescription = strings.deleteContactIconDescription,
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -301,29 +295,26 @@ fun ChatScreen(
                                     val parsed = container.handshake.parseInvite(code.trim())
                                     when {
                                         parsed == null ->
-                                            showNotification("Davet kodu geçersiz", NotificationKind.Error)
+                                            showNotification(strings.invalidInvite, NotificationKind.Error)
                                         !parsed.signingPublicKey.contentEquals(contact.publicSigningKey) ->
-                                            showNotification("Bu davet başka bir kişiye ait", NotificationKind.Error)
+                                            showNotification(strings.inviteBelongsToDifferent, NotificationKind.Error)
                                         parsed.addresses.isEmpty() ->
-                                            showNotification("Davette bağlantı bilgisi yok", NotificationKind.Error)
+                                            showNotification(strings.noConnectionInInvite, NotificationKind.Error)
                                         else -> {
                                             container.contacts.setAddresses(contact.id, parsed.addresses)
                                             container.connections.queueDial(parsed.addresses)
-                                            showNotification(
-                                                "Bağlantı bilgileri güncellendi",
-                                                NotificationKind.Success
-                                            )
+                                            showNotification(strings.connectionInfoUpdated, NotificationKind.Success)
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    showNotification("Hata: ${e.message}", NotificationKind.Error)
+                                    showNotification(strings.diagnosticError(e.message ?: ""), NotificationKind.Error)
                                 }
                             }
                         },
                         onClear = {
                             scope.launch {
                                 runCatching { container.contacts.setAddresses(contact.id, emptyList()) }
-                                showNotification("Adresler temizlendi", NotificationKind.Info)
+                                showNotification(strings.addressesCleared, NotificationKind.Info)
                             }
                         }
                     )
@@ -340,12 +331,12 @@ fun ChatScreen(
                         ) {
                             Avatar(name = contact?.nickname ?: "?", size = 64.dp)
                             Text(
-                                "Henüz mesaj yok",
+                                strings.noMessagesYet,
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                "İlk mesajı sen gönder.",
+                                strings.sendFirstMessage,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -465,9 +456,9 @@ private fun DiagnosticsCard(
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
 ) {
+    val strings = LocalStrings.current
     var refreshLink by remember { mutableStateOf("") }
 
-    // Tek bir Card — tam genişlik, üst köşeler keskin (AppBar'a yapışık), alt köşeler yuvarlak
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -478,7 +469,6 @@ private fun DiagnosticsCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        // ── Başlık satırı — her zaman görünür, tıklanabilir ──────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -494,20 +484,19 @@ private fun DiagnosticsCard(
                     .background(MaterialTheme.colorScheme.error)
             )
             Text(
-                "Bağlantı kurulamadı",
+                strings.connectionFailed,
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f)
             )
             Icon(
                 imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = if (expanded) "Daralt" else "Genişlet",
+                contentDescription = if (expanded) strings.collapseAction else strings.expandAction,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
         }
 
-        // ── Genişletilmiş içerik — şeffaf, aynı Card yüzeyinde ──────────
         if (expanded) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Column(
@@ -517,14 +506,13 @@ private fun DiagnosticsCard(
             ) {
                 if (addresses.isEmpty()) {
                     Text(
-                        "Bu kişinin kayıtlı bağlantı bilgisi yok. Karşı taraftan yeni bir davet kodu iste " +
-                            "ve aşağıya yapıştır.",
+                        strings.noConnectionInfo,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
                     Text(
-                        "Bağlantı kanalları",
+                        strings.connectionChannels,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -533,17 +521,17 @@ private fun DiagnosticsCard(
                         val a = perAddr[addr]
                         val (icon, label, color) = when (a?.status) {
                             DialAttempt.Status.TRYING ->
-                                Triple("…", "deneniyor", MaterialTheme.colorScheme.onSurfaceVariant)
+                                Triple("…", strings.trying, MaterialTheme.colorScheme.onSurfaceVariant)
                             DialAttempt.Status.CONNECT_OK ->
-                                Triple("•", "kanal hazır, doğrulama…", MaterialTheme.colorScheme.tertiary)
+                                Triple("•", strings.channelReadyVerifying, MaterialTheme.colorScheme.tertiary)
                             DialAttempt.Status.HANDSHAKE_OK ->
-                                Triple("✓", "bağlı", StadeColors.online)
+                                Triple("✓", strings.connectedLabel, StadeColors.online)
                             DialAttempt.Status.CONNECT_FAIL ->
-                                Triple("✗", "ulaşılamıyor", MaterialTheme.colorScheme.error)
+                                Triple("✗", strings.unreachable, MaterialTheme.colorScheme.error)
                             DialAttempt.Status.HANDSHAKE_FAIL ->
-                                Triple("✗", "doğrulama başarısız", MaterialTheme.colorScheme.error)
+                                Triple("✗", strings.handshakeFailed, MaterialTheme.colorScheme.error)
                             null ->
-                                Triple("·", "henüz denenmedi", MaterialTheme.colorScheme.onSurfaceVariant)
+                                Triple("·", strings.notYetTried, MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
@@ -553,7 +541,7 @@ private fun DiagnosticsCard(
                             Spacer(Modifier.width(8.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    "Kanal #${idx + 1} • ${maskAddress(addr)}",
+                                    strings.channelLabel(idx + 1, maskAddress(addr)),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -563,8 +551,7 @@ private fun DiagnosticsCard(
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Bağlantı uzaktan kuruluyorsa karşı tarafın çevrimiçi olması ve " +
-                            "ağ kanallarının hazır olması birkaç dakika sürebilir.",
+                        strings.connectionDelayNote,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -573,7 +560,7 @@ private fun DiagnosticsCard(
                 OutlinedTextField(
                     value = refreshLink,
                     onValueChange = { refreshLink = it },
-                    label = { Text("Yeni davet kodu") },
+                    label = { Text(strings.newInviteCodeLabel) },
                     placeholder = { Text("STADE2-…") },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 4,
@@ -588,11 +575,11 @@ private fun DiagnosticsCard(
                         enabled = refreshLink.isNotBlank(),
                         onClick = { onApplyInvite(refreshLink); refreshLink = "" },
                         modifier = Modifier.weight(1f)
-                    ) { Text("Davet kodunu uygula") }
+                    ) { Text(strings.applyInviteCode) }
                     OutlinedButton(
                         enabled = addresses.isNotEmpty(),
                         onClick = onClear
-                    ) { Text("Temizle") }
+                    ) { Text(strings.clearAddresses) }
                 }
             }
         }
@@ -606,6 +593,7 @@ private fun Composer(
     onChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit
 ) {
+    val strings = LocalStrings.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -632,7 +620,7 @@ private fun Composer(
                         false
                     }
                 },
-            placeholder = { Text("Mesaj yaz…") },
+            placeholder = { Text(strings.typeMessagePlaceholder) },
             maxLines = 5,
             shape = RoundedCornerShape(24.dp),
             colors = TextFieldDefaults.colors(
@@ -653,7 +641,7 @@ private fun Composer(
                 contentColor = MaterialTheme.colorScheme.onPrimary
             )
         ) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Gönder")
+            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.sendButton)
         }
     }
 }

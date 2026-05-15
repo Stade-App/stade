@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import app.stade.security.UnlockOutcome
 import app.stade.security.Vault
 import app.stade.ui.components.BrandMark
+import app.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -87,6 +88,7 @@ fun LockScreen(
     val shakeOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val scrambleEnabled = remember { vault.isScrambleKeypadEnabled() }
+    val strings = LocalStrings.current
 
     LaunchedEffect(lockoutUntil) {
         while (lockoutUntil > vault.nowMillis()) {
@@ -109,9 +111,9 @@ fun LockScreen(
                 UnlockOutcome.Success -> onUnlocked()
                 is UnlockOutcome.Wrong -> {
                     error = if (outcome.remainingBeforeLockout > 0) {
-                        "Şifre hatalı (${outcome.remainingBeforeLockout} hak kaldı)"
+                        strings.wrongPinRemaining(outcome.remainingBeforeLockout)
                     } else {
-                        "Şifre hatalı"
+                        strings.wrongPin
                     }
                     launch { shakeOffset.shake() }
                     lockoutUntil = vault.lockoutUntilMillis()
@@ -125,7 +127,7 @@ fun LockScreen(
                     pin = ""
                 }
                 UnlockOutcome.NotInitialized -> {
-                    error = "Kasa başlatılmamış"
+                    error = strings.vaultNotInitialized
                     delay(700)
                     pin = ""
                     error = null
@@ -149,10 +151,10 @@ fun LockScreen(
         ) {
             BrandMark(size = 72.dp)
             Spacer(Modifier.height(16.dp))
-            Text("Kilidi aç", style = MaterialTheme.typography.titleLarge)
+            Text(strings.unlockTitle, style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(6.dp))
             Text(
-                if (lockedNow) "Çok fazla hatalı giriş. Bekleyin." else "Devam etmek için şifreni gir.",
+                if (lockedNow) strings.tooManyAttemptsSubtitle else strings.unlockSubtitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -181,7 +183,7 @@ fun LockScreen(
                     lockedNow -> {
                         val remaining = ((lockoutUntil - nowTick) / 1000L).coerceAtLeast(0L)
                         Text(
-                            "Yeniden denemek için ${formatRemaining(remaining)}",
+                            strings.retryIn(strings.formatRemainingTime(remaining)),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.labelMedium
                         )
@@ -210,7 +212,7 @@ fun LockScreen(
             )
             Spacer(Modifier.height(16.dp))
             TextButton(onClick = { showForgotDialog = true }, enabled = !wiping) {
-                Text("Şifremi unuttum")
+                Text(strings.forgotPin)
             }
         }
     }
@@ -225,10 +227,10 @@ fun LockScreen(
                     tint = MaterialTheme.colorScheme.error
                 )
             },
-            title = { Text("Şifreyi sıfırla") },
+            title = { Text(strings.resetPinTitle) },
             text = {
                 Text(
-                    "Şifre cihazından kurtarılamaz. Devam edersen tüm yerel veriler kalıcı olarak silinir ve uygulama sıfırlanır.",
+                    strings.resetPinBody,
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
@@ -249,21 +251,15 @@ fun LockScreen(
                         containerColor = MaterialTheme.colorScheme.error,
                         contentColor = MaterialTheme.colorScheme.onError
                     )
-                ) { Text(if (wiping) "Siliniyor…" else "Sıfırla ve sil") }
+                ) { Text(if (wiping) strings.wiping else strings.resetAndWipe) }
             },
             dismissButton = {
                 TextButton(onClick = { showForgotDialog = false }, enabled = !wiping) {
-                    Text("Vazgeç")
+                    Text(strings.cancel)
                 }
             }
         )
     }
-}
-
-private fun formatRemaining(seconds: Long): String = when {
-    seconds < 60 -> "${seconds}s"
-    seconds < 3600 -> "${seconds / 60}dk ${seconds % 60}s"
-    else -> "${seconds / 3600}sa ${(seconds % 3600) / 60}dk"
 }
 
 @Composable
@@ -282,6 +278,7 @@ fun PinSetupScreen(
     var isVerifying by remember { mutableStateOf(false) }
     val shakeOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
+    val strings = LocalStrings.current
 
     val currentInput = when (phase) {
         Phase.Current -> currentPin
@@ -304,7 +301,7 @@ fun PinSetupScreen(
                 currentPin = ""
                 error = null
             } else {
-                error = "Mevcut şifre hatalı"
+                error = strings.wrongCurrentPin
                 launch { shakeOffset.shake() }
                 delay(700)
                 currentPin = ""
@@ -328,14 +325,14 @@ fun PinSetupScreen(
                 if (ok) {
                     onDone()
                 } else {
-                    error = "Şifre değiştirilemedi"
+                    error = strings.pinChangeFailed
                     launch { shakeOffset.shake() }
                     delay(800)
                     confirmPin = ""
                     error = null
                 }
             } else {
-                error = "Şifreler eşleşmiyor"
+                error = strings.pinMismatch
                 launch { shakeOffset.shake() }
                 delay(700)
                 confirmPin = ""
@@ -345,14 +342,14 @@ fun PinSetupScreen(
     }
 
     val heading = when (phase) {
-        Phase.Current -> "Mevcut şifreyi gir"
-        Phase.New -> "Yeni şifre belirle"
-        Phase.Confirm -> "Şifreyi doğrula"
+        Phase.Current -> strings.enterCurrentPinTitle
+        Phase.New -> strings.setNewPinTitle
+        Phase.Confirm -> strings.confirmPinTitle
     }
     val sub = when (phase) {
-        Phase.Current -> "Devam etmek için mevcut şifreni gir."
-        Phase.New -> "$PIN_MIN-$PIN_MAX haneli bir şifre belirle."
-        Phase.Confirm -> "Aynı şifreyi tekrar gir."
+        Phase.Current -> strings.enterCurrentPinSubtitle
+        Phase.New -> strings.setPinSubtitle(PIN_MIN, PIN_MAX)
+        Phase.Confirm -> strings.confirmPinSubtitle
     }
 
     Scaffold { padding ->
@@ -433,7 +430,7 @@ fun PinSetupScreen(
                         Phase.Confirm -> {}
                     }
                 },
-                cancelLabel = if (requireCurrent) "İptal" else null,
+                cancelLabel = if (requireCurrent) strings.cancel else null,
                 onCancel = onCancel
             )
         }
@@ -488,6 +485,7 @@ private fun PinKeypad(
     onCancel: () -> Unit = {},
     scrambled: Boolean = false
 ) {
+    val strings = LocalStrings.current
     val digits: List<String> = remember(scrambled) {
         val all = (1..9).map { it.toString() } + "0"
         if (scrambled) all.shuffled() else all
@@ -511,13 +509,13 @@ private fun PinKeypad(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             when {
-                actionIsCheck -> KeyButton(checkIcon = true, isAction = true) { onAction() }
+                actionIsCheck -> KeyButton(checkIcon = true, isAction = true, confirmDesc = strings.confirmAction) { onAction() }
                 actionLabel != null -> KeyButton(label = actionLabel, isAction = true) { onAction() }
                 cancelLabel != null -> KeyButton(label = cancelLabel, isAction = false, small = true) { onCancel() }
                 else -> Spacer(Modifier.width(72.dp).height(72.dp))
             }
             KeyButton(label = bottomMid) { onDigit(bottomMid) }
-            KeyButton(icon = true) { onBackspace() }
+            KeyButton(icon = true, backspaceDesc = strings.backspaceAction) { onBackspace() }
         }
     }
 }
@@ -529,6 +527,8 @@ private fun KeyButton(
     checkIcon: Boolean = false,
     isAction: Boolean = false,
     small: Boolean = false,
+    confirmDesc: String = "",
+    backspaceDesc: String = "",
     onClick: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
@@ -549,8 +549,8 @@ private fun KeyButton(
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             when {
-                checkIcon -> Icon(Icons.Filled.Check, contentDescription = "Onayla", tint = fg)
-                icon -> Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Sil", tint = fg)
+                checkIcon -> Icon(Icons.Filled.Check, contentDescription = confirmDesc, tint = fg)
+                icon -> Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = backspaceDesc, tint = fg)
                 else -> Text(
                     label,
                     style = if (small) MaterialTheme.typography.labelLarge
