@@ -6,3 +6,7 @@ plugins {
     alias(libs.plugins.androidApplication) apply false
     alias(libs.plugins.sqldelight) apply false
 }
+
+allprojects {
+    layout.buildDirectory = File("C:/GradleBuilds/Stade/${project.name}/build")
+}
