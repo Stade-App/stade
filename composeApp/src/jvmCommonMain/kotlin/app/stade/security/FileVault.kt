@@ -100,7 +100,7 @@ class FileVault(private val rootDir: File) : Vault {
         }
         val verifierOk = runCatching {
             val pt = gcmDecrypt(kek, meta.verifierNonce, meta.verifierCipher)
-            pt.contentEquals(VERIFIER_PLAIN)
+            java.security.MessageDigest.isEqual(pt, VERIFIER_PLAIN)
         }.getOrDefault(false)
         if (!verifierOk) {
             zero(kek)
@@ -165,7 +165,7 @@ class FileVault(private val rootDir: File) : Vault {
         val kek = deriveKey(currentPassword, meta.salt, meta.iterations)
         val verifierOk = runCatching {
             val pt = gcmDecrypt(kek, meta.verifierNonce, meta.verifierCipher)
-            pt.contentEquals(VERIFIER_PLAIN)
+            java.security.MessageDigest.isEqual(pt, VERIFIER_PLAIN)
         }.getOrDefault(false)
         if (!verifierOk) {
             zero(kek)

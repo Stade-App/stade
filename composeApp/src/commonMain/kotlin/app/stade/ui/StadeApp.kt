@@ -49,9 +49,18 @@ fun StadeApp(boot: BootContext) {
     val vault = boot.vault
     StadeTheme {
         var initialized by remember { mutableStateOf(vault.isInitialized()) }
-        var unlocked by remember { mutableStateOf(false) }
+        var unlocked by remember { mutableStateOf(vault.isUnlocked()) }
+        var autoUnlockTried by remember { mutableStateOf(false) }
         var container by remember { mutableStateOf<AppContainer?>(null) }
         val scope = rememberCoroutineScope()
+
+        LaunchedEffect(initialized) {
+            if (initialized && !unlocked && !autoUnlockTried) {
+                val ok = withContext(Dispatchers.Default) { vault.tryAutoUnlock() }
+                autoUnlockTried = true
+                if (ok) unlocked = true
+            }
+        }
 
         when {
             !initialized -> PinSetupScreen(
@@ -63,14 +72,19 @@ fun StadeApp(boot: BootContext) {
                 },
                 onCancel = { }
             )
-            !unlocked -> LockScreen(
-                vault = vault,
-                onUnlocked = { unlocked = true },
-                onForgotPin = {
-                    initialized = vault.isInitialized()
-                    container = null
+            !unlocked -> {
+                if (autoUnlockTried) {
+                    LockScreen(
+                        vault = vault,
+                        onUnlocked = { unlocked = true },
+                        onForgotPin = {
+                            initialized = vault.isInitialized()
+                            container = null
+                            autoUnlockTried = true
+                        }
+                    )
                 }
-            )
+            }
             else -> {
                 val active = container ?: remember { boot.buildContainer() }.also { container = it }
                 UnlockedApp(
