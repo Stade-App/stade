@@ -1,5 +1,7 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import java.util.Properties
+import java.net.URI
+import java.security.MessageDigest
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -72,6 +74,7 @@ kotlin {
                 implementation(libs.sqldelight.sqlite.driver)
                 runtimeOnly(libs.slf4j.nop)
             }
+            resources.srcDir(layout.buildDirectory.dir("torBinaries"))
         }
     }
 }
@@ -137,4 +140,72 @@ sqldelight {
             deriveSchemaFromMigrations.set(false)
         }
     }
+}
+
+val torBundleVersion: String = providers.gradleProperty("tor.bundle.version").getOrElse("13.5.6")
+val torDistBase = "https://archive.torproject.org/tor-package-archive/torbrowser"
+
+data class TorPlatform(val key: String, val triple: String, val shaProp: String)
+
+val torPlatforms = listOf(
+    TorPlatform("windows-x86_64", "windows-x86_64", "tor.sha256.windows.x86_64"),
+    TorPlatform("linux-x86_64", "linux-x86_64", "tor.sha256.linux.x86_64"),
+    TorPlatform("macos-x86_64", "macos-x86_64", "tor.sha256.macos.x86_64"),
+    TorPlatform("macos-aarch64", "macos-aarch64", "tor.sha256.macos.aarch64")
+)
+
+val torBinariesRoot = layout.buildDirectory.dir("torBinaries/tor")
+
+val downloadTorBinaries by tasks.registering {
+    group = "tor"
+    description = "Downloads and extracts the Tor Expert Bundle for each desktop platform."
+    val outRoot = torBinariesRoot
+    outputs.dir(outRoot)
+    inputs.property("torVersion", torBundleVersion)
+    outputs.upToDateWhen {
+        val rootDir = outRoot.get().asFile
+        torPlatforms.all { plat ->
+            rootDir.resolve("${plat.key}/.ok-$torBundleVersion").exists()
+        }
+    }
+    doLast {
+        val rootDir = outRoot.get().asFile
+        rootDir.mkdirs()
+        torPlatforms.forEach { plat ->
+            val targetDir = rootDir.resolve(plat.key)
+            val marker = targetDir.resolve(".ok-$torBundleVersion")
+            if (marker.exists()) return@forEach
+            targetDir.deleteRecursively()
+            targetDir.mkdirs()
+            val fname = "tor-expert-bundle-${plat.triple}-$torBundleVersion.tar.gz"
+            val urlStr = "$torDistBase/$torBundleVersion/$fname"
+            logger.lifecycle("Downloading $urlStr")
+            val tmp = File.createTempFile("tor-bundle-${plat.key}-", ".tar.gz")
+            try {
+                URI(urlStr).toURL().openStream().use { input ->
+                    tmp.outputStream().use { out -> input.copyTo(out) }
+                }
+                val actualSha = MessageDigest.getInstance("SHA-256")
+                    .digest(tmp.readBytes())
+                    .joinToString("") { byte -> "%02x".format(byte) }
+                val expected = providers.gradleProperty(plat.shaProp).orNull?.trim()?.takeIf { it.isNotEmpty() }
+                if (expected == null) {
+                    logger.warn("[tor] ${plat.key} SHA-256 NOT pinned. Actual=$actualSha  -> set ${plat.shaProp} in gradle.properties")
+                } else if (!expected.equals(actualSha, ignoreCase = true)) {
+                    throw GradleException("Tor binary ${plat.key} hash mismatch. expected=$expected actual=$actualSha")
+                }
+                copy {
+                    from(tarTree(resources.gzip(tmp)))
+                    into(targetDir)
+                }
+                marker.writeText(actualSha)
+            } finally {
+                tmp.delete()
+            }
+        }
+    }
+}
+
+tasks.matching { it.name == "desktopProcessResources" || it.name == "jvmProcessResources" }.configureEach {
+    dependsOn(downloadTorBinaries)
 }

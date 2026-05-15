@@ -20,6 +20,7 @@ import app.stade.transport.LanTransport
 import app.stade.transport.TorTransport
 import app.stade.transport.TransportSettings
 import app.stade.transport.TransportType
+import app.stade.transport.tor.EmbeddedTorManager
 import app.stade.ui.StadeApp
 import java.security.SecureRandom
 import androidx.compose.ui.Alignment
@@ -31,7 +32,10 @@ import org.jetbrains.compose.resources.painterResource
 fun main(args: Array<String>) = application {
     val boot = remember {
         val vault: Vault = VaultFactory().create()
+        val torAppRoot = java.io.File(System.getProperty("user.home") ?: ".", ".stade")
+        val embeddedTor = EmbeddedTorManager(torAppRoot)
         Runtime.getRuntime().addShutdownHook(Thread {
+            runCatching { kotlinx.coroutines.runBlocking { embeddedTor.shutdown() } }
             runCatching { vault.flushAndClose() }
         })
         BootContext(
@@ -42,7 +46,10 @@ fun main(args: Array<String>) = application {
                 val settings = TransportSettings(db)
                 listOf(
                     LanTransport(nodeId = nodeId),
-                    TorTransport(configProvider = { settings.get(TransportType.TOR).config })
+                    TorTransport(
+                        configProvider = { settings.get(TransportType.TOR).config },
+                        embedded = embeddedTor
+                    )
                 )
             },
             onContainerCreated = { c ->

@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.transport.TransportType
+import app.stade.transport.isTorBuiltIn
 import app.stade.ui.components.PlatformVerticalScrollbar
 import app.stade.ui.components.maskAddress
 import kotlinx.coroutines.launch
@@ -116,16 +117,24 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                             }
                             if (cfg.type == TransportType.TOR) {
                                 Spacer(Modifier.height(12.dp))
-                                TorConfigEditor(
-                                    initial = cfg.config,
-                                    onSave = { newCfg ->
-                                        container.transportSettings.setConfig(TransportType.TOR, newCfg)
-                                        configs = container.transportSettings.all()
-                                        scope.launch {
-                                            runCatching { container.connections.restart(TransportType.TOR) }
+                                if (isTorBuiltIn) {
+                                    Text(
+                                        "Tor uygulamayla birlikte gelir, otomatik başlatılır. Onion adresiniz açılışta üretilip kalıcı olarak saklanır.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    TorConfigEditor(
+                                        initial = cfg.config,
+                                        onSave = { newCfg ->
+                                            container.transportSettings.setConfig(TransportType.TOR, newCfg)
+                                            configs = container.transportSettings.all()
+                                            scope.launch {
+                                                runCatching { container.connections.restart(TransportType.TOR) }
+                                            }
                                         }
-                                    }
-                                )
+                                    )
+                                }
                             }
                         }
                     }

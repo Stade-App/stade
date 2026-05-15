@@ -18,11 +18,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import app.stade.transport.tor.EmbeddedTorRuntime
+import app.stade.transport.tor.TorStatus
+import kotlinx.coroutines.flow.collectLatest
 
 class TorTransport(
     private val defaultSocksHost: String = "127.0.0.1",
     private val defaultSocksPort: Int = 9050,
-    private val configProvider: () -> String = { "" }
+    private val configProvider: () -> String = { "" },
+    private val embedded: EmbeddedTorRuntime? = null
 ) : BaseTransport(TransportType.TOR, "Tor") {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -35,6 +39,62 @@ class TorTransport(
     @Volatile private var socksPort: Int = defaultSocksPort
 
     override suspend fun start(handler: suspend (Connection) -> Unit) = mutex.withLock {
+        if (embedded != null) {
+            startEmbedded(handler)
+            return@withLock
+        }
+        startExternal(handler)
+    }
+
+    private suspend fun startEmbedded(handler: suspend (Connection) -> Unit) {
+        state.value = TransportInfo(type, "Tor", available = false, running = false, message = "Tor başlatılıyor…")
+        scope.launch {
+            embedded!!.statusFlow.collectLatest { st ->
+                when (st) {
+                    is TorStatus.Bootstrapping -> {
+                        state.value = TransportInfo(type, "Tor", available = false, running = false, message = "Tor boot %${st.percent} · ${st.summary}")
+                    }
+                    is TorStatus.Failed -> {
+                        state.value = TransportInfo(type, "Tor", available = false, running = false, message = "başlatılamadı: ${st.reason}")
+                    }
+                    else -> Unit
+                }
+            }
+        }
+        scope.launch {
+            val ready = runCatching { embedded!!.ensureReady() }.getOrElse { err ->
+                state.value = TransportInfo(type, "Tor", available = false, running = false, message = "başlatılamadı: ${err.message ?: err::class.simpleName}")
+                return@launch
+            }
+            mutex.withLock {
+                socksHost = ready.socksHost
+                socksPort = ready.socksPort
+                inboundOnion = ready.onionHostname
+                inboundPort = ready.onionVirtualPort
+                var listenError: String? = null
+                runCatching {
+                    val s = aSocket(selector).tcp().bind(hostname = "127.0.0.1", port = ready.onionLocalPort)
+                    inboundServer = s
+                    scope.launch { runAccept(s, handler) }
+                }.onFailure { err ->
+                    listenError = err.message ?: err::class.simpleName
+                    inboundOnion = null
+                    inboundPort = 0
+                }
+                val msg = buildString {
+                    append("SOCKS5 ✓ ($socksHost:$socksPort)")
+                    if (inboundOnion != null) {
+                        append(" · onion :$inboundPort ✓")
+                    } else if (listenError != null) {
+                        append(" · onion DİNLENMİYOR ($listenError)")
+                    }
+                }
+                state.value = TransportInfo(type, "Tor", available = true, running = true, message = msg)
+            }
+        }
+    }
+
+    private suspend fun startExternal(handler: suspend (Connection) -> Unit) {
         val cfg = parseConfig(configProvider())
         val cfgHost = cfg["socksHost"]?.takeIf { it.isNotBlank() } ?: defaultSocksHost
         val cfgPort = cfg["socksPort"]?.toIntOrNull()?.takeIf { it in 1..65535 } ?: defaultSocksPort
