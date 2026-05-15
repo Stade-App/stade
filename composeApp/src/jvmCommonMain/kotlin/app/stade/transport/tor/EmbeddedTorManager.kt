@@ -13,7 +13,12 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-class EmbeddedTorManager(private val appRoot: File, private val virtualPort: Int = 5901) : EmbeddedTorRuntime {
+class EmbeddedTorManager(
+    private val appRoot: File,
+    private val virtualPort: Int = 5901,
+    private val layoutProvider: () -> TorLayout,
+    private val pidProvider: () -> Long = { runCatching { ProcessHandle.current().pid() }.getOrDefault(0L) }
+) : EmbeddedTorRuntime {
 
     private val mutex = Mutex()
     private val status = MutableStateFlow<TorStatus>(TorStatus.Idle)
@@ -38,7 +43,7 @@ class EmbeddedTorManager(private val appRoot: File, private val virtualPort: Int
 
     private fun bootInternal(): TorReady {
         status.value = TorStatus.Bootstrapping(0, "preparing")
-        val layout = TorBinaryLoader.prepare(appRoot)
+        val layout = layoutProvider()
         val socks = pickFreePort()
         val ctrl = pickFreePort()
         val localTarget = pickFreePort()
@@ -52,7 +57,8 @@ class EmbeddedTorManager(private val appRoot: File, private val virtualPort: Int
                 appendLine("ControlPort 127.0.0.1:$ctrl")
                 appendLine("CookieAuthentication 1")
                 appendLine("CookieAuthFile ${cookieFile.absolutePath}")
-                appendLine("__OwningControllerProcess ${pid()}")
+                val ownerPid = pidProvider()
+                if (ownerPid > 0) appendLine("__OwningControllerProcess $ownerPid")
                 layout.geoipFile?.let { appendLine("GeoIPFile ${it.absolutePath}") }
                 layout.geoip6File?.let { appendLine("GeoIPv6File ${it.absolutePath}") }
             })
@@ -147,12 +153,6 @@ class EmbeddedTorManager(private val appRoot: File, private val virtualPort: Int
 
     private fun pickFreePort(): Int {
         ServerSocket(0).use { return it.localPort }
-    }
-
-    private fun pid(): Long = try {
-        ProcessHandle.current().pid()
-    } catch (_: Throwable) {
-        0L
     }
 }
 

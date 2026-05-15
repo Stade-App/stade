@@ -5,9 +5,7 @@ import java.util.Locale
 
 internal object TorBinaryLoader {
 
-    data class Layout(val torDir: File, val executable: File, val dataDir: File, val geoipFile: File?, val geoip6File: File?)
-
-    fun prepare(appRoot: File): Layout {
+    fun prepare(appRoot: File): TorLayout {
         val plat = detectPlatformKey()
         val resourcePath = "/tor/$plat"
         val targetRoot = File(appRoot, "tor/$plat")
@@ -50,7 +48,7 @@ internal object TorBinaryLoader {
             ?: File(torRunDir, "geoip").takeIf { it.exists() }
         val geoip6 = File(torRunDir, "data/geoip6").takeIf { it.exists() }
             ?: File(torRunDir, "geoip6").takeIf { it.exists() }
-        return Layout(torRunDir, torExe, dataDir, geoip, geoip6)
+        return TorLayout(torRunDir, torExe, dataDir, geoip, geoip6)
     }
 
     fun detectPlatformKey(): String {

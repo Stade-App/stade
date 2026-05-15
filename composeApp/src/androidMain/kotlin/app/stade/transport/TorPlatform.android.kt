@@ -1,4 +1,4 @@
 package app.stade.transport
 
-actual val isTorBuiltIn: Boolean = false
+actual val isTorBuiltIn: Boolean = true
 

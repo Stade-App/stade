@@ -21,6 +21,7 @@ import app.stade.transport.TorTransport
 import app.stade.transport.TransportSettings
 import app.stade.transport.TransportType
 import app.stade.transport.tor.EmbeddedTorManager
+import app.stade.transport.tor.TorBinaryLoader
 import app.stade.ui.StadeApp
 import java.security.SecureRandom
 import androidx.compose.ui.Alignment
@@ -33,7 +34,7 @@ fun main(args: Array<String>) = application {
     val boot = remember {
         val vault: Vault = VaultFactory().create()
         val torAppRoot = java.io.File(System.getProperty("user.home") ?: ".", ".stade")
-        val embeddedTor = EmbeddedTorManager(torAppRoot)
+        val embeddedTor = EmbeddedTorManager(torAppRoot, layoutProvider = { TorBinaryLoader.prepare(torAppRoot) })
         Runtime.getRuntime().addShutdownHook(Thread {
             runCatching { kotlinx.coroutines.runBlocking { embeddedTor.shutdown() } }
             runCatching { vault.flushAndClose() }

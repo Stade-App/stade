@@ -16,6 +16,8 @@ import app.stade.transport.LanTransport
 import app.stade.transport.TorTransport
 import app.stade.transport.TransportSettings
 import app.stade.transport.TransportType
+import app.stade.transport.tor.AndroidTorBinaryLoader
+import app.stade.transport.tor.EmbeddedTorManager
 
 class StadeApplication : Application() {
     lateinit var boot: BootContext
@@ -36,6 +38,10 @@ class StadeApplication : Application() {
         instance = this
         vault = VaultFactory(this).create()
         val driver = DriverFactory(this)
+        val torAppRoot = java.io.File(filesDir, "stade")
+        val embeddedTor = runCatching {
+            EmbeddedTorManager(torAppRoot, layoutProvider = { AndroidTorBinaryLoader.prepare(this, torAppRoot) })
+        }.getOrNull()
         boot = BootContext(
             vault = vault,
             driverFactory = driver,
@@ -44,7 +50,10 @@ class StadeApplication : Application() {
                 val settings = TransportSettings(db)
                 listOf(
                     LanTransport(nodeId = nodeId),
-                    TorTransport(configProvider = { settings.get(TransportType.TOR).config }),
+                    TorTransport(
+                        configProvider = { settings.get(TransportType.TOR).config },
+                        embedded = embeddedTor
+                    ),
                     BluetoothTransport { bluetoothAdapter() }
                 )
             },
@@ -72,6 +81,7 @@ class StadeApplication : Application() {
             override fun onActivityDestroyed(a: Activity) {}
         })
         Runtime.getRuntime().addShutdownHook(Thread {
+            runCatching { kotlinx.coroutines.runBlocking { embeddedTor?.shutdown() } }
             runCatching { vault.flushAndClose() }
         })
     }

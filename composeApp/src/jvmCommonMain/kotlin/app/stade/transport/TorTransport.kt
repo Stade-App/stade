@@ -47,15 +47,15 @@ class TorTransport(
     }
 
     private suspend fun startEmbedded(handler: suspend (Connection) -> Unit) {
-        state.value = TransportInfo(type, "Tor", available = false, running = false, message = "Tor başlatılıyor…")
+        state.value = TransportInfo(type, "Tor", available = false, running = false, message = "starting Tor…")
         scope.launch {
             embedded!!.statusFlow.collectLatest { st ->
                 when (st) {
                     is TorStatus.Bootstrapping -> {
-                        state.value = TransportInfo(type, "Tor", available = false, running = false, message = "Tor boot %${st.percent} · ${st.summary}")
+                        state.value = TransportInfo(type, "Tor", available = false, running = false, message = "Tor boot ${st.percent}% · ${st.summary}")
                     }
                     is TorStatus.Failed -> {
-                        state.value = TransportInfo(type, "Tor", available = false, running = false, message = "başlatılamadı: ${st.reason}")
+                        state.value = TransportInfo(type, "Tor", available = false, running = false, message = "failed to start: ${st.reason}")
                     }
                     else -> Unit
                 }
@@ -63,7 +63,7 @@ class TorTransport(
         }
         scope.launch {
             val ready = runCatching { embedded!!.ensureReady() }.getOrElse { err ->
-                state.value = TransportInfo(type, "Tor", available = false, running = false, message = "başlatılamadı: ${err.message ?: err::class.simpleName}")
+                state.value = TransportInfo(type, "Tor", available = false, running = false, message = "failed to start: ${err.message ?: err::class.simpleName}")
                 return@launch
             }
             mutex.withLock {
@@ -86,7 +86,7 @@ class TorTransport(
                     if (inboundOnion != null) {
                         append(" · onion :$inboundPort ✓")
                     } else if (listenError != null) {
-                        append(" · onion DİNLENMİYOR ($listenError)")
+                        append(" · onion NOT LISTENING ($listenError)")
                     }
                 }
                 state.value = TransportInfo(type, "Tor", available = true, running = true, message = msg)
@@ -137,9 +137,9 @@ class TorTransport(
             }.onFailure { err ->
                 inboundOnion = null
                 inboundPort = 0
-                val raw = err.message ?: err::class.simpleName ?: "bind hatası"
+                val raw = err.message ?: err::class.simpleName ?: "bind error"
                 listenError = if (err is java.net.BindException) {
-                    "$listenHost:$listenPort kullanımda — torrc'de farklı listenPort verin"
+                    "$listenHost:$listenPort already in use — set a different listenPort in torrc"
                 } else raw
             }
         }
@@ -149,15 +149,15 @@ class TorTransport(
                 append("SOCKS5 ✓ ($socksHost:$socksPort)")
                 if (autoSwitched) append(" [auto]")
             } else {
-                append("SOCKS5 yok — Tor/Orbot çalışmıyor (9050 ve 9150 tarandı)")
+                append("SOCKS5 unavailable — Tor/Orbot not running (probed 9050 and 9150)")
             }
             when {
                 listening -> {
                     append(" · onion :$inboundPort ✓")
-                    if (listenPort != inboundPort) append(" (yerel :$listenPort)")
+                    if (listenPort != inboundPort) append(" (local :$listenPort)")
                 }
-                listenError != null -> append(" · onion DİNLENMİYOR ($listenError)")
-                cfg["onion"].isNullOrBlank() -> append(" · onion adresi girilmedi")
+                listenError != null -> append(" · onion NOT LISTENING ($listenError)")
+                cfg["onion"].isNullOrBlank() -> append(" · onion address not entered")
             }
         }
         val anyUp = socksOk || listening
@@ -192,7 +192,7 @@ class TorTransport(
                 val greetReply = ByteArray(2)
                 reader.readFully(greetReply)
                 if (greetReply[0] != 0x05.toByte() || greetReply[1] != 0x00.toByte()) {
-                    throw IllegalStateException("SOCKS5 greeting reddedildi (Tor servisi açık mı?)")
+                    throw IllegalStateException("SOCKS5 greeting rejected (is the Tor service running?)")
                 }
 
                 val hostBytes = host.toByteArray(Charsets.US_ASCII)
@@ -208,7 +208,7 @@ class TorTransport(
                 reader.readFully(head)
                 val rep = head[1].toInt() and 0xff
                 if (rep != 0x00) {
-                    throw IllegalStateException("SOCKS5 hata: ${socksReplyMessage(rep)}")
+                    throw IllegalStateException("SOCKS5 error: ${socksReplyMessage(rep)}")
                 }
                 val rest = when (head[3].toInt() and 0xff) {
                     0x01 -> 4 + 2
@@ -231,15 +231,15 @@ class TorTransport(
     }
 
     private fun socksReplyMessage(code: Int): String = when (code) {
-        0x01 -> "genel SOCKS sunucu hatası"
-        0x02 -> "kural izin vermiyor"
-        0x03 -> "ağa ulaşılamıyor"
-        0x04 -> "host'a ulaşılamıyor (onion descriptor yok / yayılmadı)"
-        0x05 -> "bağlantı reddedildi (karşı taraf .onion'da dinlemiyor)"
-        0x06 -> "TTL süresi doldu"
-        0x07 -> "komut desteklenmiyor"
-        0x08 -> "adres tipi desteklenmiyor"
-        else -> "kod=$code"
+        0x01 -> "general SOCKS server failure"
+        0x02 -> "connection not allowed by ruleset"
+        0x03 -> "network unreachable"
+        0x04 -> "host unreachable (onion descriptor missing / not propagated)"
+        0x05 -> "connection refused (the peer is not listening on .onion)"
+        0x06 -> "TTL expired"
+        0x07 -> "command not supported"
+        0x08 -> "address type not supported"
+        else -> "code=$code"
     }
 
     override fun selfAddress(): String? {

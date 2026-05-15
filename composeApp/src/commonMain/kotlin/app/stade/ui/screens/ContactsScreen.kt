@@ -349,14 +349,29 @@ fun ContactsScreen(
 @Composable
 private fun EmptyContacts(modifier: Modifier) {
     val strings = LocalStrings.current
-    Column(
+    Box(
         modifier = modifier,
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        contentAlignment = Alignment.Center
     ) {
-        Text(strings.noContactsTitle, style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.size(8.dp))
-        Text(strings.noContactsHint, style = MaterialTheme.typography.bodyMedium)
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                strings.noContactsTitle,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.size(8.dp))
+            Text(
+                strings.noContactsHint,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 

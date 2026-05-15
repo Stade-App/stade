@@ -97,27 +97,29 @@ android {
     buildFeatures { compose = true }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        jniLibs.useLegacyPackaging = true
     }
+    sourceSets["main"].jniLibs.srcDir(layout.buildDirectory.dir("torAndroid/jniLibs"))
+    sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("torAndroid/assets"))
 }
 
 compose.desktop {
     application {
         mainClass = "app.stade.MainKt"
-        // local.properties'ten java.home okunuyor. eğer bir hata alınırsa local.properties'te java yolunun doğru verildiğini doğrula.
         val localProps = Properties()
         rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { localProps.load(it) }
         javaHome = localProps.getProperty("java.home") ?: System.getProperty("java.home")
         nativeDistributions {
             targetFormats(TargetFormat.Deb, TargetFormat.AppImage, TargetFormat.Exe, TargetFormat.Dmg)
             modules(
-                "jdk.unsupported",       // BouncyCastle, Kotlin coroutines (sun.misc.Unsafe)
-                "java.sql",              // SQLDelight JDBC/SQLite driver
-                "java.naming",           // JNDI, required by many libs
-                "java.net.http",         // Ktor HTTP client
-                "java.management",       // JMX, required by some libs
-                "java.security.jgss",    // Security extensions
-                "jdk.crypto.cryptoki",   // Additional crypto support
-                "jdk.security.auth"      // Security auth
+                "jdk.unsupported",
+                "java.sql",
+                "java.naming",
+                "java.net.http",
+                "java.management",
+                "java.security.jgss",
+                "jdk.crypto.cryptoki",
+                "jdk.security.auth"
             )
             packageName = "Stade"
             packageVersion = "0.1.0"
@@ -160,7 +162,7 @@ val downloadTorBinaries by tasks.registering {
     group = "tor"
     description = "Downloads and extracts the Tor Expert Bundle for each desktop platform."
     val outRoot = torBinariesRoot
-    outputs.dir(outRoot)
+    doNotTrackState("Tor binaries are large external downloads managed via version markers.")
     inputs.property("torVersion", torBundleVersion)
     outputs.upToDateWhen {
         val rootDir = outRoot.get().asFile
@@ -209,3 +211,103 @@ val downloadTorBinaries by tasks.registering {
 tasks.matching { it.name == "desktopProcessResources" || it.name == "jvmProcessResources" }.configureEach {
     dependsOn(downloadTorBinaries)
 }
+
+// --- Android Tor Expert Bundle (gömülü Tor) ---
+data class AndroidTorAbi(val bundleTriple: String, val abi: String, val shaProp: String)
+
+val androidTorAbis = listOf(
+    AndroidTorAbi("android-aarch64", "arm64-v8a",   "tor.sha256.android.aarch64"),
+    AndroidTorAbi("android-armv7",   "armeabi-v7a", "tor.sha256.android.armv7"),
+    AndroidTorAbi("android-x86_64",  "x86_64",      "tor.sha256.android.x86_64"),
+    AndroidTorAbi("android-x86",     "x86",         "tor.sha256.android.x86")
+)
+
+val androidTorRoot = layout.buildDirectory.dir("torAndroid")
+
+val downloadAndroidTorBinaries by tasks.registering {
+    group = "tor"
+    description = "Downloads Tor Expert Bundle for Android ABIs and stages jniLibs + assets."
+    val outRoot = androidTorRoot
+    doNotTrackState("Tor binaries are large external downloads managed via version markers; Gradle must not delete them on Windows while the emulator holds file locks.")
+    inputs.property("torVersion", torBundleVersion)
+    outputs.upToDateWhen {
+        val rootDir = outRoot.get().asFile
+        val assetsOk = rootDir.resolve("assets/tor/geoip").exists() && rootDir.resolve("assets/tor/geoip6").exists()
+        assetsOk && androidTorAbis.all { abi ->
+            rootDir.resolve("jniLibs/${abi.abi}/libtor.so").exists() &&
+            rootDir.resolve("jniLibs/${abi.abi}/.ok-$torBundleVersion").exists()
+        }
+    }
+    doLast {
+        val rootDir = outRoot.get().asFile
+        val jniLibsDir = rootDir.resolve("jniLibs")
+        val assetsDir = rootDir.resolve("assets/tor")
+        jniLibsDir.mkdirs()
+        assetsDir.mkdirs()
+        androidTorAbis.forEach { abi ->
+            val jniDir = jniLibsDir.resolve(abi.abi)
+            val marker = jniDir.resolve(".ok-$torBundleVersion")
+            if (marker.exists() && jniDir.resolve("libtor.so").exists()) return@forEach
+            jniDir.deleteRecursively()
+            jniDir.mkdirs()
+            val fname = "tor-expert-bundle-${abi.bundleTriple}-$torBundleVersion.tar.gz"
+            val urlStr = "$torDistBase/$torBundleVersion/$fname"
+            logger.lifecycle("Downloading $urlStr")
+            val tmp = File.createTempFile("tor-android-${abi.abi}-", ".tar.gz")
+            try {
+                URI(urlStr).toURL().openStream().use { input ->
+                    tmp.outputStream().use { out -> input.copyTo(out) }
+                }
+                val actualSha = MessageDigest.getInstance("SHA-256")
+                    .digest(tmp.readBytes())
+                    .joinToString("") { byte -> "%02x".format(byte) }
+                val expected = providers.gradleProperty(abi.shaProp).orNull?.trim()?.takeIf { it.isNotEmpty() }
+                if (expected == null) {
+                    logger.warn("[tor-android] ${abi.abi} SHA-256 NOT pinned. Actual=$actualSha  -> set ${abi.shaProp} in gradle.properties")
+                } else if (!expected.equals(actualSha, ignoreCase = true)) {
+                    throw GradleException("Android Tor binary ${abi.abi} hash mismatch. expected=$expected actual=$actualSha")
+                }
+                val extractDir = File.createTempFile("tor-android-${abi.abi}-extract", "").apply {
+                    delete(); mkdirs()
+                }
+                try {
+                    copy {
+                        from(tarTree(resources.gzip(tmp)))
+                        into(extractDir)
+                    }
+                    // The bundle ships the tor binary as ./tor/tor (and pluggable transports etc).
+                    val torBin = sequenceOf(
+                        extractDir.resolve("tor/tor"),
+                        extractDir.resolve("tor/libtor.so"),
+                        extractDir.resolve("tor")
+                    ).firstOrNull { it.isFile }
+                        ?: throw GradleException("tor binary not found in bundle for ${abi.abi}")
+                    torBin.copyTo(jniDir.resolve("libtor.so"), overwrite = true)
+                    // geoip files: extract once into shared assets dir.
+                    listOf("geoip", "geoip6").forEach { gn ->
+                        val candidate = sequenceOf(
+                            extractDir.resolve("data/$gn"),
+                            extractDir.resolve("tor/$gn"),
+                            extractDir.resolve(gn)
+                        ).firstOrNull { it.isFile }
+                        if (candidate != null) candidate.copyTo(assetsDir.resolve(gn), overwrite = true)
+                    }
+                } finally {
+                    extractDir.deleteRecursively()
+                }
+                marker.writeText(actualSha)
+            } finally {
+                tmp.delete()
+            }
+        }
+    }
+}
+
+tasks.matching {
+    val n = it.name
+    n.startsWith("merge") && (n.endsWith("JniLibFolders") || n.endsWith("Assets") || n.endsWith("Resources")) ||
+        n == "preBuild" || n == "generateDebugAssets" || n == "generateReleaseAssets"
+}.configureEach {
+    dependsOn(downloadAndroidTorBinaries)
+}
+
