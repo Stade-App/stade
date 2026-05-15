@@ -1,19 +1,19 @@
 package app.stade.crypto
 
 
-import org.bouncycastle.pqc.crypto.crystals.dilithium.DilithiumKeyGenerationParameters
-import org.bouncycastle.pqc.crypto.crystals.dilithium.DilithiumKeyPairGenerator
-import org.bouncycastle.pqc.crypto.crystals.dilithium.DilithiumParameters
-import org.bouncycastle.pqc.crypto.crystals.dilithium.DilithiumPrivateKeyParameters
-import org.bouncycastle.pqc.crypto.crystals.dilithium.DilithiumPublicKeyParameters
-import org.bouncycastle.pqc.crypto.crystals.dilithium.DilithiumSigner
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberKEMExtractor
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberKEMGenerator
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberKeyGenerationParameters
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberKeyPairGenerator
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberParameters
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberPrivateKeyParameters
-import org.bouncycastle.pqc.crypto.crystals.kyber.KyberPublicKeyParameters
+import org.bouncycastle.pqc.crypto.mldsa.MLDSAKeyGenerationParameters
+import org.bouncycastle.pqc.crypto.mldsa.MLDSAKeyPairGenerator
+import org.bouncycastle.pqc.crypto.mldsa.MLDSAParameters
+import org.bouncycastle.pqc.crypto.mldsa.MLDSAPrivateKeyParameters
+import org.bouncycastle.pqc.crypto.mldsa.MLDSAPublicKeyParameters
+import org.bouncycastle.pqc.crypto.mldsa.MLDSASigner
+import org.bouncycastle.pqc.crypto.mlkem.MLKEMExtractor
+import org.bouncycastle.pqc.crypto.mlkem.MLKEMGenerator
+import org.bouncycastle.pqc.crypto.mlkem.MLKEMKeyGenerationParameters
+import org.bouncycastle.pqc.crypto.mlkem.MLKEMKeyPairGenerator
+import org.bouncycastle.pqc.crypto.mlkem.MLKEMParameters
+import org.bouncycastle.pqc.crypto.mlkem.MLKEMPrivateKeyParameters
+import org.bouncycastle.pqc.crypto.mlkem.MLKEMPublicKeyParameters
 import java.security.SecureRandom
 
 private object PqRng {
@@ -23,53 +23,53 @@ private object PqRng {
 private class JvmPqCrypto : PqCrypto {
 
     override fun generateMlKemKeyPair(): KeyPair {
-        val gen = KyberKeyPairGenerator()
-        gen.init(KyberKeyGenerationParameters(PqRng.random, KyberParameters.kyber768))
+        val gen = MLKEMKeyPairGenerator()
+        gen.init(MLKEMKeyGenerationParameters(PqRng.random, MLKEMParameters.ml_kem_768))
         val kp = gen.generateKeyPair()
-        val pub = (kp.public as KyberPublicKeyParameters).encoded
-        val priv = (kp.private as KyberPrivateKeyParameters).encoded
+        val pub = (kp.public as MLKEMPublicKeyParameters).encoded
+        val priv = (kp.private as MLKEMPrivateKeyParameters).encoded
         return KeyPair(pub, priv)
     }
 
     override fun generateMlDsaKeyPair(): KeyPair {
-        val gen = DilithiumKeyPairGenerator()
-        gen.init(DilithiumKeyGenerationParameters(PqRng.random, DilithiumParameters.dilithium3))
+        val gen = MLDSAKeyPairGenerator()
+        gen.init(MLDSAKeyGenerationParameters(PqRng.random, MLDSAParameters.ml_dsa_65))
         val kp = gen.generateKeyPair()
-        val pub = (kp.public as DilithiumPublicKeyParameters).encoded
-        val priv = (kp.private as DilithiumPrivateKeyParameters).encoded
+        val pub = (kp.public as MLDSAPublicKeyParameters).encoded
+        val priv = (kp.private as MLDSAPrivateKeyParameters).encoded
         return KeyPair(pub, priv)
     }
 
     override fun mlkemEncapsulate(peerPublicKey: ByteArray): KemResult {
-        val pub = KyberPublicKeyParameters(KyberParameters.kyber768, peerPublicKey)
-        val gen = KyberKEMGenerator(PqRng.random)
+        val pub = MLKEMPublicKeyParameters(MLKEMParameters.ml_kem_768, peerPublicKey)
+        val gen = MLKEMGenerator(PqRng.random)
         val enc = gen.generateEncapsulated(pub)
         return KemResult(ciphertext = enc.encapsulation, sharedSecret = enc.secret)
     }
 
     override fun mlkemDecapsulate(privateKey: ByteArray, ciphertext: ByteArray): ByteArray {
-        val priv = KyberPrivateKeyParameters(KyberParameters.kyber768, privateKey)
-        val ext = KyberKEMExtractor(priv)
+        val priv = MLKEMPrivateKeyParameters(MLKEMParameters.ml_kem_768, privateKey)
+        val ext = MLKEMExtractor(priv)
         return ext.extractSecret(ciphertext)
     }
 
     override fun signMlDsa(privateKey: ByteArray, publicKey: ByteArray, data: ByteArray): ByteArray {
-        val pub = DilithiumPublicKeyParameters(DilithiumParameters.dilithium3, publicKey)
-        val priv = DilithiumPrivateKeyParameters(DilithiumParameters.dilithium3, privateKey, pub)
-        val signer = DilithiumSigner()
+        val priv = MLDSAPrivateKeyParameters(MLDSAParameters.ml_dsa_65, privateKey)
+        val signer = MLDSASigner()
         signer.init(true, priv)
-        return signer.generateSignature(data)
+        signer.update(data, 0, data.size)
+        return signer.generateSignature()
     }
 
     override fun verifyMlDsa(publicKey: ByteArray, data: ByteArray, signature: ByteArray): Boolean {
         return runCatching {
-            val pub = DilithiumPublicKeyParameters(DilithiumParameters.dilithium3, publicKey)
-            val signer = DilithiumSigner()
+            val pub = MLDSAPublicKeyParameters(MLDSAParameters.ml_dsa_65, publicKey)
+            val signer = MLDSASigner()
             signer.init(false, pub)
-            signer.verifySignature(data, signature)
+            signer.update(data, 0, data.size)
+            signer.verifySignature(signature)
         }.getOrDefault(false)
     }
 }
 
 actual fun platformPq(): PqCrypto = JvmPqCrypto()
-

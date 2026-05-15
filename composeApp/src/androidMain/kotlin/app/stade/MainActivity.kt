@@ -61,15 +61,36 @@ class MainActivity : ComponentActivity() {
         val text = when {
             uri != null -> runCatching {
                 contentResolver.openInputStream(uri)?.use { stream ->
-                    stream.bufferedReader().readText()
+                    // Güvenlik: dış kaynaktan (ACTION_VIEW / ACTION_SEND, mimeType=*/*) gelen
+                    // dosyayı sınırsız okumak OOM/DoS'a yol açar. Davet kodları base32
+                    // olduğundan birkaç MB'tan büyük olamaz; sert üst sınır uyguluyoruz.
+                    val limit = MAX_INVITE_BYTES
+                    val buffer = ByteArray(8 * 1024)
+                    val out = java.io.ByteArrayOutputStream()
+                    var total = 0
+                    while (true) {
+                        val n = stream.read(buffer)
+                        if (n <= 0) break
+                        total += n
+                        if (total > limit) return@use null
+                        out.write(buffer, 0, n)
+                    }
+                    out.toString(Charsets.UTF_8.name())
                 }
             }.getOrNull()
             intent.action == Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
             else -> null
         }?.trim()?.takeIf { it.isNotEmpty() }
-        if (text != null && text.startsWith("STADE2-")) {
+        if (text != null && text.length <= MAX_INVITE_CHARS && text.startsWith("STADE2-")) {
             app.container?.pendingInvite?.value = text
         }
+    }
+
+    private companion object {
+        // Davet kodu maksimum boyutu: ML-DSA imza + ML-KEM açık anahtar + Ed25519 + adresler
+        // tipik olarak ~7-8 KB; emniyet için cömert bir tavan.
+        const val MAX_INVITE_BYTES = 256 * 1024
+        const val MAX_INVITE_CHARS = 512 * 1024
     }
 
     private fun askNotificationPermissionIfNeeded() {

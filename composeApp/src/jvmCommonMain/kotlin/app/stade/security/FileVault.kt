@@ -15,6 +15,7 @@ class FileVault(private val rootDir: File) : Vault {
     private val metaFile: File = File(rootDir, "stade.vault")
     private val encryptedDb: File = File(rootDir, "stade.db.enc")
     private val plaintextDb: File = File(rootDir, "stade.db")
+    private val sessionFile: File = File(rootDir, "stade.session")
 
     private val rng = SecureRandom()
 
@@ -132,7 +133,30 @@ class FileVault(private val rootDir: File) : Vault {
             }
         }
         unlocked = true
+        syncSessionFile(meta)
         return UnlockOutcome.Success
+    }
+
+    override fun tryAutoUnlock(): Boolean {
+        if (unlocked) return true
+        if (!isInitialized()) return false
+        val meta = readMeta() ?: return false
+        if (meta.sessionTimeoutSeconds != SessionTimeout.NEVER) {
+            if (sessionFile.exists()) runCatching { secureDelete(sessionFile) }
+            return false
+        }
+        if (!sessionFile.exists()) return false
+        val recoveredDek = runCatching { readSessionDek() }.getOrNull() ?: run {
+            runCatching { secureDelete(sessionFile) }
+            return false
+        }
+        dek = recoveredDek
+        cached = meta
+        if (!plaintextDb.exists() && encryptedDb.exists()) {
+            runCatching { decryptFile(encryptedDb, plaintextDb, recoveredDek) }
+        }
+        unlocked = true
+        return true
     }
 
     override fun changePassword(currentPassword: String, newPassword: String): Boolean {
@@ -209,6 +233,7 @@ class FileVault(private val rootDir: File) : Vault {
         runCatching { if (plaintextDb.exists()) secureDelete(plaintextDb) }
         runCatching { if (encryptedDb.exists()) secureDelete(encryptedDb) }
         runCatching { if (metaFile.exists()) secureDelete(metaFile) }
+        runCatching { if (sessionFile.exists()) secureDelete(sessionFile) }
     }
 
     override fun isScrambleKeypadEnabled(): Boolean = (cached ?: readMeta())?.scrambleKeypad ?: false
@@ -228,6 +253,7 @@ class FileVault(private val rootDir: File) : Vault {
         meta.sessionTimeoutSeconds = value
         writeMeta(meta)
         cached = meta
+        syncSessionFile(meta)
     }
 
     override fun failedAttempts(): Int = (cached ?: readMeta())?.failedAttempts ?: 0
@@ -373,6 +399,70 @@ class FileVault(private val rootDir: File) : Vault {
         for (i in b.indices) b[i] = 0
     }
 
+    private fun syncSessionFile(meta: Meta) {
+        val key = dek
+        if (meta.sessionTimeoutSeconds == SessionTimeout.NEVER && key != null) {
+            runCatching { writeSessionDek(key) }
+        } else if (sessionFile.exists()) {
+            runCatching { secureDelete(sessionFile) }
+        }
+    }
+
+    private fun writeSessionDek(plaintextDek: ByteArray) {
+        val salt = ByteArray(SALT_LEN).also { rng.nextBytes(it) }
+        val machineKey = deriveMachineKey(salt)
+        val nonce = ByteArray(NONCE_LEN).also { rng.nextBytes(it) }
+        val ct = gcmEncrypt(machineKey, nonce, plaintextDek)
+        zero(machineKey)
+        val out = ByteArray(4 + 1 + SALT_LEN + NONCE_LEN + ct.size)
+        val buf = ByteBuffer.wrap(out)
+        buf.put(SESSION_MAGIC)
+        buf.put(SESSION_VERSION)
+        buf.put(salt)
+        buf.put(nonce)
+        buf.put(ct)
+        val tmp = File(sessionFile.parentFile, sessionFile.name + ".tmp")
+        tmp.writeBytes(out)
+        if (sessionFile.exists()) sessionFile.delete()
+        if (!tmp.renameTo(sessionFile)) {
+            tmp.copyTo(sessionFile, overwrite = true)
+            tmp.delete()
+        }
+    }
+
+    private fun readSessionDek(): ByteArray {
+        val bytes = sessionFile.readBytes()
+        require(bytes.size >= 4 + 1 + SALT_LEN + NONCE_LEN + DEK_CT_LEN) { "session corrupt" }
+        val buf = ByteBuffer.wrap(bytes)
+        val magic = ByteArray(4).also { buf.get(it) }
+        require(magic.contentEquals(SESSION_MAGIC)) { "session magic" }
+        val version = buf.get()
+        require(version == SESSION_VERSION) { "session version" }
+        val salt = ByteArray(SALT_LEN).also { buf.get(it) }
+        val nonce = ByteArray(NONCE_LEN).also { buf.get(it) }
+        val ct = ByteArray(bytes.size - (4 + 1 + SALT_LEN + NONCE_LEN)).also { buf.get(it) }
+        val machineKey = deriveMachineKey(salt)
+        val pt = gcmDecrypt(machineKey, nonce, ct)
+        zero(machineKey)
+        return pt
+    }
+
+    private fun deriveMachineKey(salt: ByteArray): ByteArray {
+        val parts = listOf(
+            System.getProperty("user.name") ?: "",
+            System.getProperty("user.home") ?: "",
+            System.getProperty("os.name") ?: "",
+            System.getProperty("os.arch") ?: "",
+            "stade-machine-binding-v1"
+        )
+        val secret = parts.joinToString(separator = "\u0000")
+        val spec = PBEKeySpec(secret.toCharArray(), salt, MACHINE_KDF_ITERS, KEY_BITS)
+        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val encoded = factory.generateSecret(spec).encoded
+        spec.clearPassword()
+        return encoded
+    }
+
     private fun secureDelete(f: File) {
         try {
             if (f.exists() && f.length() > 0) {
@@ -407,8 +497,15 @@ class FileVault(private val rootDir: File) : Vault {
         private const val VERIFIER_CT_LEN = 16 + 16
         private const val KEY_BITS = 256
         private const val TAG_BITS = 128
-        private const val KDF_ITERS = 120_000
+        // OWASP 2023 önerisi: PBKDF2-HMAC-SHA256 için >= 600k.
+        // Mevcut vault'lar meta dosyasında kendi `iterations` değerlerini sakladığından
+        // bu değişiklik yalnızca yeni kurulumları ve şifre değişikliklerini etkiler;
+        // eski vault'lar güvenle açılmaya devam eder.
+        private const val KDF_ITERS = 600_000
+        private const val MACHINE_KDF_ITERS = 4_000
         private const val LOCKOUT_THRESHOLD = 5
+        private val SESSION_MAGIC = byteArrayOf('S'.code.toByte(), 'T'.code.toByte(), 'D'.code.toByte(), 'S'.code.toByte())
+        private const val SESSION_VERSION: Byte = 0x01
         private const val MIN_META_SIZE =
             4 + 1 + SALT_LEN + 4 + NONCE_LEN + VERIFIER_CT_LEN + NONCE_LEN + DEK_CT_LEN + 4 + 8 + 1 + 4
         private val VERIFIER_PLAIN = byteArrayOf(
