@@ -35,6 +35,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 sealed interface Screen {
     data object Onboarding : Screen
@@ -126,6 +127,8 @@ private fun UnlockedApp(
     val scope = rememberCoroutineScope()
     var identity by remember { mutableStateOf<LocalIdentity?>(null) }
     var screen by remember { mutableStateOf<Screen>(Screen.Onboarding) }
+    // Settings scroll pozisyonu: ekranlar arası geçişte kaybolmaması için burada tutulur
+    val settingsListState = rememberLazyListState()
 
     val isInForeground by container.isAppInForeground.collectAsState()
     var leftForegroundAt by remember { mutableStateOf<Long?>(null) }
@@ -231,7 +234,8 @@ private fun UnlockedApp(
                         container.connections.stop()
                         onWipeRequested()
                     }
-                }
+                },
+                listState = settingsListState
             )
             screen == Screen.Security -> SecuritySettingsScreen(
                 container = container,

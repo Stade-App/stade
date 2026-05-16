@@ -22,7 +22,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Grid3x3
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -33,8 +36,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -53,6 +58,7 @@ import app.stade.security.SessionTimeout
 import app.stade.ui.components.PlatformVerticalScrollbar
 import app.stade.ui.i18n.LocalStrings
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SecuritySettingsScreen(
@@ -64,7 +70,9 @@ fun SecuritySettingsScreen(
     var refreshTick by remember { mutableStateOf(0) }
     val scrambleEnabled = remember(refreshTick) { container.secrets.isScrambleKeypadEnabled() }
     val sessionTimeout = remember(refreshTick) { container.secrets.sessionTimeoutSeconds() }
+    val screenshotBlockingEnabled = remember(refreshTick) { container.secrets.isScreenshotBlockingEnabled() }
     var timeoutMenuOpen by remember { mutableStateOf(false) }
+    var showNeverInfoDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     Scaffold(
@@ -98,26 +106,61 @@ fun SecuritySettingsScreen(
                             tint = MaterialTheme.colorScheme.primary,
                             title = strings.changePinTitle,
                             subtitle = strings.changePinSubtitle,
-                            onClick = { onOpenPinSetup(true) }
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            onClick = { onOpenPinSetup(true) },
+                            modifier = Modifier
+                                .padding(bottom = 2.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                                )
+                                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp))
                         )
                         SecuritySwitchRow(
                             icon = Icons.Default.Grid3x3,
                             tint = MaterialTheme.colorScheme.tertiary,
                             title = strings.scrambleKeypadTitle,
-                            subtitle = if (scrambleEnabled)
-                                strings.scrambleKeypadOnSubtitle
-                            else
-                                strings.scrambleKeypadOffSubtitle,
+                            subtitle = if (scrambleEnabled) strings.scrambleKeypadOnSubtitle else strings.scrambleKeypadOffSubtitle,
                             checked = scrambleEnabled,
                             onCheckedChange = {
                                 container.secrets.setScrambleKeypadEnabled(it)
                                 refreshTick++
-                            }
+                            },
+                            modifier = Modifier
+                                .background(
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+                                )
+                                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp))
                         )
+                    }
+                }
+
+                // Gizlilik bölümü yalnızca desteklenen platformlarda gösterilir (Android).
+                // Masaüstünde FLAG_SECURE ve benzeri özellikler desteklenmediğinden gizlenir.
+                // İleride masaüstüne özgü gizlilik ayarları eklendikçe PrivacyFeatures.kt
+                // güncellenerek bu blok otomatik olarak görünür hale gelir.
+                if (isScreenPrivacySupported) {
+                    item {
+                        SecuritySectionLabel(strings.privacySection)
+                        SecurityGroup {
+                            SecuritySwitchRow(
+                                icon = Icons.Default.VisibilityOff,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                title = strings.screenshotBlockingTitle,
+                                subtitle = if (screenshotBlockingEnabled) strings.screenshotBlockingOnSubtitle else strings.screenshotBlockingOffSubtitle,
+                                checked = screenshotBlockingEnabled,
+                                onCheckedChange = {
+                                    container.secrets.setScreenshotBlockingEnabled(it)
+                                    refreshTick++
+                                },
+                                modifier = Modifier
+                                    .background(
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        shape = MaterialTheme.shapes.large
+                                    )
+                                    .clip(MaterialTheme.shapes.large)
+                            )
+                        }
                     }
                 }
 
@@ -130,7 +173,23 @@ fun SecuritySettingsScreen(
                                 tint = MaterialTheme.colorScheme.secondary,
                                 title = strings.autoLockTitle,
                                 subtitle = strings.autoLockSubtitle(strings.sessionTimeoutLabel(sessionTimeout)),
-                                onClick = { timeoutMenuOpen = true }
+                                onClick = { timeoutMenuOpen = true },
+                                modifier = Modifier
+                                    .background(
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        shape = MaterialTheme.shapes.large
+                                    )
+                                    .clip(MaterialTheme.shapes.large),
+                                trailingContent = {
+                                    IconButton(onClick = { showNeverInfoDialog = true }) {
+                                        Icon(
+                                            Icons.Default.Info,
+                                            contentDescription = strings.autoLockNeverInfoTitle,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
                             )
                             DropdownMenu(
                                 expanded = timeoutMenuOpen,
@@ -156,6 +215,31 @@ fun SecuritySettingsScreen(
                     }
                 }
             }
+
+            if (showNeverInfoDialog) {
+                AlertDialog(
+                    onDismissRequest = { showNeverInfoDialog = false },
+                    icon = {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    title = { Text(strings.autoLockNeverInfoTitle) },
+                    text = {
+                        Text(
+                            strings.autoLockNeverInfoBody,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showNeverInfoDialog = false }) {
+                            Text(strings.understood)
+                        }
+                    }
+                )
+            }
             PlatformVerticalScrollbar(
                 state = listState,
                 modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
@@ -174,14 +258,16 @@ private fun SecuritySectionLabel(title: String) {
     )
 }
 
+// Eski SecurityGroup fonksiyonunu tamamen bununla değiştir:
 @Composable
 private fun SecurityGroup(content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) { content() }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+    ) {
+        content()
+    }
 }
 
 @Composable
@@ -190,19 +276,44 @@ private fun SecurityNavRow(
     tint: Color,
     title: String,
     subtitle: String? = null,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailingContent: (@Composable () -> Unit)? = null
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(modifier),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SecurityIconBox(icon, tint)
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            if (subtitle != null) {
-                Spacer(Modifier.height(2.dp))
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onClick)
+                .padding(
+                    start = 16.dp,
+                    top = 14.dp,
+                    bottom = 14.dp,
+                    end = if (trailingContent != null) 4.dp else 16.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SecurityIconBox(icon, tint)
+            Spacer(Modifier.width(14.dp))
+            Column {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                if (subtitle != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        if (trailingContent != null) {
+            Box(
+                modifier = Modifier.padding(end = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                trailingContent()
             }
         }
     }
@@ -215,10 +326,15 @@ private fun SecuritySwitchRow(
     title: String,
     subtitle: String?,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(modifier)
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         SecurityIconBox(icon, tint)

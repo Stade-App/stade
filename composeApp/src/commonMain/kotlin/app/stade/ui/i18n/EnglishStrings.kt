@@ -211,6 +211,17 @@ object EnglishStrings : AppStrings() {
         else -> if (seconds < 60) "$seconds seconds" else "${seconds / 60} minutes"
     }
 
+    override val privacySection = "Privacy"
+    override val screenshotBlockingTitle = "Disable screenshot capture"
+    override val screenshotBlockingOnSubtitle = "App content hidden in recent apps; screenshots disabled"
+    override val screenshotBlockingOffSubtitle = "App content visible in recent apps"
+
+    override val autoLockNeverInfoTitle = "About the 'Never' Option"
+    override val autoLockNeverInfoBody =
+        "When set to 'Never', no PIN is required when returning to the app from the background.\n\n" +
+        "However, if the app is fully closed and restarted — even if cleared from memory by the system — you will still need to enter your PIN."
+    override val understood = "Got it"
+
     override val transportsTitle = "Transport layers"
     override val notRegistered = "not registered"
     override fun transportRunning(msg: String) = "running · $msg"

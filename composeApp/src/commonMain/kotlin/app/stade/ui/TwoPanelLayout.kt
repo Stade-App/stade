@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -109,6 +110,8 @@ fun TwoPanelLayout(
     val connectedSet by container.sync.connectedContacts.collectAsState()
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
     var query by remember { mutableStateOf("") }
+    // Settings scroll pozisyonu: Settings→Security→Settings geçişinde kaybolmaması için burada tutulur
+    val settingsListState = rememberLazyListState()
 
     val pendingInvite by container.pendingInvite.collectAsState()
     LaunchedEffect(pendingInvite) {
@@ -393,7 +396,8 @@ fun TwoPanelLayout(
                     onBack = { right = PanelRight.Empty },
                     onOpenTransports = { right = PanelRight.Transports },
                     onOpenSecurity = { right = PanelRight.Security },
-                    onLogout = onLogout
+                    onLogout = onLogout,
+                    listState = settingsListState
                 )
 
                 is PanelRight.Security -> SecuritySettingsScreen(

@@ -76,7 +76,11 @@ class AppContainer(
     val connections = ConnectionManager(transports, contacts, sync).also {
         sync.selfAddressesProvider = { it.selfAddresses() }
     }
-    val secrets = SecretStore(db, crypto, vault)
+
+    val screenshotSettingTick = MutableStateFlow(0)
+
+    val secrets = SecretStore(db, crypto, vault,
+        onScreenshotSettingChanged = { screenshotSettingTick.value++ })
 
     @Volatile var activeContactId: String? = null
 

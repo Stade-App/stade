@@ -6,15 +6,19 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import app.stade.notification.clearAllMessageNotifications
 import app.stade.service.StadeService
 import app.stade.ui.StadeApp
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -30,10 +34,21 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         val app = (application as StadeApplication)
+        applySecureScreenFlag(app)
         startForegroundService(Intent(this, StadeService::class.java))
         askNotificationPermissionIfNeeded()
         handleIncomingInvite(intent)
         setContent { StadeApp(app.boot) }
+
+        // Ekran görüntüsü engelleme ayarı değiştiğinde (SecuritySettingsScreen'den)
+        // onResume'u beklemeden FLAG_SECURE'ü anında uygula.
+        lifecycleScope.launch {
+            app.containerFlow.collectLatest { container ->
+                container?.screenshotSettingTick?.collect {
+                    applySecureScreenFlag(app)
+                }
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -44,7 +59,30 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Ayar değişmiş olabilir; her öne geliş anında yeniden uygula
+        val app = (application as StadeApplication)
+        applySecureScreenFlag(app)
         clearAllMessageNotifications()
+    }
+
+    private fun applySecureScreenFlag(app: StadeApplication) {
+        // Vault her zaman StadeApplication.onCreate'de başlatılır; container'ın
+        // (null olabileceği soğuk başlatma dahil) hazır olmasını beklemeden
+        // doğrudan vault'tan okuruz. readMeta şifreli dosyada çalışır,
+        // PIN kilidi açma gerektirmez.
+        val enabled = app.vault.isScreenshotBlockingEnabled()
+        // Mevcut durum ile istenen durum aynıysa hiçbir şey yapma.
+        // clearFlags/setFlags çağrısı, arka plandan öne geçiş animasyonu sırasında
+        // pencere yüzeyini geçici olarak temizleyebilir ve gri ekrana yol açabilir.
+        val hasSecure = (window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
+        when {
+            enabled && !hasSecure -> window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+            !enabled && hasSecure -> window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            // Zaten doğru durumda → dokunma
+        }
     }
 
     private fun handleIncomingInvite(intent: Intent?) {

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,7 +31,6 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Grid3x3
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.OpenInNew
@@ -45,7 +45,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -98,7 +97,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenTransports: () -> Unit,
     onOpenSecurity: () -> Unit = {},
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    listState: LazyListState = rememberLazyListState()
 ) {
     val strings = LocalStrings.current
     val fingerprint = remember(owner.id) { container.fingerprint.fingerprint(owner.publicSigningKey) }
@@ -167,7 +167,6 @@ fun SettingsScreen(
             )
         }
     ) { padding ->
-        val listState = rememberLazyListState()
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -254,7 +253,22 @@ fun SettingsScreen(
             if (isNotificationSupported) {
                 item {
                     SettingsSectionLabel(strings.notificationsSection)
-                    SettingsGroup {
+                    val bgColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    val shapeTop = RoundedCornerShape(
+                        topStart = 16.dp, topEnd = 16.dp,
+                        bottomStart = 4.dp, bottomEnd = 4.dp
+                    )
+                    val shapeMid = RoundedCornerShape(4.dp)
+                    val shapeBot = RoundedCornerShape(
+                        topStart = 4.dp, topEnd = 4.dp,
+                        bottomStart = 16.dp, bottomEnd = 16.dp
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        // ── Bildirimler toggle — her zaman en üstte ──────
                         SwitchSettingsRow(
                             icon = if (notificationsEnabled) Icons.Default.Notifications
                                    else Icons.Default.NotificationsOff,
@@ -264,13 +278,14 @@ fun SettingsScreen(
                             subtitle = if (notificationsEnabled) strings.notificationsOnSubtitle
                                        else strings.notificationsOffSubtitle,
                             checked = notificationsEnabled,
-                            onCheckedChange = { setNotificationsEnabled(it) }
+                            onCheckedChange = { setNotificationsEnabled(it) },
+                            modifier = Modifier
+                                .padding(bottom = 2.dp)
+                                .background(color = bgColor, shape = shapeTop)
+                                .clip(shapeTop)
                         )
+                        // ── Gizlilik toggle — yalnızca bildirimler açıkken ──
                         if (notificationsEnabled) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                            )
                             SwitchSettingsRow(
                                 icon = Icons.Default.VisibilityOff,
                                 iconTint = MaterialTheme.colorScheme.tertiary,
@@ -280,19 +295,23 @@ fun SettingsScreen(
                                 else
                                     strings.visibleNotificationSubtitle,
                                 checked = notificationPrivacyEnabled,
-                                onCheckedChange = { setNotificationPrivacyEnabled(it) }
+                                onCheckedChange = { setNotificationPrivacyEnabled(it) },
+                                modifier = Modifier
+                                    .padding(bottom = 2.dp)
+                                    .background(color = bgColor, shape = shapeMid)
+                                    .clip(shapeMid)
                             )
                         }
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
+                        // ── Sistem bildirimleri — her zaman en altta ──────
                         NavigationSettingsRow(
                             icon = Icons.Default.OpenInNew,
                             iconTint = MaterialTheme.colorScheme.secondary,
                             title = strings.systemNotificationsTitle,
                             subtitle = strings.systemNotificationsSubtitle,
-                            onClick = { openNotificationSettings() }
+                            onClick = { openNotificationSettings() },
+                            modifier = Modifier
+                                .background(color = bgColor, shape = shapeBot)
+                                .clip(shapeBot)
                         )
                     }
                 }
@@ -480,11 +499,13 @@ private fun SwitchSettingsRow(
     title: String,
     subtitle: String? = null,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(modifier)
             .clickable { onCheckedChange(!checked) }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -513,11 +534,13 @@ private fun NavigationSettingsRow(
     iconTint: Color,
     title: String,
     subtitle: String? = null,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(modifier)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
