@@ -54,13 +54,17 @@ class MainActivity : ComponentActivity() {
 
     private fun applySecureScreenFlag(app: StadeApplication) {
         val enabled = app.container?.secrets?.isScreenshotBlockingEnabled() ?: false
-        if (enabled) {
-            window.setFlags(
+        // Mevcut durum ile istenen durum aynıysa hiçbir şey yapma.
+        // clearFlags/setFlags çağrısı, arka plandan öne geçiş animasyonu sırasında
+        // pencere yüzeyini geçici olarak temizleyebilir ve gri ekrana yol açabilir.
+        val hasSecure = (window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
+        when {
+            enabled && !hasSecure -> window.setFlags(
                 WindowManager.LayoutParams.FLAG_SECURE,
                 WindowManager.LayoutParams.FLAG_SECURE
             )
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            !enabled && hasSecure -> window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            // Zaten doğru durumda → dokunma
         }
     }
 
