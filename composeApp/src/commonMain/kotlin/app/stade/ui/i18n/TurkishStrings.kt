@@ -217,6 +217,12 @@ object TurkishStrings : AppStrings() {
     override val screenshotBlockingOnSubtitle = "Uygulama içeriği son uygulamalar'da gizlenir; ekran görüntüsü alınamaz"
     override val screenshotBlockingOffSubtitle = "Uygulama içeriği son uygulamalar'da görünür"
 
+    override val autoLockNeverInfoTitle = "«Asla» Seçeneği Hakkında"
+    override val autoLockNeverInfoBody =
+        "«Asla» seçildiğinde, uygulama arka planda çalışırken öne alındığında PIN istenmez.\n\n" +
+        "Ancak uygulama tamamen kapatılıp yeniden açıldığında — sistem tarafından bellekten temizlenmiş olsa dahi — şifrenizi girmeniz gerekir."
+    override val understood = "Anladım"
+
     override val transportsTitle = "Taşıma katmanları"
     override val notRegistered = "kayıtlı değil"
     override fun transportRunning(msg: String) = "çalışıyor · $msg"

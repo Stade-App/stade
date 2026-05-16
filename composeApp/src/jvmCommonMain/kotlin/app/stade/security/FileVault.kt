@@ -139,25 +139,16 @@ class FileVault(private val rootDir: File) : Vault {
     }
 
     override fun tryAutoUnlock(): Boolean {
+        // Session dosyası mekanizması kaldırıldı.
+        // "Asla" kilit zaman aşımı artık yalnızca bellek tabanlıdır:
+        //   • Uygulama arka planda çalışırken dönüldüğünde FileVault.unlocked == true,
+        //     bu nedenle ilk satır true döner → PIN istenmez.
+        //   • Uygulama tamamen kapatılıp yeniden başlatıldığında yeni bir FileVault
+        //     örneği oluşur ve unlocked == false olur → aşağıda false döner → PIN istenir.
         if (unlocked) return true
-        if (!isInitialized()) return false
-        val meta = readMeta() ?: return false
-        if (meta.sessionTimeoutSeconds != SessionTimeout.NEVER) {
-            if (sessionFile.exists()) runCatching { secureDelete(sessionFile) }
-            return false
-        }
-        if (!sessionFile.exists()) return false
-        val recoveredDek = runCatching { readSessionDek() }.getOrNull() ?: run {
-            runCatching { secureDelete(sessionFile) }
-            return false
-        }
-        dek = recoveredDek
-        cached = meta
-        if (!plaintextDb.exists() && encryptedDb.exists()) {
-            runCatching { decryptFile(encryptedDb, plaintextDb, recoveredDek) }
-        }
-        unlocked = true
-        return true
+        // Eski bir session dosyası kalmışsa güvenli şekilde sil.
+        if (sessionFile.exists()) runCatching { secureDelete(sessionFile) }
+        return false
     }
 
     override fun changePassword(currentPassword: String, newPassword: String): Boolean {
@@ -415,12 +406,11 @@ class FileVault(private val rootDir: File) : Vault {
     }
 
     private fun syncSessionFile(meta: Meta) {
-        val key = dek
-        if (meta.sessionTimeoutSeconds == SessionTimeout.NEVER && key != null) {
-            runCatching { writeSessionDek(key) }
-        } else if (sessionFile.exists()) {
-            runCatching { secureDelete(sessionFile) }
-        }
+        // Session dosyası mekanizması artık kullanılmıyor.
+        // "Asla" kilit: arka plan koruması process'in bellekte canlı olmasına dayanır,
+        // kalıcı dosyaya değil. Mevcut dosya varsa güvenlik gereği temizle.
+        @Suppress("UNUSED_PARAMETER")
+        if (sessionFile.exists()) runCatching { secureDelete(sessionFile) }
     }
 
     private fun writeSessionDek(plaintextDek: ByteArray) {

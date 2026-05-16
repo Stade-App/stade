@@ -22,8 +22,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Grid3x3
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -37,6 +39,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -69,6 +72,7 @@ fun SecuritySettingsScreen(
     val sessionTimeout = remember(refreshTick) { container.secrets.sessionTimeoutSeconds() }
     val screenshotBlockingEnabled = remember(refreshTick) { container.secrets.isScreenshotBlockingEnabled() }
     var timeoutMenuOpen by remember { mutableStateOf(false) }
+    var showNeverInfoDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     Scaffold(
@@ -170,14 +174,22 @@ fun SecuritySettingsScreen(
                                 title = strings.autoLockTitle,
                                 subtitle = strings.autoLockSubtitle(strings.sessionTimeoutLabel(sessionTimeout)),
                                 onClick = { timeoutMenuOpen = true },
-                                // DÜZELTME: Bu tek başına duran bir kart olduğu için tüm köşelerini
-                                // orijinal halindeki gibi (MaterialTheme.shapes.large) eşit derecede oval yapıyoruz.
                                 modifier = Modifier
                                     .background(
                                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                         shape = MaterialTheme.shapes.large
                                     )
-                                    .clip(MaterialTheme.shapes.large)
+                                    .clip(MaterialTheme.shapes.large),
+                                trailingContent = {
+                                    IconButton(onClick = { showNeverInfoDialog = true }) {
+                                        Icon(
+                                            Icons.Default.Info,
+                                            contentDescription = strings.autoLockNeverInfoTitle,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
                             )
                             DropdownMenu(
                                 expanded = timeoutMenuOpen,
@@ -202,6 +214,31 @@ fun SecuritySettingsScreen(
                         }
                     }
                 }
+            }
+
+            if (showNeverInfoDialog) {
+                AlertDialog(
+                    onDismissRequest = { showNeverInfoDialog = false },
+                    icon = {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    title = { Text(strings.autoLockNeverInfoTitle) },
+                    text = {
+                        Text(
+                            strings.autoLockNeverInfoBody,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showNeverInfoDialog = false }) {
+                            Text(strings.understood)
+                        }
+                    }
+                )
             }
             PlatformVerticalScrollbar(
                 state = listState,
@@ -240,13 +277,13 @@ private fun SecurityNavRow(
     title: String,
     subtitle: String? = null,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    trailingContent: (@Composable () -> Unit)? = null
 ) {
     Row(
-        // Düzenlenen kısım: modifier'ı clickable ve iç padding'in önünde konumlandırdık
         modifier = Modifier
             .fillMaxWidth()
-            .then(modifier) // Dışarıdan gelen clip ve padding buraya enjekte olur
+            .then(modifier)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -259,6 +296,9 @@ private fun SecurityNavRow(
                 Spacer(Modifier.height(2.dp))
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+        }
+        if (trailingContent != null) {
+            trailingContent()
         }
     }
 }
