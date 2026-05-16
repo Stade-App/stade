@@ -283,22 +283,38 @@ private fun SecurityNavRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(modifier)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .then(modifier),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SecurityIconBox(icon, tint)
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            if (subtitle != null) {
-                Spacer(Modifier.height(2.dp))
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onClick)
+                .padding(
+                    start = 16.dp,
+                    top = 14.dp,
+                    bottom = 14.dp,
+                    end = if (trailingContent != null) 4.dp else 16.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SecurityIconBox(icon, tint)
+            Spacer(Modifier.width(14.dp))
+            Column {
+                Text(title, style = MaterialTheme.typography.bodyLarge)
+                if (subtitle != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
         if (trailingContent != null) {
-            trailingContent()
+            Box(
+                modifier = Modifier.padding(end = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                trailingContent()
+            }
         }
     }
 }
@@ -314,7 +330,6 @@ private fun SecuritySwitchRow(
     modifier: Modifier = Modifier
 ) {
     Row(
-        // Düzenlenen kısım: Aynı zincirleme mantığı Switch için de geçerli
         modifier = Modifier
             .fillMaxWidth()
             .then(modifier)

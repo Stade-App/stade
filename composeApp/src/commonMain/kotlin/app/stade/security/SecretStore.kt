@@ -6,7 +6,8 @@ import app.stade.db.StadeDb
 class SecretStore(
     private val db: StadeDb,
     private val crypto: CryptoApi,
-    private val vault: Vault
+    private val vault: Vault,
+    private val onScreenshotSettingChanged: () -> Unit = {}
 ) {
     fun isLockEnabled(): Boolean = vault.isInitialized()
 
@@ -34,7 +35,10 @@ class SecretStore(
 
     fun isScreenshotBlockingEnabled(): Boolean = vault.isScreenshotBlockingEnabled()
 
-    fun setScreenshotBlockingEnabled(enabled: Boolean) = vault.setScreenshotBlockingEnabled(enabled)
+    fun setScreenshotBlockingEnabled(enabled: Boolean) {
+        vault.setScreenshotBlockingEnabled(enabled)
+        onScreenshotSettingChanged()
+    }
 
     fun failedAttempts(): Int = vault.failedAttempts()
 

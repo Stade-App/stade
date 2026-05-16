@@ -13,9 +13,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import app.stade.notification.clearAllMessageNotifications
 import app.stade.service.StadeService
 import app.stade.ui.StadeApp
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -36,6 +39,16 @@ class MainActivity : ComponentActivity() {
         askNotificationPermissionIfNeeded()
         handleIncomingInvite(intent)
         setContent { StadeApp(app.boot) }
+
+        // Ekran görüntüsü engelleme ayarı değiştiğinde (SecuritySettingsScreen'den)
+        // onResume'u beklemeden FLAG_SECURE'ü anında uygula.
+        lifecycleScope.launch {
+            app.containerFlow.collectLatest { container ->
+                container?.screenshotSettingTick?.collect {
+                    applySecureScreenFlag(app)
+                }
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -53,7 +66,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun applySecureScreenFlag(app: StadeApplication) {
-        val enabled = app.container?.secrets?.isScreenshotBlockingEnabled() ?: false
+        // Vault her zaman StadeApplication.onCreate'de başlatılır; container'ın
+        // (null olabileceği soğuk başlatma dahil) hazır olmasını beklemeden
+        // doğrudan vault'tan okuruz. readMeta şifreli dosyada çalışır,
+        // PIN kilidi açma gerektirmez.
+        val enabled = app.vault.isScreenshotBlockingEnabled()
         // Mevcut durum ile istenen durum aynıysa hiçbir şey yapma.
         // clearFlags/setFlags çağrısı, arka plandan öne geçiş animasyonu sırasında
         // pencere yüzeyini geçici olarak temizleyebilir ve gri ekrana yol açabilir.
