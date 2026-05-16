@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -96,7 +97,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenTransports: () -> Unit,
     onOpenSecurity: () -> Unit = {},
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    listState: LazyListState = rememberLazyListState()
 ) {
     val strings = LocalStrings.current
     val fingerprint = remember(owner.id) { container.fingerprint.fingerprint(owner.publicSigningKey) }
@@ -165,7 +167,6 @@ fun SettingsScreen(
             )
         }
     ) { padding ->
-        val listState = rememberLazyListState()
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

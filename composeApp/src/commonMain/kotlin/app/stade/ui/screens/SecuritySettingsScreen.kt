@@ -104,14 +104,13 @@ fun SecuritySettingsScreen(
                             subtitle = strings.changePinSubtitle,
                             onClick = { onOpenPinSetup(true) },
                             modifier = Modifier
-                                .padding(bottom = 2.dp) // Kartı fiziksel olarak aşağı iter
+                                .padding(bottom = 2.dp)
                                 .background(
                                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                     shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
                                 )
                                 .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp))
                         )
-
                         SecuritySwitchRow(
                             icon = Icons.Default.Grid3x3,
                             tint = MaterialTheme.colorScheme.tertiary,
@@ -132,26 +131,32 @@ fun SecuritySettingsScreen(
                     }
                 }
 
-                item {
-                    SecuritySectionLabel(strings.privacySection)
-                    SecurityGroup {
-                        SecuritySwitchRow(
-                            icon = Icons.Default.VisibilityOff,
-                            tint = MaterialTheme.colorScheme.secondary,
-                            title = strings.screenshotBlockingTitle,
-                            subtitle = if (screenshotBlockingEnabled) strings.screenshotBlockingOnSubtitle else strings.screenshotBlockingOffSubtitle,
-                            checked = screenshotBlockingEnabled,
-                            onCheckedChange = {
-                                container.secrets.setScreenshotBlockingEnabled(it)
-                                refreshTick++
-                            },
-                            modifier = Modifier
-                                .background(
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    shape = MaterialTheme.shapes.large
-                                )
-                                .clip(MaterialTheme.shapes.large)
-                        )
+                // Gizlilik bölümü yalnızca desteklenen platformlarda gösterilir (Android).
+                // Masaüstünde FLAG_SECURE ve benzeri özellikler desteklenmediğinden gizlenir.
+                // İleride masaüstüne özgü gizlilik ayarları eklendikçe PrivacyFeatures.kt
+                // güncellenerek bu blok otomatik olarak görünür hale gelir.
+                if (isScreenPrivacySupported) {
+                    item {
+                        SecuritySectionLabel(strings.privacySection)
+                        SecurityGroup {
+                            SecuritySwitchRow(
+                                icon = Icons.Default.VisibilityOff,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                title = strings.screenshotBlockingTitle,
+                                subtitle = if (screenshotBlockingEnabled) strings.screenshotBlockingOnSubtitle else strings.screenshotBlockingOffSubtitle,
+                                checked = screenshotBlockingEnabled,
+                                onCheckedChange = {
+                                    container.secrets.setScreenshotBlockingEnabled(it)
+                                    refreshTick++
+                                },
+                                modifier = Modifier
+                                    .background(
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        shape = MaterialTheme.shapes.large
+                                    )
+                                    .clip(MaterialTheme.shapes.large)
+                            )
+                        }
                     }
                 }
 

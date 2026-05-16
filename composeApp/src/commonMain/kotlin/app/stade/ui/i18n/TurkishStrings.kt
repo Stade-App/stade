@@ -213,7 +213,7 @@ object TurkishStrings : AppStrings() {
     }
 
     override val privacySection = "Gizlilik"
-    override val screenshotBlockingTitle = "Son uygulamalar önizlemesini gizle"
+    override val screenshotBlockingTitle = "Ekran görüntüsü almayı devre dışı bırak"
     override val screenshotBlockingOnSubtitle = "Uygulama içeriği son uygulamalar'da gizlenir; ekran görüntüsü alınamaz"
     override val screenshotBlockingOffSubtitle = "Uygulama içeriği son uygulamalar'da görünür"
 

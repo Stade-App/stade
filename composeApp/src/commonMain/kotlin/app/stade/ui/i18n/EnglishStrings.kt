@@ -212,7 +212,7 @@ object EnglishStrings : AppStrings() {
     }
 
     override val privacySection = "Privacy"
-    override val screenshotBlockingTitle = "Block recent apps preview"
+    override val screenshotBlockingTitle = "Disable screenshot capture"
     override val screenshotBlockingOnSubtitle = "App content hidden in recent apps; screenshots disabled"
     override val screenshotBlockingOffSubtitle = "App content visible in recent apps"
 
