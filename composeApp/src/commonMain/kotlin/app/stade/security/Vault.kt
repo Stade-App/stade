@@ -16,6 +16,8 @@ interface Vault {
     fun setScrambleKeypadEnabled(enabled: Boolean)
     fun sessionTimeoutSeconds(): Int
     fun setSessionTimeoutSeconds(value: Int)
+    fun isScreenshotBlockingEnabled(): Boolean
+    fun setScreenshotBlockingEnabled(enabled: Boolean)
     fun failedAttempts(): Int
     fun lockoutUntilMillis(): Long
     fun nowMillis(): Long

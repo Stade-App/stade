@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         val app = (application as StadeApplication)
+        applySecureScreenFlag(app)
         startForegroundService(Intent(this, StadeService::class.java))
         askNotificationPermissionIfNeeded()
         handleIncomingInvite(intent)
@@ -44,7 +46,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Ayar değişmiş olabilir; her öne geliş anında yeniden uygula
+        val app = (application as StadeApplication)
+        applySecureScreenFlag(app)
         clearAllMessageNotifications()
+    }
+
+    private fun applySecureScreenFlag(app: StadeApplication) {
+        val enabled = app.container?.secrets?.isScreenshotBlockingEnabled() ?: false
+        if (enabled) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
     }
 
     private fun handleIncomingInvite(intent: Intent?) {

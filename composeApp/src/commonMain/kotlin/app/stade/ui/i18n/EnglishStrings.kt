@@ -211,6 +211,11 @@ object EnglishStrings : AppStrings() {
         else -> if (seconds < 60) "$seconds seconds" else "${seconds / 60} minutes"
     }
 
+    override val privacySection = "Privacy"
+    override val screenshotBlockingTitle = "Block recent apps preview"
+    override val screenshotBlockingOnSubtitle = "App content hidden in recent apps; screenshots disabled"
+    override val screenshotBlockingOffSubtitle = "App content visible in recent apps"
+
     override val transportsTitle = "Transport layers"
     override val notRegistered = "not registered"
     override fun transportRunning(msg: String) = "running · $msg"

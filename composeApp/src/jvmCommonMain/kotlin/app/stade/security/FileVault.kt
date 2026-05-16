@@ -37,7 +37,8 @@ class FileVault(private val rootDir: File) : Vault {
         var failedAttempts: Int,
         var lockoutUntilMillis: Long,
         var scrambleKeypad: Boolean,
-        var sessionTimeoutSeconds: Int
+        var sessionTimeoutSeconds: Int,
+        var screenshotBlocking: Boolean = false
     )
 
     override fun isInitialized(): Boolean = metaFile.exists() && metaFile.length() >= MIN_META_SIZE
@@ -256,6 +257,16 @@ class FileVault(private val rootDir: File) : Vault {
         syncSessionFile(meta)
     }
 
+    override fun isScreenshotBlockingEnabled(): Boolean =
+        (cached ?: readMeta())?.screenshotBlocking ?: false
+
+    override fun setScreenshotBlockingEnabled(enabled: Boolean) {
+        val meta = readMeta() ?: return
+        meta.screenshotBlocking = enabled
+        writeMeta(meta)
+        cached = meta
+    }
+
     override fun failedAttempts(): Int = (cached ?: readMeta())?.failedAttempts ?: 0
 
     override fun lockoutUntilMillis(): Long = (cached ?: readMeta())?.lockoutUntilMillis ?: 0L
@@ -340,7 +351,8 @@ class FileVault(private val rootDir: File) : Vault {
     private fun readMeta(): Meta? {
         if (!metaFile.exists()) return null
         val bytes = runCatching { metaFile.readBytes() }.getOrNull() ?: return null
-        if (bytes.size < MIN_META_SIZE) return null
+        // MIN_META_SIZE - 1 = eski vault formatı (screenshotBlocking baytı olmadan); geriye dönük uyum
+        if (bytes.size < MIN_META_SIZE - 1) return null
         val buf = ByteBuffer.wrap(bytes)
         val magic = ByteArray(4).also { buf.get(it) }
         if (!magic.contentEquals(META_MAGIC)) return null
@@ -356,6 +368,7 @@ class FileVault(private val rootDir: File) : Vault {
         val lockoutUntil = buf.long
         val scramble = buf.get() != 0.toByte()
         val timeout = buf.int
+        val screenshot = if (buf.hasRemaining()) buf.get() != 0.toByte() else false
         return Meta(
             salt = salt,
             iterations = iterations,
@@ -366,7 +379,8 @@ class FileVault(private val rootDir: File) : Vault {
             failedAttempts = failed,
             lockoutUntilMillis = lockoutUntil,
             scrambleKeypad = scramble,
-            sessionTimeoutSeconds = timeout
+            sessionTimeoutSeconds = timeout,
+            screenshotBlocking = screenshot
         )
     }
 
@@ -386,6 +400,7 @@ class FileVault(private val rootDir: File) : Vault {
         buf.putLong(meta.lockoutUntilMillis)
         buf.put(if (meta.scrambleKeypad) 1.toByte() else 0.toByte())
         buf.putInt(meta.sessionTimeoutSeconds)
+        buf.put(if (meta.screenshotBlocking) 1.toByte() else 0.toByte())
         val tmp = File(metaFile.parentFile, metaFile.name + ".tmp")
         tmp.writeBytes(out)
         if (metaFile.exists()) metaFile.delete()
@@ -507,7 +522,7 @@ class FileVault(private val rootDir: File) : Vault {
         private val SESSION_MAGIC = byteArrayOf('S'.code.toByte(), 'T'.code.toByte(), 'D'.code.toByte(), 'S'.code.toByte())
         private const val SESSION_VERSION: Byte = 0x01
         private const val MIN_META_SIZE =
-            4 + 1 + SALT_LEN + 4 + NONCE_LEN + VERIFIER_CT_LEN + NONCE_LEN + DEK_CT_LEN + 4 + 8 + 1 + 4
+            4 + 1 + SALT_LEN + 4 + NONCE_LEN + VERIFIER_CT_LEN + NONCE_LEN + DEK_CT_LEN + 4 + 8 + 1 + 4 + 1
         private val VERIFIER_PLAIN = byteArrayOf(
             'S'.code.toByte(), 'T'.code.toByte(), 'A'.code.toByte(), 'D'.code.toByte(),
             'E'.code.toByte(), '-'.code.toByte(), 'V'.code.toByte(), 'E'.code.toByte(),

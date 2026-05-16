@@ -51,6 +51,7 @@ kotlin {
                 implementation(libs.ktor.network)
                 implementation(libs.sqldelight.runtime)
                 implementation(libs.sqldelight.coroutines)
+                implementation(compose.material3)
             }
         }
         val jvmCommonMain by getting {

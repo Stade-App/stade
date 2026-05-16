@@ -212,6 +212,11 @@ object TurkishStrings : AppStrings() {
         else -> if (seconds < 60) "$seconds saniye" else "${seconds / 60} dakika"
     }
 
+    override val privacySection = "Gizlilik"
+    override val screenshotBlockingTitle = "Son uygulamalar önizlemesini gizle"
+    override val screenshotBlockingOnSubtitle = "Uygulama içeriği son uygulamalar'da gizlenir; ekran görüntüsü alınamaz"
+    override val screenshotBlockingOffSubtitle = "Uygulama içeriği son uygulamalar'da görünür"
+
     override val transportsTitle = "Taşıma katmanları"
     override val notRegistered = "kayıtlı değil"
     override fun transportRunning(msg: String) = "çalışıyor · $msg"

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Grid3x3
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -33,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -53,6 +55,7 @@ import app.stade.security.SessionTimeout
 import app.stade.ui.components.PlatformVerticalScrollbar
 import app.stade.ui.i18n.LocalStrings
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SecuritySettingsScreen(
@@ -64,6 +67,7 @@ fun SecuritySettingsScreen(
     var refreshTick by remember { mutableStateOf(0) }
     val scrambleEnabled = remember(refreshTick) { container.secrets.isScrambleKeypadEnabled() }
     val sessionTimeout = remember(refreshTick) { container.secrets.sessionTimeoutSeconds() }
+    val screenshotBlockingEnabled = remember(refreshTick) { container.secrets.isScreenshotBlockingEnabled() }
     var timeoutMenuOpen by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
@@ -98,25 +102,55 @@ fun SecuritySettingsScreen(
                             tint = MaterialTheme.colorScheme.primary,
                             title = strings.changePinTitle,
                             subtitle = strings.changePinSubtitle,
-                            onClick = { onOpenPinSetup(true) }
+                            onClick = { onOpenPinSetup(true) },
+                            modifier = Modifier
+                                .padding(bottom = 2.dp) // Kartı fiziksel olarak aşağı iter
+                                .background(
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                                )
+                                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp))
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
+
                         SecuritySwitchRow(
                             icon = Icons.Default.Grid3x3,
                             tint = MaterialTheme.colorScheme.tertiary,
                             title = strings.scrambleKeypadTitle,
-                            subtitle = if (scrambleEnabled)
-                                strings.scrambleKeypadOnSubtitle
-                            else
-                                strings.scrambleKeypadOffSubtitle,
+                            subtitle = if (scrambleEnabled) strings.scrambleKeypadOnSubtitle else strings.scrambleKeypadOffSubtitle,
                             checked = scrambleEnabled,
                             onCheckedChange = {
                                 container.secrets.setScrambleKeypadEnabled(it)
                                 refreshTick++
-                            }
+                            },
+                            modifier = Modifier
+                                .background(
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+                                )
+                                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp))
+                        )
+                    }
+                }
+
+                item {
+                    SecuritySectionLabel(strings.privacySection)
+                    SecurityGroup {
+                        SecuritySwitchRow(
+                            icon = Icons.Default.VisibilityOff,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            title = strings.screenshotBlockingTitle,
+                            subtitle = if (screenshotBlockingEnabled) strings.screenshotBlockingOnSubtitle else strings.screenshotBlockingOffSubtitle,
+                            checked = screenshotBlockingEnabled,
+                            onCheckedChange = {
+                                container.secrets.setScreenshotBlockingEnabled(it)
+                                refreshTick++
+                            },
+                            modifier = Modifier
+                                .background(
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    shape = MaterialTheme.shapes.large
+                                )
+                                .clip(MaterialTheme.shapes.large)
                         )
                     }
                 }
@@ -130,7 +164,15 @@ fun SecuritySettingsScreen(
                                 tint = MaterialTheme.colorScheme.secondary,
                                 title = strings.autoLockTitle,
                                 subtitle = strings.autoLockSubtitle(strings.sessionTimeoutLabel(sessionTimeout)),
-                                onClick = { timeoutMenuOpen = true }
+                                onClick = { timeoutMenuOpen = true },
+                                // DÜZELTME: Bu tek başına duran bir kart olduğu için tüm köşelerini
+                                // orijinal halindeki gibi (MaterialTheme.shapes.large) eşit derecede oval yapıyoruz.
+                                modifier = Modifier
+                                    .background(
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        shape = MaterialTheme.shapes.large
+                                    )
+                                    .clip(MaterialTheme.shapes.large)
                             )
                             DropdownMenu(
                                 expanded = timeoutMenuOpen,
@@ -174,14 +216,16 @@ private fun SecuritySectionLabel(title: String) {
     )
 }
 
+// Eski SecurityGroup fonksiyonunu tamamen bununla değiştir:
 @Composable
 private fun SecurityGroup(content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) { content() }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+    ) {
+        content()
+    }
 }
 
 @Composable
@@ -190,10 +234,16 @@ private fun SecurityNavRow(
     tint: Color,
     title: String,
     subtitle: String? = null,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        // Düzenlenen kısım: modifier'ı clickable ve iç padding'in önünde konumlandırdık
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(modifier) // Dışarıdan gelen clip ve padding buraya enjekte olur
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         SecurityIconBox(icon, tint)
@@ -215,10 +265,16 @@ private fun SecuritySwitchRow(
     title: String,
     subtitle: String?,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onCheckedChange(!checked) }.padding(horizontal = 16.dp, vertical = 14.dp),
+        // Düzenlenen kısım: Aynı zincirleme mantığı Switch için de geçerli
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(modifier)
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         SecurityIconBox(icon, tint)

@@ -32,6 +32,10 @@ class SecretStore(
 
     fun setSessionTimeoutSeconds(value: Int) = vault.setSessionTimeoutSeconds(value)
 
+    fun isScreenshotBlockingEnabled(): Boolean = vault.isScreenshotBlockingEnabled()
+
+    fun setScreenshotBlockingEnabled(enabled: Boolean) = vault.setScreenshotBlockingEnabled(enabled)
+
     fun failedAttempts(): Int = vault.failedAttempts()
 
     fun lockoutUntilMillis(): Long = vault.lockoutUntilMillis()

@@ -169,6 +169,11 @@ abstract class AppStrings {
     abstract fun autoLockSubtitle(label: String): String
     abstract fun sessionTimeoutLabel(seconds: Int): String
 
+    abstract val privacySection: String
+    abstract val screenshotBlockingTitle: String
+    abstract val screenshotBlockingOnSubtitle: String
+    abstract val screenshotBlockingOffSubtitle: String
+
     abstract val transportsTitle: String
     abstract val notRegistered: String
     abstract fun transportRunning(msg: String): String
