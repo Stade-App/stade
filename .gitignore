@@ -9,3 +9,7 @@ out/
 .DS_Store
 
 *_out.log
+
+*.jks
+*.keystore
+

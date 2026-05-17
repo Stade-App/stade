@@ -26,6 +26,10 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val app = (application as StadeApplication)
+        if (app.vault.isScreenshotBlockingEnabled()) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
                 lightScrim = android.graphics.Color.TRANSPARENT,
@@ -33,8 +37,6 @@ class MainActivity : ComponentActivity() {
             )
         )
         super.onCreate(savedInstanceState)
-        val app = (application as StadeApplication)
-        applySecureScreenFlag(app)
         startForegroundService(Intent(this, StadeService::class.java))
         askNotificationPermissionIfNeeded()
         handleIncomingInvite(intent)
@@ -59,10 +61,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Ayar değişmiş olabilir; her öne geliş anında yeniden uygula
+        // Ayar değişmiş olabilir; her öne geliş anında yeniden uygula.
         val app = (application as StadeApplication)
         applySecureScreenFlag(app)
         clearAllMessageNotifications()
+    }
+
+    /**
+     * Uygulama arka plandan ön plana döndüğünde pencere odağı yeniden kazanılır.
+     * FLAG_SECURE etkinken Android, arka plan geçişinde pencere yüzeyini serbest bırakabilir;
+     * odak geri geldiğinde Compose'u yeniden çizmeye zorlayarak gri ekranı önlüyoruz.
+     */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            window.decorView.invalidate()
+        }
     }
 
     private fun applySecureScreenFlag(app: StadeApplication) {
@@ -71,16 +85,17 @@ class MainActivity : ComponentActivity() {
         // doğrudan vault'tan okuruz. readMeta şifreli dosyada çalışır,
         // PIN kilidi açma gerektirmez.
         val enabled = app.vault.isScreenshotBlockingEnabled()
-        // Mevcut durum ile istenen durum aynıysa hiçbir şey yapma.
-        // clearFlags/setFlags çağrısı, arka plandan öne geçiş animasyonu sırasında
-        // pencere yüzeyini geçici olarak temizleyebilir ve gri ekrana yol açabilir.
         val hasSecure = (window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
         when {
-            enabled && !hasSecure -> window.setFlags(
-                WindowManager.LayoutParams.FLAG_SECURE,
-                WindowManager.LayoutParams.FLAG_SECURE
-            )
-            !enabled && hasSecure -> window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            enabled && !hasSecure -> {
+                window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                // Yeni flag sonrası yüzeyi zorla yenile
+                window.decorView.invalidate()
+            }
+            !enabled && hasSecure -> {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                window.decorView.invalidate()
+            }
             // Zaten doğru durumda → dokunma
         }
     }

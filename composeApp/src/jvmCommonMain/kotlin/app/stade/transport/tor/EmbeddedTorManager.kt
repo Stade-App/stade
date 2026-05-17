@@ -17,7 +17,7 @@ class EmbeddedTorManager(
     private val appRoot: File,
     private val virtualPort: Int = 5901,
     private val layoutProvider: () -> TorLayout,
-    private val pidProvider: () -> Long = { runCatching { ProcessHandle.current().pid() }.getOrDefault(0L) }
+    private val pidProvider: () -> Long = { currentPid() }
 ) : EmbeddedTorRuntime {
 
     private val mutex = Mutex()
@@ -215,4 +215,21 @@ class EmbeddedTorManager(
         ServerSocket(0).use { return it.localPort }
     }
 }
+
+/**
+ * Mevcut JVM sürecinin PID'ini döner.
+ *
+ * Java 9+ `ProcessHandle.current().pid()` API'sini reflection ile çağırır.
+ * Android veya eski JVM ortamlarında (R8 derleme dahil) `ProcessHandle` sınıfı
+ * bulunmayabilir. Reflection sayesinde bu sınıfa doğrudan bir derleme zamanı
+ * bağımlılığı oluşmaz ve R8 "Missing class" hatası vermez.
+ * API mevcut değilse 0L döner (torrc'ye __OwningControllerProcess satırı eklenmez).
+ */
+private fun currentPid(): Long = runCatching {
+    val phClass = Class.forName("java.lang.ProcessHandle")
+    val currentMethod = phClass.getMethod("current")
+    val handle = currentMethod.invoke(null)
+    val pidMethod = phClass.getMethod("pid")
+    (pidMethod.invoke(handle) as? Long) ?: 0L
+}.getOrDefault(0L)
 

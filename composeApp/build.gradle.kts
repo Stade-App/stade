@@ -91,6 +91,44 @@ android {
         versionCode = 1
         versionName = "0.1.0"
     }
+
+    val localProps = Properties().also { props ->
+        rootProject.file("local.properties").takeIf { it.exists() }
+            ?.inputStream()?.use { props.load(it) }
+    }
+
+    signingConfigs {
+        create("release") {
+            val ksPath = localProps.getProperty("keystore.path")
+            if (ksPath != null) {
+                storeFile = file(ksPath)
+                storePassword = localProps.getProperty("keystore.password") ?: ""
+                keyAlias = localProps.getProperty("keystore.alias") ?: ""
+                keyPassword = localProps.getProperty("keystore.keyPassword") ?: ""
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            val ksPath = localProps.getProperty("keystore.path")
+            signingConfig = if (ksPath != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+        }
+        debug {
+            isMinifyEnabled = false
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
