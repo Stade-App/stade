@@ -4,3 +4,5 @@ package app.stade.ui.screens
 // İleride masaüstüne özgü gizlilik ayarları eklendiğinde bu değer true yapılabilir.
 actual val isScreenPrivacySupported: Boolean = false
 
+// Masaüstü kullanıcıları için PIN tuş takımının gizlenmesini sağlıyor.
+actual val isKeypadSupported: Boolean = false

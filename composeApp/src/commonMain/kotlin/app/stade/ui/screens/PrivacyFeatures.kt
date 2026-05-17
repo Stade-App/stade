@@ -11,3 +11,9 @@ package app.stade.ui.screens
  */
 expect val isScreenPrivacySupported: Boolean
 
+/**
+ *
+ * PIN tuş takımını gizlemek için var
+ * Masaüstü kullanıcıları için PIN tuş takımının gizlenmesini sağlıyor.
+ */
+expect val isKeypadSupported: Boolean

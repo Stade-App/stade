@@ -38,7 +38,7 @@ class FileVault(private val rootDir: File) : Vault {
         var lockoutUntilMillis: Long,
         var scrambleKeypad: Boolean,
         var sessionTimeoutSeconds: Int,
-        var screenshotBlocking: Boolean = false
+        var screenshotBlocking: Boolean = true
     )
 
     override fun isInitialized(): Boolean = metaFile.exists() && metaFile.length() >= MIN_META_SIZE
@@ -252,7 +252,7 @@ class FileVault(private val rootDir: File) : Vault {
     }
 
     override fun isScreenshotBlockingEnabled(): Boolean =
-        (cached ?: readMeta())?.screenshotBlocking ?: false
+        (cached ?: readMeta())?.screenshotBlocking ?: true
 
     override fun setScreenshotBlockingEnabled(enabled: Boolean) {
         val meta = readMeta() ?: return
@@ -349,7 +349,7 @@ class FileVault(private val rootDir: File) : Vault {
         val lockoutUntil = buf.long
         val scramble = buf.get() != 0.toByte()
         val timeout = buf.int
-        val screenshot = if (buf.hasRemaining()) buf.get() != 0.toByte() else false
+        val screenshot = if (buf.hasRemaining()) buf.get() != 0.toByte() else true
         return Meta(
             salt = salt,
             iterations = iterations,

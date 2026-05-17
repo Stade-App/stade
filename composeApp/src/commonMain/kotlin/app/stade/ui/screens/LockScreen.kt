@@ -245,20 +245,22 @@ fun LockScreen(
                 }
             }
             Spacer(Modifier.height(20.dp))
-            PinKeypad(
-                onDigit = { d ->
-                    if (!lockedNow && pin.length < PIN_MAX && error == null && !isVerifying) {
-                        pin += d
-                        if (pin.length >= PIN_MAX) tryUnlock()
-                    }
-                },
-                onBackspace = {
-                    if (pin.isNotEmpty() && !isVerifying) pin = pin.dropLast(1)
-                },
-                actionIsCheck = pin.length >= PIN_MIN && error == null && !isVerifying && !lockedNow,
-                onAction = { tryUnlock() },
-                scrambled = scrambleEnabled
-            )
+            if (isKeypadSupported) {
+                PinKeypad(
+                    onDigit = { d ->
+                        if (!lockedNow && pin.length < PIN_MAX && error == null && !isVerifying) {
+                            pin += d
+                            if (pin.length >= PIN_MAX) tryUnlock()
+                        }
+                    },
+                    onBackspace = {
+                        if (pin.isNotEmpty() && !isVerifying) pin = pin.dropLast(1)
+                    },
+                    actionIsCheck = pin.length >= PIN_MIN && error == null && !isVerifying && !lockedNow,
+                    onAction = { tryUnlock() },
+                    scrambled = scrambleEnabled
+                )
+            }
             Spacer(Modifier.height(16.dp))
             TextButton(onClick = { showForgotDialog = true }, enabled = !wiping) {
                 Text(strings.forgotPin)
@@ -547,7 +549,7 @@ fun PinSetupScreen(
 private enum class Phase { Current, New, Confirm }
 
 @Composable
-private fun PinDots(filled: Int, shakeOffset: Float, error: Boolean) {
+internal fun PinDots(filled: Int, shakeOffset: Float, error: Boolean) {
     val visibleDots = filled.coerceIn(PIN_MIN, PIN_DOTS_MAX)
     val overflow = (filled - PIN_DOTS_MAX).coerceAtLeast(0)
 
