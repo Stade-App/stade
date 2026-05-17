@@ -17,4 +17,10 @@ class ChatService(
         }
         return msg
     }
+
+
+    suspend fun sendImage(owner: LocalIdentity, contact: Contact, imageBytes: ByteArray): Message {
+        val body = encodeImageBody(imageBytes)
+        return send(owner, contact, body)
+    }
 }

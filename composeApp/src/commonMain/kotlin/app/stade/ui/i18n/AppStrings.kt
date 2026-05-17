@@ -207,6 +207,12 @@ abstract class AppStrings {
     abstract val contactStadeId: String
 
     abstract val selectContactHint: String
+    abstract val attachPhoto: String
+    abstract val photoMessage: String
+    abstract val photoSendFailed: String
+    abstract val photoTooBig: String
+    abstract val tapToViewPhoto: String
+    abstract val closePhoto: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

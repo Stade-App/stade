@@ -48,6 +48,7 @@ class SyncEngine(
     private val _connected = MutableStateFlow<Set<String>>(emptySet())
     val connectedContacts: StateFlow<Set<String>> = _connected.asStateFlow()
     @Volatile var selfAddressesProvider: () -> List<String> = { emptyList() }
+    @Volatile private var forgottenIds = emptySet<String>()
 
     sealed interface SyncEvent {
         data class ContactConnected(val contactId: String, val isNew: Boolean) : SyncEvent
@@ -71,7 +72,8 @@ class SyncEngine(
         sessionsLock.withLock { sessions[contact.id] }?.notifyOutbox()
     }
 
-    suspend fun handleConnection(owner: LocalIdentity, connection: Connection) {
+    suspend fun handleConnection(owner: LocalIdentity, connection: Connection): Boolean {
+        var sessionStarted = false
         coroutineScope {
             val handshakeOutcome = handshake(owner, connection)
             if (handshakeOutcome == null) {
@@ -81,13 +83,11 @@ class SyncEngine(
             val (contact, isNew) = handshakeOutcome
             contacts.markSeen(contact.id, Clock.System.now().toEpochMilliseconds())
             val session = sessionsLock.withLock {
-                sessions[contact.id]?.let { existing ->
-                    runCatching { existing.cancel() }
-                }
-                ContactSession(this, owner, contact, connection).also { sessions[contact.id] = it }
+                ContactSession(this@coroutineScope, owner, contact, connection).also { sessions[contact.id] = it }
             }
             updateConnectedSet()
             _events.tryEmit(SyncEvent.ContactConnected(contact.id, isNew))
+            sessionStarted = true
             try {
                 session.run()
             } finally {
@@ -98,6 +98,7 @@ class SyncEngine(
                 _events.tryEmit(SyncEvent.ContactDisconnected(contact.id))
             }
         }
+        return sessionStarted
     }
 
     private fun updateConnectedSet() {
@@ -158,6 +159,7 @@ class SyncEngine(
             _events.tryEmit(SyncEvent.HandshakeRejected("Stade ID anahtarlarla eşleşmiyor"))
             return null
         }
+        if (peerHello.stadeId in forgottenIds) return null
 
         val expectedPeerTc = transcriptCommitment(
             protocolVersion,
@@ -405,6 +407,7 @@ class SyncEngine(
 
     suspend fun forgetContact(contactId: String) {
         sessionsLock.withLock {
+            forgottenIds = forgottenIds + contactId
             sessions.remove(contactId)?.let { runCatching { it.cancel() } }
         }
         updateConnectedSet()

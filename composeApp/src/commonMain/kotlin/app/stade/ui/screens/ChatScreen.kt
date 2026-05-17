@@ -17,11 +17,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -30,7 +32,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
@@ -40,6 +45,7 @@ import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -70,31 +76,40 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
 import app.stade.message.Message
 import app.stade.message.MessageDirection
+import app.stade.message.MessageType
 import app.stade.notification.cancelMessagesNotification
 import app.stade.notification.clearAllMessageNotifications
 import app.stade.sync.SyncEngine
 import app.stade.transport.DialAttempt
+import app.stade.ui.ImagePickerLauncher
 import app.stade.ui.components.Avatar
 import app.stade.ui.components.formatChatTime
 import app.stade.ui.components.maskAddress
+import app.stade.ui.decodeToImageBitmap
 import app.stade.ui.i18n.LocalStrings
+import app.stade.ui.rememberImagePickerLauncher
 import app.stade.ui.theme.StadeColors
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class NotificationKind { Success, Error, Info }
 private data class NotificationData(val message: String, val kind: NotificationKind)
@@ -168,6 +183,20 @@ fun ChatScreen(
         if (messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex)
     }
 
+    val MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3 MB
+
+    val imagePicker = rememberImagePickerLauncher { bytes ->
+        val c = contact ?: return@rememberImagePickerLauncher
+        if (bytes.size > MAX_IMAGE_BYTES) {
+            showNotification(strings.photoTooBig, NotificationKind.Error)
+            return@rememberImagePickerLauncher
+        }
+        scope.launch {
+            runCatching { container.chat.sendImage(owner, c, bytes) }
+                .onFailure { showNotification(strings.photoSendFailed, NotificationKind.Error) }
+        }
+    }
+
     var prevColumnHeight by remember { mutableStateOf(Int.MAX_VALUE) }
 
     if (showDeleteDialog && contact != null) {
@@ -183,9 +212,11 @@ fun ChatScreen(
                     onClick = {
                         deleting = true
                         scope.launch {
-                            runCatching {
-                                container.sync.forgetContact(contact.id)
-                                container.contacts.purge(contact.id)
+                            withContext(Dispatchers.Default) {
+                                runCatching {
+                                    container.sync.forgetContact(contact.id)
+                                    container.contacts.purge(contact.id)
+                                }
                             }
                             showDeleteDialog = false
                             deleting = false
@@ -358,7 +389,11 @@ fun ChatScreen(
                             val tight = prev != null &&
                                     prev.direction == msg.direction &&
                                     (msg.timestamp - prev.timestamp) < 60_000L
-                            Bubble(msg, tightWithPrev = tight)
+                            if (msg.type == MessageType.IMAGE) {
+                                ImageBubble(msg, tightWithPrev = tight)
+                            } else {
+                                Bubble(msg, tightWithPrev = tight)
+                            }
                         }
                     }
                 }
@@ -372,7 +407,8 @@ fun ChatScreen(
                         if (text.isEmpty()) return@Composer
                         draft = TextFieldValue("")
                         scope.launch { container.chat.send(owner, c, text) }
-                    }
+                    },
+                    onPickImage = { imagePicker.launch() }
                 )
             }
 
@@ -591,7 +627,8 @@ private fun DiagnosticsCard(
 private fun Composer(
     draft: TextFieldValue,
     onChange: (TextFieldValue) -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
+    onPickImage: () -> Unit
 ) {
     val strings = LocalStrings.current
     Row(
@@ -601,6 +638,16 @@ private fun Composer(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        IconButton(
+            onClick = onPickImage,
+            modifier = Modifier.size(44.dp)
+        ) {
+            Icon(
+                Icons.Default.AddPhotoAlternate,
+                contentDescription = strings.attachPhoto,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
         TextField(
             value = draft,
             onValueChange = onChange,
@@ -700,3 +747,136 @@ private fun Bubble(msg: Message, tightWithPrev: Boolean) {
         }
     }
 }
+
+@Composable
+private fun ImageBubble(msg: Message, tightWithPrev: Boolean) {
+    val strings = LocalStrings.current
+    val outgoing = msg.direction == MessageDirection.OUT
+    val align = if (outgoing) Alignment.End else Alignment.Start
+    val bg = if (outgoing) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.surfaceContainerHighest
+    val fg = if (outgoing) MaterialTheme.colorScheme.onPrimary
+    else MaterialTheme.colorScheme.onSurface
+    val sub = fg.copy(alpha = if (outgoing) 0.75f else 0.55f)
+
+    val cornerTop = if (tightWithPrev) 6.dp else 18.dp
+    val cornerSelf = 18.dp
+    val cornerTail = if (tightWithPrev) 18.dp else 4.dp
+
+    val bitmap: ImageBitmap? = remember(msg.id) {
+        msg.imageBytes()?.decodeToImageBitmap()
+    }
+    var showFullscreen by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = if (tightWithPrev) 1.dp else 6.dp),
+        horizontalAlignment = align
+    ) {
+        Box(
+            Modifier.widthIn(max = 240.dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = if (outgoing) cornerSelf else cornerTop,
+                        topEnd = if (outgoing) cornerTop else cornerSelf,
+                        bottomStart = if (outgoing) cornerSelf else cornerTail,
+                        bottomEnd = if (outgoing) cornerTail else cornerSelf
+                    )
+                )
+                .background(bg)
+                .clickable(enabled = bitmap != null) { showFullscreen = true }
+                .padding(4.dp)
+        ) {
+            Column {
+                if (bitmap != null) {
+                    androidx.compose.foundation.Image(
+                        bitmap = bitmap,
+                        contentDescription = strings.photoMessage,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 220.dp)
+                            .clip(RoundedCornerShape(10.dp)),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(120.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.BrokenImage,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                strings.photoSendFailed,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(3.dp))
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        formatChatTime(msg.timestamp),
+                        color = sub,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (outgoing) {
+                        Spacer(Modifier.size(4.dp))
+                        Text(
+                            if (msg.delivered) "✓✓" else "·",
+                            color = sub,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showFullscreen && bitmap != null) {
+        Dialog(onDismissRequest = { showFullscreen = false }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.92f))
+                    .clickable { showFullscreen = false },
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.foundation.Image(
+                    bitmap = bitmap,
+                    contentDescription = strings.photoMessage,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentScale = ContentScale.Fit
+                )
+                IconButton(
+                    onClick = { showFullscreen = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = strings.closePhoto,
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+    }
+}
+

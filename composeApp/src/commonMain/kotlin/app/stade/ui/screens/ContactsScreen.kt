@@ -74,7 +74,9 @@ import app.stade.contact.Contact
 import app.stade.identity.LocalIdentity
 import app.stade.ui.PlatformBackHandler
 import app.stade.ui.i18n.LocalStrings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -177,9 +179,11 @@ fun ContactsScreen(
                     onClick = {
                         deleting = true
                         scope.launch {
-                            runCatching {
-                                container.sync.forgetContact(c.id)
-                                container.contacts.purge(c.id)
+                            withContext(Dispatchers.Default) {
+                                runCatching {
+                                    container.sync.forgetContact(c.id)
+                                    container.contacts.purge(c.id)
+                                }
                             }
                             showDeleteConfirm = false
                             actionContact = null

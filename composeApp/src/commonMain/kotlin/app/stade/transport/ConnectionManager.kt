@@ -219,8 +219,8 @@ class ConnectionManager(
                     return@launch
                 }
                 recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, "handshake yapılıyor…"))
-                val handshakeOk = runCatching { sync.handleConnection(owner, conn) }.isSuccess
-                if (handshakeOk) {
+                val sessionConnected = runCatching { sync.handleConnection(owner, conn) }.getOrDefault(false)
+                if (sessionConnected) {
                     recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_OK, "bağlandı ✓"))
                     consumePendingAddress(addr)
                 } else {
@@ -272,13 +272,9 @@ class ConnectionManager(
             recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, "handshake yapılıyor…"))
             scope.launch {
                 try {
-                    val before = sync.isConnected(contact.id)
-                    sync.handleConnection(owner, connection)
-                    val after = sync.isConnected(contact.id)
-                    if (after) {
+                    val sessionConnected = sync.handleConnection(owner, connection)
+                    if (sessionConnected) {
                         recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_OK, "bağlandı ✓"))
-                    } else if (before) {
-                        recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, "zaten bağlı"))
                     } else {
                         recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, "handshake başarısız"))
                         backoff[key] = nowMs() + 30_000L

@@ -84,7 +84,9 @@ import app.stade.ui.screens.VerifyContactScreen
 import app.stade.ui.screens.SecuritySettingsScreen
 import app.stade.ui.i18n.LocalStrings
 import app.stade.ui.theme.StadeColors
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private sealed class PanelRight {
     data object Empty : PanelRight()
@@ -158,9 +160,11 @@ fun TwoPanelLayout(
                     onClick = {
                         deleting = true
                         scope.launch {
-                            runCatching {
-                                container.sync.forgetContact(c.id)
-                                container.contacts.purge(c.id)
+                            withContext(Dispatchers.Default) {
+                                runCatching {
+                                    container.sync.forgetContact(c.id)
+                                    container.contacts.purge(c.id)
+                                }
                             }
                             val currentRight = right
                             if (currentRight is PanelRight.Chat && currentRight.contactId == c.id) {
