@@ -15,7 +15,6 @@ class FileVault(private val rootDir: File) : Vault {
     private val metaFile: File = File(rootDir, "stade.vault")
     private val encryptedDb: File = File(rootDir, "stade.db.enc")
     private val plaintextDb: File = File(rootDir, "stade.db")
-    // sessionFile: session-file mekanizması kaldırıldı; yalnızca eski dosyaları temizlemek için referans.
     private val sessionFile: File = File(rootDir, "stade.session")
 
     private val rng = SecureRandom()
@@ -80,10 +79,8 @@ class FileVault(private val rootDir: File) : Vault {
         unlocked = true
         if (plaintextDb.exists()) {
             encryptFile(plaintextDb, encryptedDb, newDek)
-        } else if (encryptedDb.exists()) {
-            decryptFile(encryptedDb, plaintextDb, newDek)
         } else {
-            encryptedDb.writeBytes(emptyEncryptedPayload(newDek))
+            if (encryptedDb.exists()) runCatching { secureDelete(encryptedDb) }
         }
         zero(kek)
     }
@@ -129,9 +126,21 @@ class FileVault(private val rootDir: File) : Vault {
         writeMeta(meta)
         cached = meta
         dek = decryptedDek
+        if (plaintextDb.exists() && !isValidSqliteFile(plaintextDb)) {
+            runCatching { plaintextDb.delete() }
+        }
         if (!plaintextDb.exists()) {
             if (encryptedDb.exists()) {
-                decryptFile(encryptedDb, plaintextDb, decryptedDek)
+                val ok = runCatching {
+                    decryptFile(encryptedDb, plaintextDb, decryptedDek)
+                }.isSuccess
+                if (!ok) {
+                    runCatching { secureDelete(encryptedDb) }
+                    runCatching { if (plaintextDb.exists()) secureDelete(plaintextDb) }
+                } else if (plaintextDb.exists() && !isValidSqliteFile(plaintextDb)) {
+                    runCatching { plaintextDb.delete() }
+                    runCatching { secureDelete(encryptedDb) }
+                }
             }
         }
         unlocked = true
@@ -140,14 +149,7 @@ class FileVault(private val rootDir: File) : Vault {
     }
 
     override fun tryAutoUnlock(): Boolean {
-        // Session dosyası mekanizması kaldırıldı.
-        // "Asla" kilit zaman aşımı artık yalnızca bellek tabanlıdır:
-        //   • Uygulama arka planda çalışırken dönüldüğünde FileVault.unlocked == true,
-        //     bu nedenle ilk satır true döner → PIN istenmez.
-        //   • Uygulama tamamen kapatılıp yeniden başlatıldığında yeni bir FileVault
-        //     örneği oluşur ve unlocked == false olur → aşağıda false döner → PIN istenir.
         if (unlocked) return true
-        // Eski bir session dosyası kalmışsa güvenli şekilde sil.
         if (sessionFile.exists()) runCatching { secureDelete(sessionFile) }
         return false
     }
@@ -328,24 +330,9 @@ class FileVault(private val rootDir: File) : Vault {
         dest.writeBytes(pt)
     }
 
-    private fun emptyEncryptedPayload(key: ByteArray): ByteArray {
-        val nonce = ByteArray(NONCE_LEN).also { rng.nextBytes(it) }
-        val ct = gcmEncrypt(key, nonce, ByteArray(0))
-        val out = ByteArray(DB_HEADER_LEN + ct.size)
-        val buf = ByteBuffer.wrap(out)
-        buf.put(DB_MAGIC)
-        buf.put(DB_VERSION)
-        buf.put(nonce)
-        buf.put(ct)
-        return out
-    }
-
     private fun readMeta(): Meta? {
         if (!metaFile.exists()) return null
         val bytes = runCatching { metaFile.readBytes() }.getOrNull() ?: return null
-        // MIN_META_SIZE_LEGACY = eski vault formatı (screenshotBlocking baytı olmadan);
-        // geriye dönük uyum için bu sabit kullanılır — ileride yeni alanlar eklenirse
-        // yalnızca MIN_META_SIZE_LEGACY tanımı güncellenir, bu satır değişmez.
         if (bytes.size < MIN_META_SIZE_LEGACY) return null
         val buf = ByteBuffer.wrap(bytes)
         val magic = ByteArray(4).also { buf.get(it) }
@@ -409,12 +396,21 @@ class FileVault(private val rootDir: File) : Vault {
     }
 
     private fun syncSessionFile() {
-        // Session dosyası mekanizması artık kullanılmıyor.
-        // "Asla" kilit: arka plan koruması process'in bellekte canlı olmasına dayanır,
-        // kalıcı dosyaya değil. Mevcut dosya varsa güvenlik gereği temizle.
         if (sessionFile.exists()) runCatching { secureDelete(sessionFile) }
     }
 
+    private fun isValidSqliteFile(f: File): Boolean {
+        if (f.length() < 16L) return false
+        return try {
+            val header = ByteArray(16)
+            f.inputStream().use { it.read(header) }
+            header[0] == 0x53.toByte() && header[1] == 0x51.toByte() &&
+            header[2] == 0x4C.toByte() && header[3] == 0x69.toByte() &&
+            header[4] == 0x74.toByte() && header[5] == 0x65.toByte()
+        } catch (_: Throwable) {
+            false
+        }
+    }
 
     private fun secureDelete(f: File) {
         try {
@@ -450,16 +446,11 @@ class FileVault(private val rootDir: File) : Vault {
         private const val VERIFIER_CT_LEN = 16 + 16
         private const val KEY_BITS = 256
         private const val TAG_BITS = 128
-        // OWASP 2023 önerisi: PBKDF2-HMAC-SHA256 için >= 600k.
-        // Mevcut vault'lar meta dosyasında kendi `iterations` değerlerini sakladığından
-        // bu değişiklik yalnızca yeni kurulumları ve şifre değişikliklerini etkiler;
-        // eski vault'lar güvenle açılmaya devam eder.
         private const val KDF_ITERS = 600_000
         private const val LOCKOUT_THRESHOLD = 5
         private const val MIN_META_SIZE =
             4 + 1 + SALT_LEN + 4 + NONCE_LEN + VERIFIER_CT_LEN + NONCE_LEN + DEK_CT_LEN + 4 + 8 + 1 + 4 + 1
-
-        private const val MIN_META_SIZE_LEGACY = MIN_META_SIZE - 1 // screenshotBlocking baytı yok
+        private const val MIN_META_SIZE_LEGACY = MIN_META_SIZE - 1
         private val VERIFIER_PLAIN = byteArrayOf(
             'S'.code.toByte(), 'T'.code.toByte(), 'A'.code.toByte(), 'D'.code.toByte(),
             'E'.code.toByte(), '-'.code.toByte(), 'V'.code.toByte(), 'E'.code.toByte(),
