@@ -28,7 +28,10 @@ import app.stade.ui.components.Avatar
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.PersonAdd
+import app.stade.group.GroupInfo
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Verified
@@ -84,11 +87,14 @@ fun ContactsScreen(
     container: AppContainer,
     owner: LocalIdentity,
     onOpenChat: (String) -> Unit,
+    onOpenGroupChat: (String) -> Unit,
     onOpenSettings: () -> Unit,
     onAddContact: () -> Unit,
+    onCreateGroup: () -> Unit,
     onLongPressVerify: (String) -> Unit
 ) {
     val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
+    val groups by container.groups.observeGroups(owner.id).collectAsState(initial = emptyList())
     val connectedSet by container.sync.connectedContacts.collectAsState()
     val scope = rememberCoroutineScope()
     val strings = LocalStrings.current
@@ -310,15 +316,39 @@ fun ContactsScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddContact) {
-                Icon(Icons.Default.PersonAdd, contentDescription = strings.addContactAction)
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                FloatingActionButton(
+                    onClick = onCreateGroup,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ) {
+                    Icon(Icons.Default.GroupAdd, contentDescription = strings.createGroupAction)
+                }
+                FloatingActionButton(onClick = onAddContact) {
+                    Icon(Icons.Default.PersonAdd, contentDescription = strings.addContactAction)
+                }
             }
         }
     ) { padding ->
-        if (contacts.isEmpty()) {
+        if (contacts.isEmpty() && groups.isEmpty()) {
             EmptyContacts(Modifier.fillMaxSize().padding(padding))
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
+                if (groups.isNotEmpty()) {
+                    items(groups, key = { "grp_${it.id}" }) { group ->
+                        val lastMsg = remember(group.id) { container.groups.lastMessage(group.id) }
+                        val unread = remember(group.id) { container.groups.unreadCount(group.id) }
+                        GroupRow(
+                            group = group,
+                            lastMessage = lastMsg?.body,
+                            unread = unread,
+                            onClick = { onOpenGroupChat(group.id) }
+                        )
+                    }
+                    if (contacts.isNotEmpty()) {
+                        item { HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp)) }
+                    }
+                }
                 items(filtered, key = { it.id }) { contact ->
                     val lastMsg by container.messages.observeLastMessage(contact.id).collectAsState(initial = null)
                     val unread by container.messages.observeUnreadCount(contact.id).collectAsState(initial = 0L)
@@ -479,15 +509,67 @@ private fun ContactRow(
 }
 
 @Composable
-private fun Avatar(nickname: String, size: Dp = 52.dp) {
-    Box(
-        Modifier.size(size).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            nickname.firstOrNull()?.uppercase() ?: "?",
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            style = MaterialTheme.typography.titleMedium
-        )
+private fun GroupRow(
+    group: GroupInfo,
+    lastMessage: String?,
+    unread: Long,
+    onClick: () -> Unit
+) {
+    val strings = LocalStrings.current
+    Surface(modifier = Modifier.fillMaxWidth(), color = Color.Transparent) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Group,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    group.name,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    lastMessage ?: strings.noMessages,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    maxLines = 1
+                )
+            }
+            if (unread > 0) {
+                Box(
+                    Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        unread.toString(),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+            }
+        }
     }
 }
+
+

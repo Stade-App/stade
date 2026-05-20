@@ -20,6 +20,8 @@ import app.stade.security.SessionTimeout
 import app.stade.ui.screens.AddContactScreen
 import app.stade.ui.screens.ChatScreen
 import app.stade.ui.screens.ContactsScreen
+import app.stade.ui.screens.CreateGroupScreen
+import app.stade.ui.screens.GroupChatScreen
 import app.stade.ui.screens.LockScreen
 import app.stade.ui.screens.OnboardingScreen
 import app.stade.ui.screens.PinSetupScreen
@@ -41,6 +43,8 @@ sealed interface Screen {
     data object Onboarding : Screen
     data object Contacts : Screen
     data class Chat(val contactId: String) : Screen
+    data class GroupChat(val groupId: String) : Screen
+    data object CreateGroup : Screen
     data class Verify(val contactId: String) : Screen
     data object Settings : Screen
     data object Security : Screen
@@ -171,6 +175,7 @@ private fun UnlockedApp(
         val current = identity
         if (current != null) {
             container.connections.start(current)
+            container.groupChat.start(current, this)
         } else {
             container.connections.stop()
         }
@@ -189,6 +194,8 @@ private fun UnlockedApp(
         ) {
             when (val s = screen) {
                 is Screen.Chat -> screen = Screen.Contacts
+                is Screen.GroupChat -> screen = Screen.Contacts
+                Screen.CreateGroup -> screen = Screen.Contacts
                 is Screen.Verify -> screen = Screen.Contacts
                 Screen.Settings -> screen = Screen.Contacts
                 Screen.Security -> screen = Screen.Settings
@@ -267,14 +274,29 @@ private fun UnlockedApp(
                 owner = identity!!,
                 contactId = (screen as Screen.Chat).contactId,
                 onBack = { screen = Screen.Contacts },
-                onVerify = { screen = Screen.Verify((screen as Screen.Chat).contactId) }
+                onVerify = { screen = Screen.Verify((screen as Screen.Chat).contactId) },
+                onContactDeleted = { screen = Screen.Contacts }
+            )
+            screen is Screen.GroupChat -> GroupChatScreen(
+                container = container,
+                owner = identity!!,
+                groupId = (screen as Screen.GroupChat).groupId,
+                onBack = { screen = Screen.Contacts }
+            )
+            screen == Screen.CreateGroup -> CreateGroupScreen(
+                container = container,
+                owner = identity!!,
+                onBack = { screen = Screen.Contacts },
+                onGroupCreated = { groupId -> screen = Screen.GroupChat(groupId) }
             )
             else -> ContactsScreen(
                 container = container,
                 owner = identity!!,
                 onOpenChat = { screen = Screen.Chat(it) },
+                onOpenGroupChat = { screen = Screen.GroupChat(it) },
                 onOpenSettings = { screen = Screen.Settings },
                 onAddContact = { screen = Screen.AddContact },
+                onCreateGroup = { screen = Screen.CreateGroup },
                 onLongPressVerify = { screen = Screen.Verify(it) }
             )
         }

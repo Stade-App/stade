@@ -5,8 +5,13 @@ import app.stade.contact.ContactManager
 import app.stade.contact.HandshakeService
 import app.stade.contact.InvitePayload
 import app.stade.crypto.CryptoApi
+import app.stade.crypto.Encoding
 import app.stade.crypto.PqCrypto
 import app.stade.crypto.RatchetSessions
+import app.stade.group.GRP_JOIN_PREFIX
+import app.stade.group.GRP_MSG_PREFIX
+import app.stade.group.GRP_WELCOME_PREFIX
+import app.stade.group.GroupManager
 import app.stade.identity.LocalIdentity
 import app.stade.identity.StadeId
 import app.stade.message.MessageManager
@@ -37,7 +42,8 @@ class SyncEngine(
     private val messages: MessageManager,
     private val ratchet: RatchetSessions,
     private val outbox: Outbox,
-    private val handshakeService: HandshakeService
+    private val handshakeService: HandshakeService,
+    val groupManager: GroupManager? = null
 ) {
     private val protocolVersion = 2
     private val json = Json { ignoreUnknownKeys = true }
@@ -54,6 +60,7 @@ class SyncEngine(
         data class ContactConnected(val contactId: String, val isNew: Boolean) : SyncEvent
         data class ContactDisconnected(val contactId: String) : SyncEvent
         data class MessageReceived(val contactId: String, val messageId: String) : SyncEvent
+        data class GroupMessageReceived(val groupId: String) : SyncEvent
         data class HandshakeRejected(val reason: String) : SyncEvent
         data class DecryptFailed(val contactId: String) : SyncEvent
         data class SendFailed(val contactId: String, val reason: String) : SyncEvent
@@ -380,11 +387,39 @@ class SyncEngine(
                         _events.tryEmit(SyncEvent.DecryptFailed(contact.id))
                         return
                     }
-                    val saved = messages.saveIncoming(payload.messageId, contact.id, plain.decodeToString(), payload.timestamp)
-                    if (saved != null) {
-                        _events.tryEmit(SyncEvent.MessageReceived(contact.id, payload.messageId))
-                        contacts.markSeen(contact.id, payload.timestamp)
+                    val bodyStr = plain.decodeToString()
+
+                    when {
+                        groupManager != null && bodyStr.startsWith(GRP_MSG_PREFIX) -> {
+                            val groupId = groupManager.handleIncomingGroupMsg(contact.id, payload.messageId, bodyStr, payload.timestamp)
+                            if (groupId != null) _events.tryEmit(SyncEvent.GroupMessageReceived(groupId))
+                        }
+                        groupManager != null && bodyStr.startsWith(GRP_JOIN_PREFIX) -> {
+                            val welcomeBody = groupManager.handleJoinRequest(contact.id, bodyStr)
+                            if (welcomeBody != null) {
+                                runCatching {
+                                    val msgId = Encoding.toHex(crypto.randomBytes(16))
+                                    val ts = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+                                    val sealed = ratchet.seal(owner, contact, welcomeBody.encodeToByteArray())
+                                    val mp = MessagePayload(msgId, ts, sealed)
+                                    val frame = json.encodeToString(MessagePayload.serializer(), mp).encodeToByteArray()
+                                    outbox.enqueue(contact.id, msgId, frame)
+                                    outboxSignal.tryEmit(Unit)
+                                }
+                            }
+                        }
+                        groupManager != null && bodyStr.startsWith(GRP_WELCOME_PREFIX) -> {
+                            groupManager.handleGroupWelcome(owner.id, bodyStr)
+                        }
+                        else -> {
+                            val saved = messages.saveIncoming(payload.messageId, contact.id, bodyStr, payload.timestamp)
+                            if (saved != null) {
+                                _events.tryEmit(SyncEvent.MessageReceived(contact.id, payload.messageId))
+                                contacts.markSeen(contact.id, payload.timestamp)
+                            }
+                        }
                     }
+
                     val ack = AckPayload(payload.messageId)
                     runCatching {
                         connection.send(FrameCodec.encode(SyncRecord(RecordType.ACK, json.encodeToString(AckPayload.serializer(), ack).encodeToByteArray())))

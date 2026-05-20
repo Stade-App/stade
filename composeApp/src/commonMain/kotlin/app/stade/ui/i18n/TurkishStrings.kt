@@ -266,5 +266,17 @@ object TurkishStrings : AppStrings() {
     override val photoTooBig = "Fotoğraf çok büyük (maks. 3 MB)"
     override val tapToViewPhoto = "Görüntülemek için dokun"
     override val closePhoto = "Kapat"
+
+    override val createGroupTitle = "Grup Oluştur"
+    override val createGroupAction = "Grup Oluştur"
+    override val groupNameLabel = "Grup adı"
+    override val selectMembersHint = "Gruba eklenecek üyeleri seç:"
+    override val groupInviteTitle = "Grup Davet Linki"
+    override val groupInviteBody = "Bu linki gruba davet etmek istediğin kişiyle paylaş. Kişinin zaten rehberinde kayıtlı olması gerekir."
+    override val copyInviteLink = "Linki Kopyala"
+    override val deleteGroupTitle = "Grubu Sil"
+    override val deleteGroupBody = "Tüm grup mesajları ve üye kayıtları kalıcı olarak silinecek. Bu işlem geri alınamaz."
+    override val groupGenerateInvite = "Davet linki oluştur"
+    override fun groupMemberCount(count: Int) = "$count üye"
 }
 

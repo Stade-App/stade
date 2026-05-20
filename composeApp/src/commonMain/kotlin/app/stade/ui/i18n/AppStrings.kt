@@ -213,6 +213,19 @@ abstract class AppStrings {
     abstract val photoTooBig: String
     abstract val tapToViewPhoto: String
     abstract val closePhoto: String
+
+    // Group chat
+    abstract val createGroupTitle: String
+    abstract val createGroupAction: String
+    abstract val groupNameLabel: String
+    abstract val selectMembersHint: String
+    abstract val groupInviteTitle: String
+    abstract val groupInviteBody: String
+    abstract val copyInviteLink: String
+    abstract val deleteGroupTitle: String
+    abstract val deleteGroupBody: String
+    abstract val groupGenerateInvite: String
+    abstract fun groupMemberCount(count: Int): String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

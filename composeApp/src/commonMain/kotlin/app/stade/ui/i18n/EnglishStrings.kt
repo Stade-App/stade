@@ -267,5 +267,18 @@ object EnglishStrings : AppStrings() {
     override val photoTooBig = "Photo is too large (max 3 MB)"
     override val tapToViewPhoto = "Tap to view"
     override val closePhoto = "Close"
+
+    // Group chat
+    override val createGroupTitle = "Create Group"
+    override val createGroupAction = "Create Group"
+    override val groupNameLabel = "Group name"
+    override val selectMembersHint = "Select members to add to the group:"
+    override val groupInviteTitle = "Group Invite Link"
+    override val groupInviteBody = "Share this link with someone to invite them to the group. They must already be your contact."
+    override val copyInviteLink = "Copy Link"
+    override val deleteGroupTitle = "Delete Group"
+    override val deleteGroupBody = "All group messages and member records will be permanently deleted. This action cannot be undone."
+    override val groupGenerateInvite = "Generate invite link"
+    override fun groupMemberCount(count: Int) = "$count members"
 }
 

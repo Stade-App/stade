@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -77,6 +78,8 @@ import app.stade.ui.components.BrandMark
 import app.stade.ui.components.formatChatTime
 import app.stade.ui.screens.AddContactScreen
 import app.stade.ui.screens.ChatScreen
+import app.stade.ui.screens.CreateGroupScreen
+import app.stade.ui.screens.GroupChatScreen
 import app.stade.ui.screens.PinSetupScreen
 import app.stade.ui.screens.SettingsScreen
 import app.stade.ui.screens.TransportsScreen
@@ -91,6 +94,8 @@ import kotlinx.coroutines.withContext
 private sealed class PanelRight {
     data object Empty : PanelRight()
     data class Chat(val contactId: String) : PanelRight()
+    data class GroupChat(val groupId: String) : PanelRight()
+    data object CreateGroup : PanelRight()
     data object Settings : PanelRight()
     data object Security : PanelRight()
     data object Transports : PanelRight()
@@ -109,6 +114,7 @@ fun TwoPanelLayout(
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
+    val groups by container.groups.observeGroups(owner.id).collectAsState(initial = emptyList())
     val connectedSet by container.sync.connectedContacts.collectAsState()
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
     var query by remember { mutableStateOf("") }
@@ -292,6 +298,67 @@ fun TwoPanelLayout(
                     } else {
                         Box(modifier = Modifier.fillMaxSize()) {
                             LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                if (groups.isNotEmpty()) {
+                                    items(groups, key = { "grp_${it.id}" }) { group ->
+                                        val lastGroupMsg = remember(group.id) { container.groups.lastMessage(group.id) }
+                                        val groupUnread = remember(group.id) { container.groups.unreadCount(group.id) }
+                                        val isGroupSelected = right is PanelRight.GroupChat && (right as PanelRight.GroupChat).groupId == group.id
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            color = if (isGroupSelected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable { right = PanelRight.GroupChat(group.id) }
+                                                    .padding(horizontal = 16.dp, vertical = 13.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    Modifier
+                                                        .size(44.dp)
+                                                        .clip(CircleShape)
+                                                        .background(MaterialTheme.colorScheme.tertiaryContainer),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Group,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                        modifier = Modifier.size(22.dp)
+                                                    )
+                                                }
+                                                Spacer(Modifier.width(12.dp))
+                                                Column(Modifier.weight(1f)) {
+                                                    Text(group.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
+                                                    if (lastGroupMsg != null) {
+                                                        Spacer(Modifier.height(2.dp))
+                                                        Text(
+                                                            lastGroupMsg.body,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                }
+                                                if (groupUnread > 0) {
+                                                    Box(
+                                                        Modifier.size(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            groupUnread.toString(),
+                                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    item { HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp)) }
+                                }
                                 items(filtered, key = { it.id }) { contact ->
                                     val lastMsg by container.messages.observeLastMessage(contact.id)
                                         .collectAsState(initial = null)
@@ -334,6 +401,15 @@ fun TwoPanelLayout(
                                     }
                                 }
                                 item { Spacer(Modifier.height(80.dp)) }
+                            }
+                            FloatingActionButton(
+                                onClick = { right = PanelRight.CreateGroup },
+                                modifier = Modifier.align(Alignment.BottomEnd)
+                                    .padding(bottom = 16.dp, end = 80.dp),
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ) {
+                                Icon(Icons.Default.Group, contentDescription = strings.createGroupTitle)
                             }
                             FloatingActionButton(
                                 onClick = { right = PanelRight.AddContact },
@@ -438,6 +514,20 @@ fun TwoPanelLayout(
                     owner = owner,
                     contactId = rp.contactId,
                     onBack = { right = PanelRight.Chat(rp.contactId) }
+                )
+
+                is PanelRight.CreateGroup -> CreateGroupScreen(
+                    container = container,
+                    owner = owner,
+                    onBack = { right = PanelRight.Empty },
+                    onGroupCreated = { groupId -> right = PanelRight.GroupChat(groupId) }
+                )
+
+                is PanelRight.GroupChat -> GroupChatScreen(
+                    container = container,
+                    owner = owner,
+                    groupId = rp.groupId,
+                    onBack = { right = PanelRight.Empty }
                 )
             }
         }

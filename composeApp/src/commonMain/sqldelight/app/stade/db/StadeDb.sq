@@ -215,3 +215,90 @@ DELETE FROM TransportSetting;
 wipeKeyValue:
 DELETE FROM KeyValue;
 
+CREATE TABLE StadeGroup (
+    id TEXT NOT NULL PRIMARY KEY,
+    ownerId TEXT NOT NULL,
+    name TEXT NOT NULL,
+    inviteToken TEXT NOT NULL,
+    createdAt INTEGER NOT NULL
+);
+
+CREATE TABLE GroupMember (
+    groupId TEXT NOT NULL,
+    contactId TEXT NOT NULL,
+    joinedAt INTEGER NOT NULL,
+    PRIMARY KEY(groupId, contactId)
+);
+
+CREATE TABLE GroupMessage (
+    id TEXT NOT NULL PRIMARY KEY,
+    groupId TEXT NOT NULL,
+    senderId TEXT NOT NULL,
+    body TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    outgoing INTEGER NOT NULL DEFAULT 0,
+    read INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX idxGroupMessage ON GroupMessage(groupId, timestamp);
+
+insertGroup:
+INSERT INTO StadeGroup(id, ownerId, name, inviteToken, createdAt) VALUES (?, ?, ?, ?, ?);
+
+selectGroups:
+SELECT * FROM StadeGroup WHERE ownerId = ? ORDER BY name;
+
+selectGroup:
+SELECT * FROM StadeGroup WHERE id = ?;
+
+selectGroupByToken:
+SELECT * FROM StadeGroup WHERE inviteToken = ?;
+
+deleteGroup:
+DELETE FROM StadeGroup WHERE id = ?;
+
+insertGroupMember:
+INSERT OR IGNORE INTO GroupMember(groupId, contactId, joinedAt) VALUES (?, ?, ?);
+
+selectGroupMembers:
+SELECT * FROM GroupMember WHERE groupId = ?;
+
+memberGroupIds:
+SELECT groupId FROM GroupMember WHERE contactId = ?;
+
+deleteGroupMember:
+DELETE FROM GroupMember WHERE groupId = ? AND contactId = ?;
+
+deleteGroupMembers:
+DELETE FROM GroupMember WHERE groupId = ?;
+
+insertGroupMessage:
+INSERT INTO GroupMessage(id, groupId, senderId, body, timestamp, outgoing, read) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+selectGroupMessages:
+SELECT * FROM GroupMessage WHERE groupId = ? ORDER BY timestamp ASC;
+
+selectLastGroupMessage:
+SELECT * FROM GroupMessage WHERE groupId = ? ORDER BY timestamp DESC LIMIT 1;
+
+countGroupUnread:
+SELECT COUNT(*) FROM GroupMessage WHERE groupId = ? AND read = 0 AND outgoing = 0;
+
+markGroupRead:
+UPDATE GroupMessage SET read = 1 WHERE groupId = ?;
+
+groupMessageExists:
+SELECT COUNT(*) FROM GroupMessage WHERE id = ?;
+
+deleteGroupMessages:
+DELETE FROM GroupMessage WHERE groupId = ?;
+
+wipeGroups:
+DELETE FROM StadeGroup;
+
+wipeGroupMembers:
+DELETE FROM GroupMember;
+
+wipeGroupMessages:
+DELETE FROM GroupMessage;
+
