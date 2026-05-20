@@ -59,64 +59,64 @@ fun StadeApp(boot: BootContext) {
     val locale by getLocalePreference()
     StadeTheme {
         CompositionLocalProvider(LocalStrings provides localeToStrings(locale)) {
-        var initialized by remember { mutableStateOf(vault.isInitialized()) }
-        var unlocked by remember { mutableStateOf(vault.isUnlocked()) }
-        var autoUnlockTried by remember { mutableStateOf(false) }
-        var container by remember { mutableStateOf<AppContainer?>(null) }
-        val scope = rememberCoroutineScope()
+            var initialized by remember { mutableStateOf(vault.isInitialized()) }
+            var unlocked by remember { mutableStateOf(vault.isUnlocked()) }
+            var autoUnlockTried by remember { mutableStateOf(false) }
+            var container by remember { mutableStateOf<AppContainer?>(null) }
+            val scope = rememberCoroutineScope()
 
-        LaunchedEffect(initialized) {
-            if (initialized && !unlocked && !autoUnlockTried) {
-                val ok = withContext(Dispatchers.Default) { vault.tryAutoUnlock() }
-                autoUnlockTried = true
-                if (ok) unlocked = true
+            LaunchedEffect(initialized) {
+                if (initialized && !unlocked && !autoUnlockTried) {
+                    val ok = withContext(Dispatchers.Default) { vault.tryAutoUnlock() }
+                    autoUnlockTried = true
+                    if (ok) unlocked = true
+                }
             }
-        }
 
-        when {
-            !initialized -> PinSetupScreen(
-                vault = vault,
-                requireCurrent = false,
-                onDone = {
-                    initialized = true
-                    unlocked = true
-                },
-                onCancel = { }
-            )
-            !unlocked -> {
-                if (autoUnlockTried) {
-                    LockScreen(
-                        vault = vault,
-                        onUnlocked = { unlocked = true },
-                        onForgotPin = {
-                            initialized = vault.isInitialized()
-                            container = null
-                            autoUnlockTried = true
+            when {
+                !initialized -> PinSetupScreen(
+                    vault = vault,
+                    requireCurrent = false,
+                    onDone = {
+                        initialized = true
+                        unlocked = true
+                    },
+                    onCancel = { }
+                )
+                !unlocked -> {
+                    if (autoUnlockTried) {
+                        LockScreen(
+                            vault = vault,
+                            onUnlocked = { unlocked = true },
+                            onForgotPin = {
+                                initialized = vault.isInitialized()
+                                container = null
+                                autoUnlockTried = true
+                            }
+                        )
+                    }
+                }
+                else -> {
+                    val active = container ?: remember { boot.buildContainer() }.also { container = it }
+                    UnlockedApp(
+                        container = active,
+                        onLockRequested = {
+                            scope.launch {
+                                withContext(Dispatchers.Default) { vault.flushAndKeep() }
+                                unlocked = false
+                            }
+                        },
+                        onWipeRequested = {
+                            scope.launch {
+                                active.wipeAllData()
+                                container = null
+                                initialized = vault.isInitialized()
+                                unlocked = false
+                            }
                         }
                     )
                 }
             }
-            else -> {
-                val active = container ?: remember { boot.buildContainer() }.also { container = it }
-                UnlockedApp(
-                    container = active,
-                    onLockRequested = {
-                        scope.launch {
-                            withContext(Dispatchers.Default) { vault.flushAndKeep() }
-                            unlocked = false
-                        }
-                    },
-                    onWipeRequested = {
-                        scope.launch {
-                            active.wipeAllData()
-                            container = null
-                            initialized = vault.isInitialized()
-                            unlocked = false
-                        }
-                    }
-                )
-            }
-        }
         }
     }
 }
@@ -184,13 +184,13 @@ private fun UnlockedApp(
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isWideScreen = maxWidth >= 600.dp
         val showTwoPanel = isWideScreen && identity != null &&
-            screen != Screen.Onboarding &&
-            screen !is Screen.PinSetup
+                screen != Screen.Onboarding &&
+                screen !is Screen.PinSetup
 
         PlatformBackHandler(
             enabled = !showTwoPanel &&
-                screen !is Screen.Onboarding &&
-                screen !is Screen.Contacts
+                    screen !is Screen.Onboarding &&
+                    screen !is Screen.Contacts
         ) {
             when (val s = screen) {
                 is Screen.Chat -> screen = Screen.Contacts

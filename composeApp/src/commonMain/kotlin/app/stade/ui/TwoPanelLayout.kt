@@ -1,5 +1,10 @@
 package app.stade.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +25,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PersonAdd
@@ -34,6 +41,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -118,6 +126,7 @@ fun TwoPanelLayout(
     val connectedSet by container.sync.connectedContacts.collectAsState()
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
     var query by remember { mutableStateOf("") }
+    var isFabExpanded by remember { mutableStateOf(false) }
     // Settings scroll pozisyonu: Settings→Security→Settings geçişinde kaybolmaması için burada tutulur
     val settingsListState = rememberLazyListState()
 
@@ -402,22 +411,76 @@ fun TwoPanelLayout(
                                 }
                                 item { Spacer(Modifier.height(80.dp)) }
                             }
-                            FloatingActionButton(
-                                onClick = { right = PanelRight.CreateGroup },
-                                modifier = Modifier.align(Alignment.BottomEnd)
-                                    .padding(bottom = 16.dp, end = 80.dp),
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(16.dp),
+                                horizontalAlignment = Alignment.End,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                Icon(Icons.Default.Group, contentDescription = strings.createGroupTitle)
-                            }
-                            FloatingActionButton(
-                                onClick = { right = PanelRight.AddContact },
-                                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            ) {
-                                Icon(Icons.Default.PersonAdd, contentDescription = strings.addContactAction)
+                                AnimatedVisibility(
+                                    visible = isFabExpanded,
+                                    enter = fadeIn() + expandVertically(),
+                                    exit = fadeOut() + shrinkVertically()
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.End,
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = strings.createGroupTitle,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            SmallFloatingActionButton(
+                                                onClick = {
+                                                    isFabExpanded = false
+                                                    right = PanelRight.CreateGroup
+                                                },
+                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                            ) {
+                                                Icon(Icons.Default.Group, contentDescription = strings.createGroupTitle)
+                                            }
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(
+                                                text = strings.addContactAction,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            SmallFloatingActionButton(
+                                                onClick = {
+                                                    isFabExpanded = false
+                                                    right = PanelRight.AddContact
+                                                },
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                            ) {
+                                                Icon(Icons.Default.PersonAdd, contentDescription = strings.addContactAction)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                FloatingActionButton(
+                                    onClick = { isFabExpanded = !isFabExpanded },
+                                    containerColor = if (isFabExpanded) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primary,
+                                    contentColor = if (isFabExpanded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
+                                ) {
+                                    Icon(
+                                        imageVector = if (isFabExpanded) Icons.Default.Close else Icons.Default.Add,
+                                        contentDescription = null
+                                    )
+                                }
                             }
                         }
                     }

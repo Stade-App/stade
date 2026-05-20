@@ -5,6 +5,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,6 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import app.stade.ui.components.Avatar
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Group
@@ -40,6 +43,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -101,6 +105,7 @@ fun ContactsScreen(
 
     var searchActive by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    var isFabExpanded by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
     var actionContact by remember { mutableStateOf<Contact?>(null) }
@@ -154,9 +159,9 @@ fun ContactsScreen(
                     HorizontalDivider()
                 }
             },
-                    confirmButton = {
-                        TextButton(onClick = { actionContact = null }) { Text(strings.cancel) }
-                    }
+            confirmButton = {
+                TextButton(onClick = { actionContact = null }) { Text(strings.cancel) }
+            }
         )
     }
 
@@ -316,16 +321,71 @@ fun ContactsScreen(
             )
         },
         floatingActionButton = {
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                FloatingActionButton(
-                    onClick = onCreateGroup,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                AnimatedVisibility(
+                    visible = isFabExpanded,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
                 ) {
-                    Icon(Icons.Default.GroupAdd, contentDescription = strings.createGroupAction)
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = strings.createGroupAction,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    isFabExpanded = false
+                                    onCreateGroup()
+                                },
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ) {
+                                Icon(Icons.Default.GroupAdd, contentDescription = strings.createGroupAction)
+                            }
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = strings.addContactAction,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    isFabExpanded = false
+                                    onAddContact()
+                                },
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ) {
+                                Icon(Icons.Default.PersonAdd, contentDescription = strings.addContactAction)
+                            }
+                        }
+                    }
                 }
-                FloatingActionButton(onClick = onAddContact) {
-                    Icon(Icons.Default.PersonAdd, contentDescription = strings.addContactAction)
+
+                FloatingActionButton(
+                    onClick = { isFabExpanded = !isFabExpanded },
+                    containerColor = if (isFabExpanded) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primary,
+                    contentColor = if (isFabExpanded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
+                ) {
+                    Icon(
+                        imageVector = if (isFabExpanded) Icons.Default.Close else Icons.Default.Add,
+                        contentDescription = null
+                    )
                 }
             }
         }
@@ -571,5 +631,3 @@ private fun GroupRow(
         }
     }
 }
-
-
