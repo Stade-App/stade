@@ -484,7 +484,7 @@ private fun ContactRow(
 ) {
     val haptic = LocalHapticFeedback.current
     val strings = LocalStrings.current
-    val subtleColor = remember(contact.id) { MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f) }
+    val subtleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = Color.Transparent,
@@ -580,7 +580,7 @@ private fun GroupRow(
     onClick: () -> Unit
 ) {
     val strings = LocalStrings.current
-    val subtleColor = remember(group.id) { MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f) }
+    val subtleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
     Surface(modifier = Modifier.fillMaxWidth(), color = Color.Transparent) {
         Row(
             modifier = Modifier

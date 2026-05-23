@@ -14,22 +14,21 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import app.stade.notification.clearAllMessageNotifications
 import app.stade.service.StadeService
 import app.stade.ui.StadeApp
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
+    /** Son uygulanan FLAG_SECURE durumu; aynı değerle tekrar setFlags/clearFlags çağrısını önler. */
+    private var lastSecureFlagState: Boolean? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        val app = (application as StadeApplication)
-        if (app.vault.isScreenshotBlockingEnabled()) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
                 lightScrim = android.graphics.Color.TRANSPARENT,
@@ -37,20 +36,12 @@ class MainActivity : ComponentActivity() {
             )
         )
         super.onCreate(savedInstanceState)
+        val app = (application as StadeApplication)
+        applySecureScreenFlag(app)
         startForegroundService(Intent(this, StadeService::class.java))
         askNotificationPermissionIfNeeded()
         handleIncomingInvite(intent)
         setContent { StadeApp(app.boot) }
-
-        // Ekran görüntüsü engelleme ayarı değiştiğinde (SecuritySettingsScreen'den)
-        // onResume'u beklemeden FLAG_SECURE'ü anında uygula.
-        lifecycleScope.launch {
-            app.containerFlow.collectLatest { container ->
-                container?.screenshotSettingTick?.collect {
-                    applySecureScreenFlag(app)
-                }
-            }
-        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -59,18 +50,28 @@ class MainActivity : ComponentActivity() {
         handleIncomingInvite(intent)
     }
 
+    override fun onStop() {
+        super.onStop()
+        // Uygulama arka plana geçtiğinde DB'yi arka planda şifrele.
+        // onDispose yerine burada yapılır; main thread'i bloklamaz.
+        val app = (application as StadeApplication)
+        val vault = app.container?.vault ?: return
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { vault.flushAndKeep() }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
-        // Ayar değişmiş olabilir; her öne geliş anında yeniden uygula.
         val app = (application as StadeApplication)
         applySecureScreenFlag(app)
         clearAllMessageNotifications()
     }
 
     /**
-     * Uygulama arka plandan ön plana döndüğünde pencere odağı yeniden kazanılır.
-     * FLAG_SECURE etkinken Android, arka plan geçişinde pencere yüzeyini serbest bırakabilir;
-     * odak geri geldiğinde Compose'u yeniden çizmeye zorlayarak gri ekranı önlüyoruz.
+     * FLAG_SECURE etkinken arka plandan dönerken pencere yüzeyi yeniden oluşturulabilir.
+     * Odak geri kazanıldığında decor view'ı invalidate ederek Compose'u yeniden çizmeye
+     * zorluyoruz; bu, gri ekran sorununu ortadan kaldırır.
      */
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -80,23 +81,20 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun applySecureScreenFlag(app: StadeApplication) {
-        // Vault her zaman StadeApplication.onCreate'de başlatılır; container'ın
-        // (null olabileceği soğuk başlatma dahil) hazır olmasını beklemeden
-        // doğrudan vault'tan okuruz. readMeta şifreli dosyada çalışır,
-        // PIN kilidi açma gerektirmez.
-        val enabled = app.vault.isScreenshotBlockingEnabled()
-        val hasSecure = (window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
-        when {
-            enabled && !hasSecure -> {
-                window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                // Yeni flag sonrası yüzeyi zorla yenile
-                window.decorView.invalidate()
-            }
-            !enabled && hasSecure -> {
-                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                window.decorView.invalidate()
-            }
-            // Zaten doğru durumda → dokunma
+        val enabled = app.container?.secrets?.isScreenshotBlockingEnabled() ?: false
+        // Durum değişmediyse dokunma.
+        if (enabled == lastSecureFlagState) return
+        // FLAG_SECURE hiç etkinleştirilmediyse clearFlags çağırmaya gerek yok;
+        // clearFlags çağrısı bile window surface'ını yeniden oluşturabilir ve gri ekrana yol açar.
+        if (lastSecureFlagState == null && !enabled) {
+            lastSecureFlagState = false
+            return
+        }
+        lastSecureFlagState = enabled
+        if (enabled) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
     }
 
@@ -114,9 +112,6 @@ class MainActivity : ComponentActivity() {
         val text = when {
             uri != null -> runCatching {
                 contentResolver.openInputStream(uri)?.use { stream ->
-                    // Güvenlik: dış kaynaktan (ACTION_VIEW / ACTION_SEND, mimeType=*/*) gelen
-                    // dosyayı sınırsız okumak OOM/DoS'a yol açar. Davet kodları base32
-                    // olduğundan birkaç MB'tan büyük olamaz; sert üst sınır uyguluyoruz.
                     val limit = MAX_INVITE_BYTES
                     val buffer = ByteArray(8 * 1024)
                     val out = java.io.ByteArrayOutputStream()
@@ -140,8 +135,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
-        // Davet kodu maksimum boyutu: ML-DSA imza + ML-KEM açık anahtar + Ed25519 + adresler
-        // tipik olarak ~7-8 KB; emniyet için cömert bir tavan.
         const val MAX_INVITE_BYTES = 256 * 1024
         const val MAX_INVITE_CHARS = 512 * 1024
     }

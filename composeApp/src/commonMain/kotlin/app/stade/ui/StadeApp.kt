@@ -84,17 +84,17 @@ fun StadeApp(boot: BootContext) {
                     onCancel = { }
                 )
                 !unlocked -> {
-                    if (autoUnlockTried) {
-                        LockScreen(
-                            vault = vault,
-                            onUnlocked = { unlocked = true },
-                            onForgotPin = {
-                                initialized = vault.isInitialized()
-                                container = null
-                                autoUnlockTried = true
-                            }
-                        )
-                    }
+                    // autoUnlockTried false iken blank frame oluşmaması için her zaman
+                    // bir şey render ediyoruz; LockScreen kendi içinde bekleme gösterir.
+                    LockScreen(
+                        vault = vault,
+                        onUnlocked = { unlocked = true },
+                        onForgotPin = {
+                            initialized = vault.isInitialized()
+                            container = null
+                            autoUnlockTried = true
+                        }
+                    )
                 }
                 else -> {
                     val active = container ?: remember { boot.buildContainer() }.also { container = it }
@@ -159,7 +159,10 @@ private fun UnlockedApp(
 
     DisposableEffect(container) {
         onDispose {
-            runCatching { container.vault.flushAndKeep() }
+            // flushAndKeep burada kasıtlı olarak ÇAĞRILMIYOR.
+            // onLockRequested zaten Dispatchers.Default üzerinde flushAndKeep çağırıyor;
+            // burada main thread'de senkron dosya I/O yapmak LockScreen render edilirken
+            // kare düşürür ve gri ekrana yol açar.
         }
     }
 
