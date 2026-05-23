@@ -98,8 +98,16 @@ fun GroupChatScreen(
         onDispose { container.groups.markRead(groupId) }
     }
 
+    var prevMessageCount by remember { mutableStateOf(0) }
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+        if (messages.isNotEmpty()) {
+            if (prevMessageCount == 0) {
+                listState.scrollToItem(messages.size - 1)
+            } else {
+                listState.animateScrollToItem(messages.size - 1)
+            }
+        }
+        prevMessageCount = messages.size
     }
 
     if (showInviteDialog && group != null) {

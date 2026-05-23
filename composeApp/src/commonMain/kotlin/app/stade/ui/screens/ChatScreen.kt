@@ -25,7 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,6 +67,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -129,7 +130,7 @@ fun ChatScreen(
     val contact = remember(contactId) { container.contacts.get(contactId) }
     val messages by container.messages.observeMessages(contactId).collectAsState(initial = emptyList())
     val connected by container.sync.connectedContacts.collectAsState()
-    val isOnline = connected.contains(contactId)
+    val isOnline by remember(contactId) { derivedStateOf { connected.contains(contactId) } }
     val diagnostics by container.connections.diagnostics.collectAsState()
     val listState = rememberLazyListState()
     var draft by remember { mutableStateOf(TextFieldValue("")) }
@@ -179,8 +180,17 @@ fun ChatScreen(
     }
 
     LaunchedEffect(contactId, messages.size) { container.messages.markRead(contactId) }
+
+    var prevMessageCount by remember { mutableStateOf(0) }
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.scrollToItem(messages.lastIndex)
+        if (messages.isNotEmpty()) {
+            if (prevMessageCount == 0) {
+                listState.scrollToItem(messages.lastIndex)
+            } else {
+                listState.animateScrollToItem(messages.lastIndex)
+            }
+        }
+        prevMessageCount = messages.size
     }
 
     val MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3 MB
@@ -383,8 +393,7 @@ fun ChatScreen(
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                         contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
-                        items(messages, key = { it.id }) { msg ->
-                            val idx = messages.indexOf(msg)
+                        itemsIndexed(messages, key = { _, msg -> msg.id }) { idx, msg ->
                             val prev = messages.getOrNull(idx - 1)
                             val tight = prev != null &&
                                     prev.direction == msg.direction &&

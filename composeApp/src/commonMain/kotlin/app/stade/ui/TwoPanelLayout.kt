@@ -58,6 +58,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -308,10 +309,10 @@ fun TwoPanelLayout(
                         Box(modifier = Modifier.fillMaxSize()) {
                             LazyColumn(modifier = Modifier.fillMaxSize()) {
                                 if (groups.isNotEmpty()) {
-                                    items(groups, key = { "grp_${it.id}" }) { group ->
+                                        items(groups, key = { "grp_${it.id}" }) { group ->
                                         val lastGroupMsg = remember(group.id) { container.groups.lastMessage(group.id) }
                                         val groupUnread = remember(group.id) { container.groups.unreadCount(group.id) }
-                                        val isGroupSelected = right is PanelRight.GroupChat && (right as PanelRight.GroupChat).groupId == group.id
+                                        val isGroupSelected by remember(group.id) { derivedStateOf { right is PanelRight.GroupChat && (right as? PanelRight.GroupChat)?.groupId == group.id } }
                                         Surface(
                                             modifier = Modifier.fillMaxWidth(),
                                             color = if (isGroupSelected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
@@ -373,10 +374,14 @@ fun TwoPanelLayout(
                                         .collectAsState(initial = null)
                                     val unread by container.messages.observeUnreadCount(contact.id)
                                         .collectAsState(initial = 0L)
-                                    val isSelected = when (val r = right) {
-                                        is PanelRight.Chat   -> r.contactId == contact.id
-                                        is PanelRight.Verify -> r.contactId == contact.id
-                                        else -> false
+                                    val isSelected by remember(contact.id) {
+                                        derivedStateOf {
+                                            when (val r = right) {
+                                                is PanelRight.Chat   -> r.contactId == contact.id
+                                                is PanelRight.Verify -> r.contactId == contact.id
+                                                else -> false
+                                            }
+                                        }
                                     }
                                     PanelContactRow(
                                         contact = contact,

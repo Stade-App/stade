@@ -60,6 +60,7 @@ import app.stade.ui.theme.StadeColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -235,9 +236,11 @@ fun ContactsScreen(
         query = ""
     }
 
-    val filtered = remember(contacts, query, searchActive) {
-        if (!searchActive || query.isBlank()) contacts
-        else contacts.filter { it.nickname.contains(query.trim(), ignoreCase = true) }
+    val filtered by remember {
+        derivedStateOf {
+            if (!searchActive || query.isBlank()) contacts
+            else contacts.filter { it.nickname.contains(query.trim(), ignoreCase = true) }
+        }
     }
 
     Scaffold(
@@ -396,8 +399,8 @@ fun ContactsScreen(
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
                 if (groups.isNotEmpty()) {
                     items(groups, key = { "grp_${it.id}" }) { group ->
-                        val lastMsg = remember(group.id) { container.groups.lastMessage(group.id) }
-                        val unread = remember(group.id) { container.groups.unreadCount(group.id) }
+                        val lastMsg by container.groups.observeLastMessage(group.id).collectAsState(initial = null)
+                        val unread by container.groups.observeUnreadCount(group.id).collectAsState(initial = 0L)
                         GroupRow(
                             group = group,
                             lastMessage = lastMsg?.body,
@@ -481,6 +484,7 @@ private fun ContactRow(
 ) {
     val haptic = LocalHapticFeedback.current
     val strings = LocalStrings.current
+    val subtleColor = remember(contact.id) { MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f) }
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = Color.Transparent,
@@ -544,7 +548,7 @@ private fun ContactRow(
                 Text(
                     lastMessage ?: strings.noMessages,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    color = subtleColor,
                     maxLines = 1
                 )
             }
@@ -576,6 +580,7 @@ private fun GroupRow(
     onClick: () -> Unit
 ) {
     val strings = LocalStrings.current
+    val subtleColor = remember(group.id) { MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f) }
     Surface(modifier = Modifier.fillMaxWidth(), color = Color.Transparent) {
         Row(
             modifier = Modifier
@@ -609,7 +614,7 @@ private fun GroupRow(
                 Text(
                     lastMessage ?: strings.noMessages,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    color = subtleColor,
                     maxLines = 1
                 )
             }

@@ -2,6 +2,8 @@ package app.stade.group
 
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
+import app.cash.sqldelight.coroutines.mapToOne
+import app.cash.sqldelight.coroutines.mapToOneOrNull
 import app.stade.crypto.CryptoApi
 import app.stade.crypto.Encoding
 import app.stade.db.StadeDb
@@ -29,20 +31,28 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
             GroupInfo(it.id, it.ownerId, it.name, it.inviteToken, it.createdAt, members)
         }
 
-    fun allGroups(ownerId: String): List<GroupInfo> =
-        db.stadeDbQueries.selectGroups(ownerId).executeAsList().map { row ->
-            val members = db.stadeDbQueries.selectGroupMembers(row.id).executeAsList().map { it.contactId }
-            GroupInfo(row.id, row.ownerId, row.name, row.inviteToken, row.createdAt, members)
+    fun allGroups(ownerId: String): List<GroupInfo> {
+        val rows = db.stadeDbQueries.selectGroups(ownerId).executeAsList()
+        if (rows.isEmpty()) return emptyList()
+        val membersByGroup = db.stadeDbQueries.selectAllGroupMembersForOwner(ownerId)
+            .executeAsList()
+            .groupBy({ it.groupId }, { it.contactId })
+        return rows.map { row ->
+            GroupInfo(row.id, row.ownerId, row.name, row.inviteToken, row.createdAt, membersByGroup[row.id].orEmpty())
         }
+    }
 
     fun observeGroups(ownerId: String): Flow<List<GroupInfo>> =
         db.stadeDbQueries.selectGroups(ownerId)
             .asFlow()
             .mapToList(Dispatchers.Default)
             .map { rows ->
+                if (rows.isEmpty()) return@map emptyList()
+                val membersByGroup = db.stadeDbQueries.selectAllGroupMembersForOwner(ownerId)
+                    .executeAsList()
+                    .groupBy({ it.groupId }, { it.contactId })
                 rows.map { row ->
-                    val members = db.stadeDbQueries.selectGroupMembers(row.id).executeAsList().map { it.contactId }
-                    GroupInfo(row.id, row.ownerId, row.name, row.inviteToken, row.createdAt, members)
+                    GroupInfo(row.id, row.ownerId, row.name, row.inviteToken, row.createdAt, membersByGroup[row.id].orEmpty())
                 }
             }
 
@@ -72,6 +82,17 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
             .mapToList(Dispatchers.Default)
             .map { rows -> rows.map { it.toGroupMessage() } }
 
+    fun observeLastMessage(groupId: String): Flow<GroupMessage?> =
+        db.stadeDbQueries.selectLastGroupMessage(groupId)
+            .asFlow()
+            .mapToOneOrNull(Dispatchers.Default)
+            .map { it?.toGroupMessage() }
+
+    fun observeUnreadCount(groupId: String): Flow<Long> =
+        db.stadeDbQueries.countGroupUnread(groupId)
+            .asFlow()
+            .mapToOne(Dispatchers.Default)
+
     fun lastMessage(groupId: String): GroupMessage? =
         db.stadeDbQueries.selectLastGroupMessage(groupId).executeAsOneOrNull()?.toGroupMessage()
 
@@ -100,8 +121,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
         if (senderId != contactId) return null
 
         val group = db.stadeDbQueries.selectGroup(groupId).executeAsOneOrNull() ?: return null
-        val isMember = db.stadeDbQueries.selectGroupMembers(groupId).executeAsList()
-            .any { it.contactId == contactId }
+        val isMember = db.stadeDbQueries.isGroupMember(groupId, contactId).executeAsOne() > 0L
         if (!isMember) return null
 
         if (db.stadeDbQueries.groupMessageExists(messageId).executeAsOne() > 0L) return groupId

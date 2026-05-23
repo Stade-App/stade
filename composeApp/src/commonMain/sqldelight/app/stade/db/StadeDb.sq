@@ -290,6 +290,14 @@ UPDATE GroupMessage SET read = 1 WHERE groupId = ?;
 groupMessageExists:
 SELECT COUNT(*) FROM GroupMessage WHERE id = ?;
 
+isGroupMember:
+SELECT COUNT(*) FROM GroupMember WHERE groupId = ? AND contactId = ?;
+
+selectAllGroupMembersForOwner:
+SELECT gm.groupId, gm.contactId FROM GroupMember gm
+JOIN StadeGroup g ON g.id = gm.groupId
+WHERE g.ownerId = ?;
+
 deleteGroupMessages:
 DELETE FROM GroupMessage WHERE groupId = ?;
 
