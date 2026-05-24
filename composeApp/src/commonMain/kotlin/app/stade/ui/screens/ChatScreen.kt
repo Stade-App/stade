@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -195,16 +196,16 @@ fun ChatScreen(
 
     val MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3 MB
 
+    // Henüz gönderilmemiş, hazırlanmakta olan ek listesi
+    var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
+
     val imagePicker = rememberImagePickerLauncher { bytes ->
-        val c = contact ?: return@rememberImagePickerLauncher
         if (bytes.size > MAX_IMAGE_BYTES) {
             showNotification(strings.photoTooBig, NotificationKind.Error)
             return@rememberImagePickerLauncher
         }
-        scope.launch {
-            runCatching { container.chat.sendImage(owner, c, bytes) }
-                .onFailure { showNotification(strings.photoSendFailed, NotificationKind.Error) }
-        }
+        // Hemen göndermek yerine giriş listesine ekle
+        pendingImages = pendingImages + bytes
     }
 
     var prevColumnHeight by remember { mutableStateOf(Int.MAX_VALUE) }
@@ -409,13 +410,28 @@ fun ChatScreen(
 
                 Composer(
                     draft = draft,
+                    pendingImages = pendingImages,
                     onChange = { draft = it },
+                    onRemoveImage = { idx ->
+                        pendingImages = pendingImages.toMutableList().also { it.removeAt(idx) }
+                    },
                     onSend = {
                         val c = contact ?: return@Composer
                         val text = draft.text.trim()
-                        if (text.isEmpty()) return@Composer
+                        val images = pendingImages
+                        if (text.isEmpty() && images.isEmpty()) return@Composer
                         draft = TextFieldValue("")
-                        scope.launch { container.chat.send(owner, c, text) }
+                        pendingImages = emptyList()
+                        scope.launch {
+                            if (text.isNotEmpty()) {
+                                runCatching { container.chat.send(owner, c, text) }
+                                    .onFailure { showNotification(strings.sendFailed(it.message ?: ""), NotificationKind.Error) }
+                            }
+                            images.forEach { imageBytes ->
+                                runCatching { container.chat.sendImage(owner, c, imageBytes) }
+                                    .onFailure { showNotification(strings.photoSendFailed, NotificationKind.Error) }
+                            }
+                        }
                     },
                     onPickImage = { imagePicker.launch() }
                 )
@@ -635,69 +651,142 @@ private fun DiagnosticsCard(
 @Composable
 private fun Composer(
     draft: TextFieldValue,
+    pendingImages: List<ByteArray>,
     onChange: (TextFieldValue) -> Unit,
+    onRemoveImage: (Int) -> Unit,
     onSend: () -> Unit,
     onPickImage: () -> Unit
 ) {
     val strings = LocalStrings.current
-    Row(
+    val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty()
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .background(MaterialTheme.colorScheme.surface)
     ) {
-        IconButton(
-            onClick = onPickImage,
-            modifier = Modifier.size(44.dp)
+        // ── Bekleyen ek önizlemeleri ──────────────────────────────────────────
+        AnimatedVisibility(
+            visible = pendingImages.isNotEmpty(),
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it }
         ) {
-            Icon(
-                Icons.Default.AddPhotoAlternate,
-                contentDescription = strings.attachPhoto,
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-        TextField(
-            value = draft,
-            onValueChange = onChange,
-            modifier = Modifier
-                .weight(1f)
-                .onPreviewKeyEvent { keyEvent ->
-                    if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Enter) {
-                        if (keyEvent.isShiftPressed) {
-                            val cursor = draft.selection.end
-                            val newText = draft.text.substring(0, cursor) + "\n" + draft.text.substring(cursor)
-                            onChange(TextFieldValue(text = newText, selection = TextRange(cursor + 1)))
-                        } else {
-                            onSend()
-                        }
-                        true
-                    } else {
-                        false
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(pendingImages) { idx, bytes ->
+                    val bitmap = remember(bytes) {
+                        runCatching { bytes.decodeToImageBitmap() }.getOrNull()
                     }
-                },
-            placeholder = { Text(strings.typeMessagePlaceholder) },
-            maxLines = 5,
-            shape = RoundedCornerShape(24.dp),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                disabledIndicatorColor = Color.Transparent
-            )
-        )
-        FilledIconButton(
-            enabled = draft.text.isNotBlank(),
-            onClick = onSend,
-            modifier = Modifier.size(48.dp),
-            shape = CircleShape,
-            colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            )
+                    Box(modifier = Modifier.size(72.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (bitmap != null) {
+                                androidx.compose.foundation.Image(
+                                    bitmap = bitmap,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.BrokenImage,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+                        // İptal (X) butonu — sağ üst köşe
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.errorContainer)
+                                .clickable { onRemoveImage(idx) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = strings.closePhoto,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Metin girişi + gönderi satırı ────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.sendButton)
+            IconButton(
+                onClick = onPickImage,
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(
+                    Icons.Default.AddPhotoAlternate,
+                    contentDescription = strings.attachPhoto,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            TextField(
+                value = draft,
+                onValueChange = onChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .onPreviewKeyEvent { keyEvent ->
+                        if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Enter) {
+                            if (keyEvent.isShiftPressed) {
+                                val cursor = draft.selection.end
+                                val newText = draft.text.substring(0, cursor) + "\n" + draft.text.substring(cursor)
+                                onChange(TextFieldValue(text = newText, selection = TextRange(cursor + 1)))
+                            } else {
+                                onSend()
+                            }
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                placeholder = { Text(strings.typeMessagePlaceholder) },
+                maxLines = 5,
+                shape = RoundedCornerShape(24.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent
+                )
+            )
+            FilledIconButton(
+                enabled = canSend,
+                onClick = onSend,
+                modifier = Modifier.size(48.dp),
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.sendButton)
+            }
         }
     }
 }
