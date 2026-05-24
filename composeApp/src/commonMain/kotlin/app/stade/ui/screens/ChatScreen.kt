@@ -18,12 +18,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -33,7 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Attachment
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -42,11 +43,11 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -60,8 +61,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -100,7 +99,6 @@ import app.stade.notification.cancelMessagesNotification
 import app.stade.notification.clearAllMessageNotifications
 import app.stade.sync.SyncEngine
 import app.stade.transport.DialAttempt
-import app.stade.ui.ImagePickerLauncher
 import app.stade.ui.components.Avatar
 import app.stade.ui.components.formatChatTime
 import app.stade.ui.components.maskAddress
@@ -246,6 +244,7 @@ fun ChatScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -317,7 +316,6 @@ fun ChatScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .padding(padding)
-                .imePadding()
         ) {
             Column(modifier = Modifier.fillMaxSize().onSizeChanged { size ->
                 if (size.height < prevColumnHeight && messages.isNotEmpty()) {
@@ -648,6 +646,7 @@ private fun DiagnosticsCard(
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Composer(
     draft: TextFieldValue,
@@ -664,8 +663,9 @@ private fun Composer(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
+            .imePadding()
+            .navigationBarsPadding()
     ) {
-        // ── Bekleyen ek önizlemeleri ──────────────────────────────────────────
         AnimatedVisibility(
             visible = pendingImages.isNotEmpty(),
             enter = fadeIn() + slideInVertically { it },
@@ -705,7 +705,6 @@ private fun Composer(
                                 )
                             }
                         }
-                        // İptal (X) butonu — sağ üst köşe
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
@@ -717,9 +716,9 @@ private fun Composer(
                         ) {
                             Icon(
                                 Icons.Default.Close,
-                                contentDescription = strings.closePhoto,
+                                contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(14.dp)
                             )
                         }
                     }
@@ -727,29 +726,19 @@ private fun Composer(
             }
         }
 
-        // ── Metin girişi + gönderi satırı ────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            IconButton(
-                onClick = onPickImage,
-                modifier = Modifier.size(44.dp)
-            ) {
-                Icon(
-                    Icons.Default.AddPhotoAlternate,
-                    contentDescription = strings.attachPhoto,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            TextField(
+            androidx.compose.foundation.text.BasicTextField(
                 value = draft,
                 onValueChange = onChange,
                 modifier = Modifier
                     .weight(1f)
+                    .height(54.dp)
                     .onPreviewKeyEvent { keyEvent ->
                         if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Enter) {
                             if (keyEvent.isShiftPressed) {
@@ -764,32 +753,68 @@ private fun Composer(
                             false
                         }
                     },
-                placeholder = { Text(strings.typeMessagePlaceholder) },
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                 maxLines = 5,
-                shape = RoundedCornerShape(24.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent
-                )
+                decorationBox = { innerTextField ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                shape = RoundedCornerShape(54.dp)
+                            )
+                            .padding(start = 18.dp, end = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (draft.text.isEmpty()) {
+                                Text(
+                                    text = strings.typeMessagePlaceholder,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            innerTextField()
+                        }
+                        IconButton(
+                            onClick = onPickImage,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Attachment,
+                                contentDescription = strings.attachPhoto,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .rotate(270f)
+                            )
+                        }
+                    }
+                }
             )
+
             FilledIconButton(
                 enabled = canSend,
                 onClick = onSend,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(54.dp),
                 shape = CircleShape,
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.sendButton)
+                Icon(
+                    Icons.AutoMirrored.Filled.Send,
+                    contentDescription = strings.sendButton,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     }
 }
+
+
 
 
 @Composable
