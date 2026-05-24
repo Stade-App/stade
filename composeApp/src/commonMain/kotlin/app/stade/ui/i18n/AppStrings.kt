@@ -213,6 +213,8 @@ abstract class AppStrings {
     abstract val photoTooBig: String
     abstract val tapToViewPhoto: String
     abstract val closePhoto: String
+    abstract val removeAttachment: String
+    abstract fun attachmentCount(count: Int): String
 
     // Group chat
     abstract val createGroupTitle: String

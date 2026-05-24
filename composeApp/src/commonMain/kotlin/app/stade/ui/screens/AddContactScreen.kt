@@ -172,8 +172,10 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                     onValueChange = { pastedCode = it },
                     label = { Text(strings.inviteCodeLabel) },
                     placeholder = { Text("STADE2-…") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
+                    maxLines = 4,
                     shape = MaterialTheme.shapes.medium,
                     supportingText = {
                         val n = pastedCode.replace(Regex("[^A-Za-z0-9]"), "").length

@@ -84,14 +84,15 @@ fun StadeApp(boot: BootContext) {
                     onCancel = { }
                 )
                 !unlocked -> {
-                    // autoUnlockTried false iken blank frame oluşmaması için her zaman
-                    // bir şey render ediyoruz; LockScreen kendi içinde bekleme gösterir.
                     LockScreen(
                         vault = vault,
                         onUnlocked = { unlocked = true },
+                        onPrepareWipe = {
+                            container?.let { runCatching { it.close() } }
+                            container = null
+                        },
                         onForgotPin = {
                             initialized = vault.isInitialized()
-                            container = null
                             autoUnlockTried = true
                         }
                     )

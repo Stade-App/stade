@@ -106,6 +106,7 @@ import app.stade.ui.components.maskAddress
 import app.stade.ui.decodeToImageBitmap
 import app.stade.ui.i18n.LocalStrings
 import app.stade.ui.rememberImagePickerLauncher
+import app.stade.ui.rememberMultiImagePickerLauncher
 import app.stade.ui.theme.StadeColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -195,15 +196,18 @@ fun ChatScreen(
 
     val MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3 MB
 
-    val imagePicker = rememberImagePickerLauncher { bytes ->
-        val c = contact ?: return@rememberImagePickerLauncher
-        if (bytes.size > MAX_IMAGE_BYTES) {
+    // Gönderilmeden önce input alanında bekleyen fotoğraflar.
+    // Kullanıcı iptal edebilir, ek fotoğraf ekleyebilir veya yanına metin yazabilir.
+    var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
+
+    val imagePicker = rememberMultiImagePickerLauncher { bytesList ->
+        val accepted = bytesList.filter { it.size <= MAX_IMAGE_BYTES }
+        val rejected = bytesList.size - accepted.size
+        if (rejected > 0) {
             showNotification(strings.photoTooBig, NotificationKind.Error)
-            return@rememberImagePickerLauncher
         }
-        scope.launch {
-            runCatching { container.chat.sendImage(owner, c, bytes) }
-                .onFailure { showNotification(strings.photoSendFailed, NotificationKind.Error) }
+        if (accepted.isNotEmpty()) {
+            pendingImages = pendingImages + accepted
         }
     }
 
@@ -410,12 +414,28 @@ fun ChatScreen(
                 Composer(
                     draft = draft,
                     onChange = { draft = it },
+                    pendingImages = pendingImages,
+                    onRemoveImage = { idx ->
+                        pendingImages = pendingImages.toMutableList().also { it.removeAt(idx) }
+                    },
                     onSend = {
                         val c = contact ?: return@Composer
                         val text = draft.text.trim()
-                        if (text.isEmpty()) return@Composer
+                        val images = pendingImages
+                        if (text.isEmpty() && images.isEmpty()) return@Composer
                         draft = TextFieldValue("")
-                        scope.launch { container.chat.send(owner, c, text) }
+                        pendingImages = emptyList()
+                        scope.launch {
+                            // Önce fotoğrafları sırayla gönder, sonra varsa metni gönder.
+                            // Bu sayede mesaj akışında görsel(ler) metnin üstünde görünür.
+                            for (img in images) {
+                                runCatching { container.chat.sendImage(owner, c, img) }
+                                    .onFailure { showNotification(strings.photoSendFailed, NotificationKind.Error) }
+                            }
+                            if (text.isNotEmpty()) {
+                                runCatching { container.chat.send(owner, c, text) }
+                            }
+                        }
                     },
                     onPickImage = { imagePicker.launch() }
                 )
@@ -636,68 +656,156 @@ private fun DiagnosticsCard(
 private fun Composer(
     draft: TextFieldValue,
     onChange: (TextFieldValue) -> Unit,
+    pendingImages: List<ByteArray>,
+    onRemoveImage: (Int) -> Unit,
     onSend: () -> Unit,
     onPickImage: () -> Unit
 ) {
     val strings = LocalStrings.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    val hasContent = draft.text.isNotBlank() || pendingImages.isNotEmpty()
+    Column(
+        modifier = Modifier.fillMaxWidth()
     ) {
-        IconButton(
-            onClick = onPickImage,
-            modifier = Modifier.size(44.dp)
-        ) {
-            Icon(
-                Icons.Default.AddPhotoAlternate,
-                contentDescription = strings.attachPhoto,
-                tint = MaterialTheme.colorScheme.primary
+        if (pendingImages.isNotEmpty()) {
+            AttachmentStrip(
+                images = pendingImages,
+                onRemove = onRemoveImage
             )
         }
-        TextField(
-            value = draft,
-            onValueChange = onChange,
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .onPreviewKeyEvent { keyEvent ->
-                    if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Enter) {
-                        if (keyEvent.isShiftPressed) {
-                            val cursor = draft.selection.end
-                            val newText = draft.text.substring(0, cursor) + "\n" + draft.text.substring(cursor)
-                            onChange(TextFieldValue(text = newText, selection = TextRange(cursor + 1)))
-                        } else {
-                            onSend()
-                        }
-                        true
-                    } else {
-                        false
-                    }
-                },
-            placeholder = { Text(strings.typeMessagePlaceholder) },
-            maxLines = 5,
-            shape = RoundedCornerShape(24.dp),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                disabledIndicatorColor = Color.Transparent
-            )
-        )
-        FilledIconButton(
-            enabled = draft.text.isNotBlank(),
-            onClick = onSend,
-            modifier = Modifier.size(48.dp),
-            shape = CircleShape,
-            colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            )
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.sendButton)
+            IconButton(
+                onClick = onPickImage,
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(
+                    Icons.Default.AddPhotoAlternate,
+                    contentDescription = strings.attachPhoto,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            TextField(
+                value = draft,
+                onValueChange = onChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .onPreviewKeyEvent { keyEvent ->
+                        if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Enter) {
+                            if (keyEvent.isShiftPressed) {
+                                val cursor = draft.selection.end
+                                val newText = draft.text.substring(0, cursor) + "\n" + draft.text.substring(cursor)
+                                onChange(TextFieldValue(text = newText, selection = TextRange(cursor + 1)))
+                            } else {
+                                onSend()
+                            }
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                placeholder = { Text(strings.typeMessagePlaceholder) },
+                maxLines = 5,
+                shape = RoundedCornerShape(24.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent
+                )
+            )
+            FilledIconButton(
+                enabled = hasContent,
+                onClick = onSend,
+                modifier = Modifier.size(48.dp),
+                shape = CircleShape,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.sendButton)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentStrip(
+    images: List<ByteArray>,
+    onRemove: (Int) -> Unit
+) {
+    val strings = LocalStrings.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(
+            strings.attachmentCount(images.size),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(6.dp))
+        androidx.compose.foundation.lazy.LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            itemsIndexed(images, key = { idx, _ -> idx }) { idx, bytes ->
+                AttachmentThumb(bytes = bytes, onRemove = { onRemove(idx) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentThumb(bytes: ByteArray, onRemove: () -> Unit) {
+    val strings = LocalStrings.current
+    val bitmap: ImageBitmap? = remember(bytes) { bytes.decodeToImageBitmap() }
+    Box(modifier = Modifier.size(72.dp)) {
+        if (bitmap != null) {
+            androidx.compose.foundation.Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.BrokenImage, contentDescription = null)
+            }
+        }
+        // Sağ üst köşedeki kaldırma butonu
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(2.dp)
+                .size(20.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.6f))
+                .clickable { onRemove() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = strings.removeAttachment,
+                tint = Color.White,
+                modifier = Modifier.size(14.dp)
+            )
         }
     }
 }

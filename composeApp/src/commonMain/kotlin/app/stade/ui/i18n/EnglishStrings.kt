@@ -267,6 +267,8 @@ object EnglishStrings : AppStrings() {
     override val photoTooBig = "Photo is too large (max 3 MB)"
     override val tapToViewPhoto = "Tap to view"
     override val closePhoto = "Close"
+    override val removeAttachment = "Remove"
+    override fun attachmentCount(count: Int) = if (count == 1) "1 photo attached" else "$count photos attached"
 
     // Group chat
     override val createGroupTitle = "Create Group"

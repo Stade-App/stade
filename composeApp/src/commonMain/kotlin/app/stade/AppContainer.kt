@@ -2,6 +2,7 @@ package app.stade
 
 import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlCursor
+import app.cash.sqldelight.db.SqlDriver
 import app.stade.contact.ContactManager
 import app.stade.contact.HandshakeService
 import app.stade.crypto.CryptoApi
@@ -35,10 +36,14 @@ class AppContainer(
     val crypto: CryptoApi = platformCrypto()
     val pq: PqCrypto = platformPq()
 
-    val db: StadeDb = run {
-        val driver = driverFactory.create(vault.plaintextDbPath())
+    val db: StadeDb
+    private val driver: SqlDriver
+
+    init {
+        val createdDriver = driverFactory.create(vault.plaintextDbPath())
+        driver = createdDriver
         val schemaOk = runCatching {
-            driver.executeQuery(
+            createdDriver.executeQuery(
                 identifier = null,
                 sql = "SELECT mlkemPublicKey FROM Contact LIMIT 0",
                 mapper = { _: SqlCursor -> QueryResult.Value(Unit) },
@@ -51,24 +56,24 @@ class AppContainer(
                 "Outbox", "Message", "Contact", "PendingContact",
                 "LocalIdentity", "TransportSetting", "KeyValue"
             )
-            indexes.forEach { runCatching { driver.execute(null, "DROP INDEX IF EXISTS $it", 0) } }
-            tables.forEach { runCatching { driver.execute(null, "DROP TABLE IF EXISTS $it", 0) } }
-            StadeDb.Schema.create(driver)
+            indexes.forEach { runCatching { createdDriver.execute(null, "DROP INDEX IF EXISTS $it", 0) } }
+            tables.forEach { runCatching { createdDriver.execute(null, "DROP TABLE IF EXISTS $it", 0) } }
+            StadeDb.Schema.create(createdDriver)
         }
-        val database = StadeDb(driver)
+        val database = StadeDb(createdDriver)
         runCatching {
             database.stadeDbQueries.putKv("schema.version", "2".encodeToByteArray())
         }
         runCatching {
-            driver.executeQuery(null, "SELECT id FROM StadeGroup LIMIT 0",
+            createdDriver.executeQuery(null, "SELECT id FROM StadeGroup LIMIT 0",
                 { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
         }.onFailure {
-            runCatching { driver.execute(null, "CREATE TABLE IF NOT EXISTS StadeGroup (id TEXT NOT NULL PRIMARY KEY, ownerId TEXT NOT NULL, name TEXT NOT NULL, inviteToken TEXT NOT NULL, createdAt INTEGER NOT NULL)", 0) }
-            runCatching { driver.execute(null, "CREATE TABLE IF NOT EXISTS GroupMember (groupId TEXT NOT NULL, contactId TEXT NOT NULL, joinedAt INTEGER NOT NULL, PRIMARY KEY(groupId, contactId))", 0) }
-            runCatching { driver.execute(null, "CREATE TABLE IF NOT EXISTS GroupMessage (id TEXT NOT NULL PRIMARY KEY, groupId TEXT NOT NULL, senderId TEXT NOT NULL, body TEXT NOT NULL, timestamp INTEGER NOT NULL, outgoing INTEGER NOT NULL DEFAULT 0, read INTEGER NOT NULL DEFAULT 0)", 0) }
-            runCatching { driver.execute(null, "CREATE INDEX IF NOT EXISTS idxGroupMessage ON GroupMessage(groupId, timestamp)", 0) }
+            runCatching { createdDriver.execute(null, "CREATE TABLE IF NOT EXISTS StadeGroup (id TEXT NOT NULL PRIMARY KEY, ownerId TEXT NOT NULL, name TEXT NOT NULL, inviteToken TEXT NOT NULL, createdAt INTEGER NOT NULL)", 0) }
+            runCatching { createdDriver.execute(null, "CREATE TABLE IF NOT EXISTS GroupMember (groupId TEXT NOT NULL, contactId TEXT NOT NULL, joinedAt INTEGER NOT NULL, PRIMARY KEY(groupId, contactId))", 0) }
+            runCatching { createdDriver.execute(null, "CREATE TABLE IF NOT EXISTS GroupMessage (id TEXT NOT NULL PRIMARY KEY, groupId TEXT NOT NULL, senderId TEXT NOT NULL, body TEXT NOT NULL, timestamp INTEGER NOT NULL, outgoing INTEGER NOT NULL DEFAULT 0, read INTEGER NOT NULL DEFAULT 0)", 0) }
+            runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxGroupMessage ON GroupMessage(groupId, timestamp)", 0) }
         }
-        database
+        db = database
     }
 
     val identities = IdentityManager(db, crypto, pq)
@@ -105,21 +110,33 @@ class AppContainer(
         runCatching { connections.stop() }
         pendingInvite.value = null
         activeContactId = null
-        db.stadeDbQueries.transaction {
-            db.stadeDbQueries.wipeGroupMessages()
-            db.stadeDbQueries.wipeGroupMembers()
-            db.stadeDbQueries.wipeGroups()
-            db.stadeDbQueries.wipeOutbox()
-            db.stadeDbQueries.wipeMessages()
-            db.stadeDbQueries.wipePending()
-            db.stadeDbQueries.wipeContacts()
-            db.stadeDbQueries.wipeIdentities()
-            db.stadeDbQueries.wipeTransports()
-            db.stadeDbQueries.wipeKeyValue()
-        }
         runCatching {
-            db.stadeDbQueries.putKv("schema.version", "2".encodeToByteArray())
+            db.stadeDbQueries.transaction {
+                db.stadeDbQueries.wipeGroupMessages()
+                db.stadeDbQueries.wipeGroupMembers()
+                db.stadeDbQueries.wipeGroups()
+                db.stadeDbQueries.wipeOutbox()
+                db.stadeDbQueries.wipeMessages()
+                db.stadeDbQueries.wipePending()
+                db.stadeDbQueries.wipeContacts()
+                db.stadeDbQueries.wipeIdentities()
+                db.stadeDbQueries.wipeTransports()
+                db.stadeDbQueries.wipeKeyValue()
+            }
         }
+        // Windows'ta plaintext DB dosyasını silebilmek için sürücüyü kapatmamız şart;
+        // aksi hâlde vault.wipe() dosyayı silemez ve yeni container açıldığında
+        // eski veri/şema kalıntıları çakışmaya yol açar.
+        runCatching { driver.close() }
         runCatching { vault.wipe() }
+    }
+
+    /**
+     * Container'ı kapatır ve veri tabanı sürücüsünü serbest bırakır.
+     * NOT: Bağlantılar suspend olduğu için bunları çağırmadan önce ayrıca
+     * `connections.stop()` çağrılmalı.
+     */
+    fun close() {
+        runCatching { driver.close() }
     }
 }

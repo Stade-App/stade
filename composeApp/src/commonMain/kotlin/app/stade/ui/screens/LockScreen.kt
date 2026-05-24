@@ -84,7 +84,13 @@ private suspend fun Animatable<Float, *>.shake() {
 fun LockScreen(
     vault: Vault,
     onUnlocked: () -> Unit,
-    onForgotPin: () -> Unit = {}
+    onForgotPin: () -> Unit = {},
+    /**
+     * Çağıran tarafın, vault.wipe() ÇAĞRILMADAN ÖNCE her türlü açık DB/container'ı
+     * kapatması için fırsatı. Windows'ta plaintext DB dosyasını silebilmek için şart.
+     * Null bırakılırsa LockScreen kendi başına vault.wipe() çağırır (geriye uyumluluk).
+     */
+    onPrepareWipe: (suspend () -> Unit)? = null
 ) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -295,7 +301,10 @@ fun LockScreen(
                         if (wiping) return@Button
                         wiping = true
                         scope.launch {
-                            withContext(Dispatchers.Default) { vault.wipe() }
+                            withContext(Dispatchers.Default) {
+                                runCatching { onPrepareWipe?.invoke() }
+                                vault.wipe()
+                            }
                             showForgotDialog = false
                             wiping = false
                             onForgotPin()

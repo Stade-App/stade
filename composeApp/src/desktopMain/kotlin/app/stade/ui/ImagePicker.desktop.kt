@@ -5,14 +5,31 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.awt.FileDialog
+import java.awt.Frame
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
+import java.io.File
 import javax.imageio.ImageIO
-import javax.swing.JFileChooser
-import javax.swing.filechooser.FileNameExtensionFilter
 
 actual class ImagePickerLauncher(private val doLaunch: () -> Unit) {
     actual fun launch() = doLaunch()
+}
+
+private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "bmp", "webp")
+
+private fun openNativeImageDialog(multiSelect: Boolean): Array<File> {
+    // java.awt.FileDialog işletim sisteminin native dosya gezginini kullanır
+    // (Windows Explorer / macOS Finder / Linux GTK). JFileChooser yerine bunu kullanıyoruz.
+    val dialog = FileDialog(null as Frame?, "Fotoğraf seç", FileDialog.LOAD)
+    dialog.isMultipleMode = multiSelect
+    dialog.setFilenameFilter { _, name ->
+        val ext = name.substringAfterLast('.', "").lowercase()
+        ext in IMAGE_EXTS
+    }
+    dialog.isVisible = true
+    val files = dialog.files
+    return files ?: emptyArray()
 }
 
 @Composable
@@ -21,21 +38,28 @@ actual fun rememberImagePickerLauncher(onImage: (ByteArray) -> Unit): ImagePicke
     return remember {
         ImagePickerLauncher {
             scope.launch(Dispatchers.IO) {
-                val chooser = JFileChooser().apply {
-                    dialogTitle = "Select Image"
-                    fileFilter = FileNameExtensionFilter(
-                        "Images (JPG, PNG, GIF, BMP, WEBP)",
-                        "jpg", "jpeg", "png", "gif", "bmp", "webp"
-                    )
-                    isAcceptAllFileFilterUsed = false
+                val files = openNativeImageDialog(multiSelect = false)
+                val file = files.firstOrNull() ?: return@launch
+                runCatching {
+                    onImage(compressImageDesktop(file.readBytes()))
                 }
-                val result = chooser.showOpenDialog(null)
-                if (result == JFileChooser.APPROVE_OPTION) {
-                    runCatching {
-                        val bytes = chooser.selectedFile.readBytes()
-                        onImage(compressImageDesktop(bytes))
-                    }
+            }
+        }
+    }
+}
+
+@Composable
+actual fun rememberMultiImagePickerLauncher(onImages: (List<ByteArray>) -> Unit): ImagePickerLauncher {
+    val scope = rememberCoroutineScope()
+    return remember {
+        ImagePickerLauncher {
+            scope.launch(Dispatchers.IO) {
+                val files = openNativeImageDialog(multiSelect = true)
+                if (files.isEmpty()) return@launch
+                val results = files.mapNotNull { f ->
+                    runCatching { compressImageDesktop(f.readBytes()) }.getOrNull()
                 }
+                if (results.isNotEmpty()) onImages(results)
             }
         }
     }

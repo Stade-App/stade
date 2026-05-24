@@ -28,6 +28,25 @@ actual fun rememberImagePickerLauncher(onImage: (ByteArray) -> Unit): ImagePicke
     return ImagePickerLauncher { launcher.launch("image/*") }
 }
 
+@Composable
+actual fun rememberMultiImagePickerLauncher(onImages: (List<ByteArray>) -> Unit): ImagePickerLauncher {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        if (uris.isNullOrEmpty()) return@rememberLauncherForActivityResult
+        val results = uris.mapNotNull { uri ->
+            runCatching {
+                val raw = context.contentResolver.openInputStream(uri)?.readBytes()
+                    ?: return@runCatching null
+                compressImageAndroid(raw)
+            }.getOrNull()
+        }
+        if (results.isNotEmpty()) onImages(results)
+    }
+    return ImagePickerLauncher { launcher.launch("image/*") }
+}
+
 private fun compressImageAndroid(bytes: ByteArray): ByteArray {
     val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return bytes
     val maxDim = 1280

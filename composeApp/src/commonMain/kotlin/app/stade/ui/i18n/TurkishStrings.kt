@@ -266,6 +266,8 @@ object TurkishStrings : AppStrings() {
     override val photoTooBig = "Fotoğraf çok büyük (maks. 3 MB)"
     override val tapToViewPhoto = "Görüntülemek için dokun"
     override val closePhoto = "Kapat"
+    override val removeAttachment = "Kaldır"
+    override fun attachmentCount(count: Int) = if (count == 1) "1 fotoğraf eklendi" else "$count fotoğraf eklendi"
 
     override val createGroupTitle = "Grup Oluştur"
     override val createGroupAction = "Grup Oluştur"
