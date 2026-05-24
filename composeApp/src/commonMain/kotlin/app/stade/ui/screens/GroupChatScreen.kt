@@ -15,19 +15,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -36,6 +35,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -58,12 +58,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
-import app.stade.group.GroupInfo
 import app.stade.group.GroupMessage
 import app.stade.identity.LocalIdentity
 import app.stade.ui.components.formatChatTime
@@ -87,7 +94,7 @@ fun GroupChatScreen(
     val group = remember(groupId) { container.groups.getGroup(groupId) }
     val messages by container.groups.observeMessages(groupId).collectAsState(initial = emptyList())
     val listState = rememberLazyListState()
-    var text by remember { mutableStateOf("") }
+    var draft by remember { mutableStateOf(TextFieldValue("")) }
     var menuOpen by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showDeleteGroupDialog by remember { mutableStateOf(false) }
@@ -98,13 +105,17 @@ fun GroupChatScreen(
         onDispose { container.groups.markRead(groupId) }
     }
 
+    LaunchedEffect(groupId, messages.size) {
+        container.groups.markRead(groupId)
+    }
+
     var prevMessageCount by remember { mutableStateOf(0) }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             if (prevMessageCount == 0) {
-                listState.scrollToItem(messages.size - 1)
+                listState.scrollToItem(messages.lastIndex)
             } else {
-                listState.animateScrollToItem(messages.size - 1)
+                listState.animateScrollToItem(messages.lastIndex)
             }
         }
         prevMessageCount = messages.size
@@ -162,6 +173,9 @@ fun GroupChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
@@ -178,7 +192,7 @@ fun GroupChatScreen(
                                 modifier = Modifier.size(20.dp)
                             )
                         }
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.size(10.dp))
                         Column {
                             Text(
                                 group?.name ?: groupId,
@@ -188,7 +202,7 @@ fun GroupChatScreen(
                             if (group != null) {
                                 Text(
                                     strings.groupMemberCount(group.memberIds.size),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -203,7 +217,7 @@ fun GroupChatScreen(
                 actions = {
                     Box {
                         IconButton(onClick = { menuOpen = true }) {
-                            Icon(Icons.Default.Group, contentDescription = null)
+                            Icon(Icons.Default.MoreVert, contentDescription = null)
                         }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                             DropdownMenuItem(
@@ -229,154 +243,179 @@ fun GroupChatScreen(
                             )
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                }
             )
-        },
-        bottomBar = {
-            GroupInputBar(
-                text = text,
-                onTextChange = { text = it },
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .imePadding()
+        ) {
+            if (messages.isEmpty()) {
+                Box(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            strings.noMessagesYet,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            strings.sendFirstMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) {
+                    itemsIndexed(messages, key = { _, msg -> msg.id }) { idx, msg ->
+                        val prev = messages.getOrNull(idx - 1)
+                        val tight = prev != null &&
+                                prev.senderId == msg.senderId &&
+                                (msg.timestamp - prev.timestamp) < 60_000L
+                        val senderName = remember(msg.senderId) {
+                            if (msg.isOwn) owner.nickname
+                            else container.contacts.get(msg.senderId)?.nickname ?: msg.senderId.takeLast(6)
+                        }
+                        GroupBubble(msg = msg, senderName = senderName, tightWithPrev = tight)
+                    }
+                }
+            }
+
+            GroupComposer(
+                draft = draft,
+                onChange = { draft = it },
                 onSend = {
-                    val body = text.trim()
-                    if (body.isNotBlank()) {
-                        text = ""
-                        scope.launch {
-                            withContext(Dispatchers.Default) {
-                                runCatching { container.groupChat.sendMessage(owner, groupId, body) }
-                            }
+                    val body = draft.text.trim()
+                    if (body.isEmpty()) return@GroupComposer
+                    draft = TextFieldValue("")
+                    scope.launch {
+                        withContext(Dispatchers.Default) {
+                            runCatching { container.groupChat.sendMessage(owner, groupId, body) }
                         }
                     }
                 }
             )
         }
-    ) { padding ->
-        if (messages.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text(
-                    strings.noMessagesYet,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(messages, key = { it.id }) { msg ->
-                    val senderName = remember(msg.senderId) {
-                        if (msg.isOwn) owner.nickname
-                        else container.contacts.get(msg.senderId)?.nickname ?: msg.senderId.takeLast(6)
-                    }
-                    GroupBubble(msg = msg, senderName = senderName)
-                }
-            }
-        }
     }
 }
 
 @Composable
-private fun GroupBubble(msg: GroupMessage, senderName: String) {
-    val bubbleColor = if (msg.isOwn)
-        MaterialTheme.colorScheme.primaryContainer
-    else
-        MaterialTheme.colorScheme.surfaceContainerHigh
-
-    val textColor = if (msg.isOwn)
-        MaterialTheme.colorScheme.onPrimaryContainer
-    else
-        MaterialTheme.colorScheme.onSurface
+private fun GroupBubble(msg: GroupMessage, senderName: String, tightWithPrev: Boolean) {
+    val outgoing = msg.isOwn
+    val bg = if (outgoing) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.surfaceContainerHighest
+    val fg = if (outgoing) MaterialTheme.colorScheme.onPrimary
+    else MaterialTheme.colorScheme.onSurface
+    val sub = fg.copy(alpha = if (outgoing) 0.75f else 0.55f)
+    val shape = RoundedCornerShape(
+        topStart = if (outgoing) 18.dp else if (tightWithPrev) 6.dp else 18.dp,
+        topEnd = if (outgoing) (if (tightWithPrev) 6.dp else 18.dp) else 18.dp,
+        bottomStart = 18.dp,
+        bottomEnd = 18.dp
+    )
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (msg.isOwn) Arrangement.End else Arrangement.Start
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = if (tightWithPrev) 1.dp else 4.dp),
+        horizontalArrangement = if (outgoing) Arrangement.End else Arrangement.Start
     ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 300.dp)
-                .wrapContentSize()
+        Surface(
+            shape = shape,
+            color = bg,
+            modifier = Modifier.widthIn(max = 300.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(
-                    topStart = if (msg.isOwn) 14.dp else 4.dp,
-                    topEnd = if (msg.isOwn) 4.dp else 14.dp,
-                    bottomStart = 14.dp,
-                    bottomEnd = 14.dp
-                ),
-                color = bubbleColor,
-                tonalElevation = 1.dp
-            ) {
-                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    if (!msg.isOwn) {
-                        Text(
-                            senderName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(Modifier.height(2.dp))
-                    }
-                    Text(msg.body, style = MaterialTheme.typography.bodyMedium, color = textColor)
-                    Spacer(Modifier.height(2.dp))
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                if (!outgoing && !tightWithPrev) {
                     Text(
-                        formatChatTime(msg.timestamp),
+                        senderName,
                         style = MaterialTheme.typography.labelSmall,
-                        color = textColor.copy(alpha = 0.6f),
-                        modifier = Modifier.align(Alignment.End)
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
                     )
+                    Spacer(Modifier.height(2.dp))
                 }
+                Text(msg.body, style = MaterialTheme.typography.bodyMedium, color = fg)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    formatChatTime(msg.timestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = sub,
+                    modifier = Modifier.align(Alignment.End)
+                )
             }
         }
     }
 }
 
 @Composable
-private fun GroupInputBar(
-    text: String,
-    onTextChange: (String) -> Unit,
+private fun GroupComposer(
+    draft: TextFieldValue,
+    onChange: (TextFieldValue) -> Unit,
     onSend: () -> Unit
 ) {
     val strings = LocalStrings.current
-    Surface(
-        tonalElevation = 2.dp,
-        shadowElevation = 4.dp
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Row(
+        TextField(
+            value = draft,
+            onValueChange = onChange,
             modifier = Modifier
-                .fillMaxWidth()
-                .imePadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            TextField(
-                value = text,
-                onValueChange = onTextChange,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text(strings.typeMessagePlaceholder) },
-                maxLines = 5,
-                shape = RoundedCornerShape(24.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent
-                )
+                .weight(1f)
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Enter) {
+                        if (keyEvent.isShiftPressed) {
+                            val cursor = draft.selection.end
+                            val newText = draft.text.substring(0, cursor) + "\n" + draft.text.substring(cursor)
+                            onChange(TextFieldValue(text = newText, selection = TextRange(cursor + 1)))
+                        } else {
+                            onSend()
+                        }
+                        true
+                    } else false
+                },
+            placeholder = { Text(strings.typeMessagePlaceholder) },
+            maxLines = 5,
+            shape = RoundedCornerShape(24.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent
             )
-            Spacer(Modifier.width(8.dp))
-            FilledIconButton(
-                onClick = onSend,
-                enabled = text.isNotBlank(),
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.sendButton)
-            }
+        )
+        FilledIconButton(
+            enabled = draft.text.isNotBlank(),
+            onClick = onSend,
+            modifier = Modifier.size(48.dp),
+            shape = CircleShape,
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.sendButton)
         }
     }
 }

@@ -196,8 +196,6 @@ fun ChatScreen(
 
     val MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3 MB
 
-    // Gönderilmeden önce input alanında bekleyen fotoğraflar.
-    // Kullanıcı iptal edebilir, ek fotoğraf ekleyebilir veya yanına metin yazabilir.
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
 
     val imagePicker = rememberMultiImagePickerLauncher { bytesList ->

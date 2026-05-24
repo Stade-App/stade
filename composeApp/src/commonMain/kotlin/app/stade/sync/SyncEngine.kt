@@ -8,6 +8,7 @@ import app.stade.crypto.CryptoApi
 import app.stade.crypto.Encoding
 import app.stade.crypto.PqCrypto
 import app.stade.crypto.RatchetSessions
+import app.stade.group.GRP_INV_PREFIX
 import app.stade.group.GRP_JOIN_PREFIX
 import app.stade.group.GRP_MSG_PREFIX
 import app.stade.group.GRP_WELCOME_PREFIX
@@ -61,6 +62,7 @@ class SyncEngine(
         data class ContactDisconnected(val contactId: String) : SyncEvent
         data class MessageReceived(val contactId: String, val messageId: String) : SyncEvent
         data class GroupMessageReceived(val groupId: String) : SyncEvent
+        data class GroupInviteReceived(val groupId: String, val groupName: String) : SyncEvent
         data class HandshakeRejected(val reason: String) : SyncEvent
         data class DecryptFailed(val contactId: String) : SyncEvent
         data class SendFailed(val contactId: String, val reason: String) : SyncEvent
@@ -410,6 +412,31 @@ class SyncEngine(
                         }
                         groupManager != null && bodyStr.startsWith(GRP_WELCOME_PREFIX) -> {
                             groupManager.handleGroupWelcome(owner.id, bodyStr)
+                        }
+                        groupManager != null && bodyStr.startsWith(GRP_INV_PREFIX) -> {
+                            // Davet edilen kullanıcı tarafında otomatik olarak importGroupInvite çağrılır.
+                            // pending join saklanır; ContactConnected eventi tetiklendiğinde
+                            // GroupChatService bunu görüp sendJoinRequest çağıracaktır.
+                            // Burada gönderen zaten kişi listesindedir (mesaj geldiğine göre).
+                            runCatching {
+                                val inviteCode = bodyStr.removePrefix(GRP_INV_PREFIX)
+                                val parsed = groupManager.parseInviteLink(inviteCode) ?: return@runCatching
+                                val pending = app.stade.group.PendingJoinData(
+                                    parsed.groupId, parsed.groupName, parsed.inviteToken
+                                )
+                                groupManager.storePendingJoin(parsed.creatorStadeId, pending)
+                                // Bağlantı zaten açık olduğu için anında join request atalım
+                                val msgId2 = Encoding.toHex(crypto.randomBytes(16))
+                                val ts2 = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+                                val joinBody = "$GRP_JOIN_PREFIX${parsed.groupId}:${parsed.inviteToken}"
+                                val sealed = ratchet.seal(owner, contact, joinBody.encodeToByteArray())
+                                val mp = MessagePayload(msgId2, ts2, sealed)
+                                val frame = json.encodeToString(MessagePayload.serializer(), mp).encodeToByteArray()
+                                outbox.enqueue(contact.id, msgId2, frame)
+                                outboxSignal.tryEmit(Unit)
+                                groupManager.clearPendingJoin(parsed.creatorStadeId)
+                                _events.tryEmit(SyncEvent.GroupInviteReceived(parsed.groupId, parsed.groupName))
+                            }
                         }
                         else -> {
                             val saved = messages.saveIncoming(payload.messageId, contact.id, bodyStr, payload.timestamp)

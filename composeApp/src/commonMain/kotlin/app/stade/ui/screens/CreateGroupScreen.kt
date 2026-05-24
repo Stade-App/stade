@@ -169,10 +169,21 @@ fun CreateGroupScreen(
                     scope.launch {
                         val group = withContext(Dispatchers.Default) {
                             val g = container.groups.createGroup(owner.id, groupName.trim())
-                            selectedIds.value.forEach { cid ->
-                                container.groups.addMember(g.id, cid)
-                            }
+
+                            runCatching { container.groups.addMember(g.id, owner.id) }
                             g
+                        }
+
+                        val inviteCode = container.groups.generateInviteLink(
+                            groupId = group.id,
+                            groupName = group.name,
+                            inviteToken = group.inviteToken,
+                            creatorStadeId = owner.stadeId
+                        )
+                        selectedIds.value.forEach { cid ->
+                            runCatching {
+                                container.groupChat.sendGroupInviteToContact(owner, cid, inviteCode)
+                            }
                         }
                         creating = false
                         onGroupCreated(group.id)

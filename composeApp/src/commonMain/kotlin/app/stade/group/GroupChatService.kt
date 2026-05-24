@@ -54,6 +54,25 @@ class GroupChatService(
         }
     }
 
+    /**
+     * Grup oluşturulduktan hemen sonra çağrılır. Davet edilen her kişiye
+     * şifrelenmiş bir davet mesajı yollar. Karşı tarafta otomatik olarak
+     * importGroupInvite tetiklenir ve bağlantı açıldığında join request gönderilir.
+     */
+    suspend fun sendGroupInviteToContact(
+        owner: LocalIdentity,
+        contactId: String,
+        inviteCode: String
+    ) {
+        val contact = contacts.get(contactId) ?: return
+        val msgId = Encoding.toHex(crypto.randomBytes(16))
+        val timestamp = Clock.System.now().toEpochMilliseconds()
+        val body = "$GRP_INV_PREFIX$inviteCode"
+        runCatching {
+            sync.queueOutgoing(owner, contact, msgId, body, timestamp)
+        }
+    }
+
     fun importGroupInvite(owner: LocalIdentity, code: String, onCreatorAlreadyContact: (PendingJoinData, String) -> Unit): GroupInviteData? {
         val data = groups.parseInviteLink(code) ?: return null
         val pending = PendingJoinData(data.groupId, data.groupName, data.inviteToken)
