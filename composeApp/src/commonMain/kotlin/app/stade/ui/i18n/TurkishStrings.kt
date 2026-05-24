@@ -261,6 +261,7 @@ object TurkishStrings : AppStrings() {
     override val selectContactHint = "Yeni bir sohbete başlamak için sol panelden bir kişi seç."
 
     override val attachPhoto = "Fotoğraf ekle"
+    override val selectMediaTitle = "Medya Seç"
     override val photoMessage = "📷 Fotoğraf"
     override val photoSendFailed = "Fotoğraf yüklenemedi"
     override val photoTooBig = "Fotoğraf çok büyük (maks. 3 MB)"

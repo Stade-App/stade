@@ -262,6 +262,7 @@ object EnglishStrings : AppStrings() {
     override val selectContactHint = "Select a contact from the left panel to start a new conversation."
 
     override val attachPhoto = "Attach photo"
+    override val selectMediaTitle = "Select Media"
     override val photoMessage = "📷 Photo"
     override val photoSendFailed = "Failed to load photo"
     override val photoTooBig = "Photo is too large (max 3 MB)"

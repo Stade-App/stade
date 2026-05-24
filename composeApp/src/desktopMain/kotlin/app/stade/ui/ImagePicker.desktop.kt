@@ -3,13 +3,16 @@ package app.stade.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import app.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.awt.FileDialog
+import java.awt.Frame
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FilenameFilter
 import javax.imageio.ImageIO
-import javax.swing.JFileChooser
-import javax.swing.filechooser.FileNameExtensionFilter
 
 actual class ImagePickerLauncher(private val doLaunch: () -> Unit) {
     actual fun launch() = doLaunch()
@@ -18,23 +21,27 @@ actual class ImagePickerLauncher(private val doLaunch: () -> Unit) {
 @Composable
 actual fun rememberImagePickerLauncher(onImage: (ByteArray) -> Unit): ImagePickerLauncher {
     val scope = rememberCoroutineScope()
-    return remember {
+    val title = LocalStrings.current.selectMediaTitle
+    return remember(title) {
         ImagePickerLauncher {
             scope.launch(Dispatchers.IO) {
-                val chooser = JFileChooser().apply {
-                    dialogTitle = "Select Image"
-                    fileFilter = FileNameExtensionFilter(
-                        "Images (JPG, PNG, GIF, BMP, WEBP)",
-                        "jpg", "jpeg", "png", "gif", "bmp", "webp"
-                    )
-                    isAcceptAllFileFilterUsed = false
-                }
-                val result = chooser.showOpenDialog(null)
-                if (result == JFileChooser.APPROVE_OPTION) {
-                    runCatching {
-                        val bytes = chooser.selectedFile.readBytes()
-                        onImage(compressImageDesktop(bytes))
+                val dialog = FileDialog(null as Frame?, title, FileDialog.LOAD).apply {
+                    filenameFilter = FilenameFilter { _, name ->
+                        val lower = name.lowercase()
+                        lower.endsWith(".jpg") || lower.endsWith(".jpeg") ||
+                        lower.endsWith(".png") || lower.endsWith(".gif") ||
+                        lower.endsWith(".bmp") || lower.endsWith(".webp")
                     }
+                    isMultipleMode = false
+                }
+                dialog.pack()
+                dialog.setLocationRelativeTo(null)
+                dialog.isVisible = true
+                val dir  = dialog.directory ?: return@launch
+                val file = dialog.file        ?: return@launch
+                runCatching {
+                    val bytes = File(dir, file).readBytes()
+                    onImage(compressImageDesktop(bytes))
                 }
             }
         }
