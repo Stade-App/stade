@@ -64,5 +64,17 @@ actual fun clearAllMessageNotifications() {
     }
     mgr.cancel(NotificationIds.HIDDEN_MESSAGES)
 }
+actual fun showIncomingMessageNotification(
+    contactId: String,
+    senderName: String,
+    preview: String,
+    privacy: Boolean,
+    unreadTotal: Int
+) {
+}
 
+actual val isRunInBackgroundSupported: Boolean = false
+private val _androidBg = mutableStateOf(true)
+actual fun getRunInBackgroundEnabledCommon(): State<Boolean> = _androidBg
+actual fun setRunInBackgroundEnabledCommon(value: Boolean) { /* Android'de daima true */ }
 

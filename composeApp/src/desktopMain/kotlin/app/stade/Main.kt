@@ -2,7 +2,10 @@ package app.stade
 
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -14,6 +17,8 @@ import java.awt.Dimension
 import app.stade.crypto.Encoding
 import app.stade.db.DriverFactory
 import app.stade.db.StadeDb
+import app.stade.notification.DesktopNotifier
+import app.stade.notification.getRunInBackgroundEnabled
 import app.stade.security.Vault
 import app.stade.security.VaultFactory
 import app.stade.transport.LanTransport
@@ -38,6 +43,7 @@ fun main(args: Array<String>) = application {
         Runtime.getRuntime().addShutdownHook(Thread {
             runCatching { kotlinx.coroutines.runBlocking { embeddedTor.shutdown() } }
             runCatching { vault.flushAndClose() }
+            runCatching { DesktopNotifier.removeTray() }
         })
         BootContext(
             vault = vault,
@@ -73,11 +79,38 @@ fun main(args: Array<String>) = application {
     val windowState = rememberWindowState(
         position = WindowPosition.Aligned(Alignment.Center)
     )
+    // Tray etkin ise pencere kapatma uygulamayı sonlandırmaz, sadece pencereyi gizler.
+    var visible by remember { mutableStateOf(true) }
+    val runInBackground by getRunInBackgroundEnabled()
+
+    // Tray entegrasyonu — desteklenen platformlarda simgeyi tepsiye ekle.
+    remember(runInBackground) {
+        if (runInBackground && java.awt.SystemTray.isSupported()) {
+            DesktopNotifier.setHandlers(
+                onActivate = { visible = true },
+                onQuit = { exitApplication() }
+            )
+            DesktopNotifier.ensureTray()
+        } else {
+            DesktopNotifier.removeTray()
+        }
+        Unit
+    }
+
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = {
+            if (runInBackground && java.awt.SystemTray.isSupported()) {
+                // Tray etkin: pencereyi gizle, uygulama arka planda çalışmaya devam etsin.
+                visible = false
+                DesktopNotifier.showMessage("Stade", "Uygulama arka planda çalışmaya devam ediyor")
+            } else {
+                exitApplication()
+            }
+        },
         state = windowState,
         title = "Stade",
-        icon = painterResource(Res.drawable.app_icon_desktop)
+        icon = painterResource(Res.drawable.app_icon_desktop),
+        visible = visible
     ) {
         SideEffect { window.minimumSize = Dimension(700, 660) }
         Surface { StadeApp(boot) }

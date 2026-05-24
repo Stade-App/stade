@@ -185,6 +185,49 @@ private fun UnlockedApp(
         }
     }
 
+    // Bildirim dispatcher: yeni mesajda platforma özel bildirim göster.
+    // Android'de bu zaten foreground service tarafından yapılıyor (no-op),
+    // masaüstünde sistem tepsisi balonu olarak gösterir.
+    LaunchedEffect(identity?.id, container) {
+        if (identity == null) return@LaunchedEffect
+        container.sync.events.collect { event ->
+            when (event) {
+                is app.stade.sync.SyncEngine.SyncEvent.MessageReceived -> {
+                    if (!app.stade.notification.getNotificationsEnabled().value) return@collect
+                    if (container.isAppInForeground.value && container.activeContactId == event.contactId) return@collect
+                    val contact = container.contacts.get(event.contactId)
+                    val sender = contact?.nickname ?: "Stade"
+                    val preview = runCatching { container.messages.lastMessage(event.contactId)?.body }
+                        .getOrNull() ?: "Yeni mesaj"
+                    val total = runCatching { container.messages.totalUnread() }.getOrDefault(0L).toInt()
+                    val privacy = app.stade.notification.getNotificationPrivacyEnabled().value
+                    app.stade.notification.showIncomingMessageNotification(
+                        contactId = event.contactId,
+                        senderName = sender,
+                        preview = preview,
+                        privacy = privacy,
+                        unreadTotal = total
+                    )
+                }
+                is app.stade.sync.SyncEngine.SyncEvent.GroupMessageReceived -> {
+                    if (!app.stade.notification.getNotificationsEnabled().value) return@collect
+                    val group = container.groups.getGroup(event.groupId)
+                    val name = group?.name ?: "Grup"
+                    val preview = container.groups.lastMessage(event.groupId)?.body ?: "Yeni mesaj"
+                    val privacy = app.stade.notification.getNotificationPrivacyEnabled().value
+                    app.stade.notification.showIncomingMessageNotification(
+                        contactId = event.groupId,
+                        senderName = name,
+                        preview = preview,
+                        privacy = privacy,
+                        unreadTotal = 0
+                    )
+                }
+                else -> Unit
+            }
+        }
+    }
+
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isWideScreen = maxWidth >= 600.dp
         val showTwoPanel = isWideScreen && identity != null &&

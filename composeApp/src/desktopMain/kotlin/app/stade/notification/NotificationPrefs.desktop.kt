@@ -2,20 +2,69 @@ package app.stade.notification
 
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
+import java.util.prefs.Preferences
 
-actual val isNotificationSupported: Boolean = false
+private val prefs: Preferences = Preferences.userRoot().node("app/stade/notifications")
 
-private val _disabled = mutableStateOf(false)
+private const val KEY_ENABLED = "enabled"
+private const val KEY_PRIVACY = "privacy"
+private const val KEY_BACKGROUND = "background"
 
-actual fun getNotificationsEnabled(): State<Boolean> = _disabled
-actual fun setNotificationsEnabled(value: Boolean) { }
+actual val isNotificationSupported: Boolean = java.awt.SystemTray.isSupported()
 
-actual fun getNotificationPrivacyEnabled(): State<Boolean> = _disabled
-actual fun setNotificationPrivacyEnabled(value: Boolean) { }
+private val _enabled = mutableStateOf(prefs.getBoolean(KEY_ENABLED, true))
+private val _privacy = mutableStateOf(prefs.getBoolean(KEY_PRIVACY, false))
+private val _runInBackground = mutableStateOf(prefs.getBoolean(KEY_BACKGROUND, true))
 
-actual fun openNotificationSettings() { }
+actual fun getNotificationsEnabled(): State<Boolean> = _enabled
+actual fun setNotificationsEnabled(value: Boolean) {
+    _enabled.value = value
+    prefs.putBoolean(KEY_ENABLED, value)
+    if (!value) DesktopNotifier.cancelAll()
+}
 
-actual fun cancelMessagesNotification(contactId: String) { }
+actual fun getNotificationPrivacyEnabled(): State<Boolean> = _privacy
+actual fun setNotificationPrivacyEnabled(value: Boolean) {
+    _privacy.value = value
+    prefs.putBoolean(KEY_PRIVACY, value)
+}
 
-actual fun clearAllMessageNotifications() { }
+actual fun openNotificationSettings() {
+    // Desktop'ta sistem geneli "bildirim ayarları" yok; uygulama içinde yönetiliyor.
+}
 
+actual fun cancelMessagesNotification(contactId: String) {
+    DesktopNotifier.cancel(contactId)
+}
+
+actual fun clearAllMessageNotifications() {
+    DesktopNotifier.cancelAll()
+}
+
+actual fun showIncomingMessageNotification(
+    contactId: String,
+    senderName: String,
+    preview: String,
+    privacy: Boolean,
+    unreadTotal: Int
+) {
+    if (!_enabled.value) return
+    if (privacy) {
+        DesktopNotifier.showMessage("Stade", "$unreadTotal yeni mesaj")
+    } else {
+        DesktopNotifier.showMessage(senderName, preview)
+    }
+}
+
+/** Sadece masaüstüne özel: uygulama kapatıldığında tray'e simge bırakılsın mı? */
+fun getRunInBackgroundEnabled(): State<Boolean> = _runInBackground
+fun setRunInBackgroundEnabled(value: Boolean) {
+    _runInBackground.value = value
+    prefs.putBoolean(KEY_BACKGROUND, value)
+}
+
+actual val isRunInBackgroundSupported: Boolean = java.awt.SystemTray.isSupported()
+actual fun getRunInBackgroundEnabledCommon(): State<Boolean> = _runInBackground
+actual fun setRunInBackgroundEnabledCommon(value: Boolean) {
+    setRunInBackgroundEnabled(value)
+}

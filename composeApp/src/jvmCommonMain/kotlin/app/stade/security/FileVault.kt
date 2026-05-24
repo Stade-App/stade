@@ -123,8 +123,30 @@ class FileVault(private val rootDir: File) : Vault {
         zero(kek)
         meta.failedAttempts = 0
         meta.lockoutUntilMillis = 0L
-        writeMeta(meta)
-        cached = meta
+        // Eski yüksek iteration değerlerini yeni KDF_ITERS değerine düşür.
+        // Bu sayede önceden 600k iteration ile setup edilmiş kasalar bir sonraki
+        // PIN doğrulamasında çok daha hızlı çalışır.
+        val finalMeta: Meta = if (meta.iterations > KDF_ITERS) {
+            runCatching {
+                val newSalt = ByteArray(SALT_LEN).also { rng.nextBytes(it) }
+                val newKek = deriveKey(password, newSalt, KDF_ITERS)
+                val newVerifierNonce = ByteArray(NONCE_LEN).also { rng.nextBytes(it) }
+                val newDekNonce = ByteArray(NONCE_LEN).also { rng.nextBytes(it) }
+                val newVerifierCt = gcmEncrypt(newKek, newVerifierNonce, VERIFIER_PLAIN)
+                val newDekCt = gcmEncrypt(newKek, newDekNonce, decryptedDek)
+                zero(newKek)
+                meta.copy(
+                    salt = newSalt,
+                    iterations = KDF_ITERS,
+                    verifierNonce = newVerifierNonce,
+                    verifierCipher = newVerifierCt,
+                    dekNonce = newDekNonce,
+                    dekCipher = newDekCt
+                )
+            }.getOrDefault(meta)
+        } else meta
+        writeMeta(finalMeta)
+        cached = finalMeta
         dek = decryptedDek
         if (plaintextDb.exists() && !isValidSqliteFile(plaintextDb)) {
             runCatching { plaintextDb.delete() }
@@ -446,7 +468,12 @@ class FileVault(private val rootDir: File) : Vault {
         private const val VERIFIER_CT_LEN = 16 + 16
         private const val KEY_BITS = 256
         private const val TAG_BITS = 128
-        private const val KDF_ITERS = 600_000
+        // PBKDF2-HMAC-SHA256, OWASP 2023 önerilen minimum değer (210k).
+        // Yanlış 5 denemeden sonra lockout devreye girdiği için daha yüksek bir değer
+        // pratik bir güvenlik avantajı sağlamadan mobil cihazlarda kullanıcıyı bekletiyordu.
+        // Mevcut kasalar kendi orijinal iteration sayılarını korur; sadece yeni setup
+        // ve changePassword bu yeni değeri kullanır.
+        private const val KDF_ITERS = 210_000
         private const val LOCKOUT_THRESHOLD = 5
         private const val MIN_META_SIZE =
             4 + 1 + SALT_LEN + 4 + NONCE_LEN + VERIFIER_CT_LEN + NONCE_LEN + DEK_CT_LEN + 4 + 8 + 1 + 4 + 1

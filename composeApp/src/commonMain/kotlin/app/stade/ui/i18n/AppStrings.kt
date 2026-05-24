@@ -138,6 +138,9 @@ abstract class AppStrings {
     abstract val visibleNotificationSubtitle: String
     abstract val systemNotificationsTitle: String
     abstract val systemNotificationsSubtitle: String
+    abstract val runInBackgroundTitle: String
+    abstract val runInBackgroundOnSubtitle: String
+    abstract val runInBackgroundOffSubtitle: String
     abstract val networkSection: String
     abstract val transportLayersTitle: String
     abstract val transportLayersSubtitle: String
