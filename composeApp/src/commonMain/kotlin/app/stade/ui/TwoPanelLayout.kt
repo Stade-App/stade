@@ -509,7 +509,7 @@ fun TwoPanelLayout(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            BrandMark(size = 150.dp)
+                            BrandMark(size = 125.dp)
 
                             Column(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
