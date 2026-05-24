@@ -552,6 +552,13 @@ fun PinSetupScreen(
                     onCancel = onCancel
                 )
             }
+            // Desktop: tuş takımı olmadığından iptal butonu buraya eklenir
+            if (!isKeypadSupported && requireCurrent) {
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = onCancel, enabled = !isVerifying) {
+                    Text(strings.cancel)
+                }
+            }
         }
     }
 }
