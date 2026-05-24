@@ -428,8 +428,10 @@ private fun SecurityPinGate(
     val shakeOffset = remember { androidx.compose.animation.core.Animatable(0f) }
     val keyFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) { runCatching { keyFocusRequester.requestFocus() } }
-
+    LaunchedEffect(Unit) {
+        delay(80)
+        runCatching { keyFocusRequester.requestFocus() }
+    }
 
     fun tryVerify() {
         if (pin.length < 4 || isVerifying || error != null) return

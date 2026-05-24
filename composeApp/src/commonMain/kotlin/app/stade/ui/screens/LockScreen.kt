@@ -99,7 +99,11 @@ fun LockScreen(
     val strings = LocalStrings.current
     val keyFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) { runCatching { keyFocusRequester.requestFocus() } }
+    LaunchedEffect(Unit) {
+        // Pencere tam olarak odaklanana kadar bekle, aksi hâlde requestFocus sessizce başarısız olur
+        delay(80)
+        runCatching { keyFocusRequester.requestFocus() }
+    }
 
     LaunchedEffect(lockoutUntil) {
         while (lockoutUntil > vault.nowMillis()) {
@@ -332,7 +336,11 @@ fun PinSetupScreen(
     val strings = LocalStrings.current
     val keyFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) { runCatching { keyFocusRequester.requestFocus() } }
+    LaunchedEffect(Unit) {
+        // Pencere tam olarak odaklanana kadar bekle, aksi hâlde requestFocus sessizce başarısız olur
+        delay(80)
+        runCatching { keyFocusRequester.requestFocus() }
+    }
 
     val currentInput = when (phase) {
         Phase.Current -> currentPin
@@ -505,43 +513,45 @@ fun PinSetupScreen(
                 }
             }
             Spacer(Modifier.height(16.dp))
-            PinKeypad(
-                onDigit = { d ->
-                    when (phase) {
-                        Phase.Current -> if (currentPin.length < PIN_MAX && error == null && !isVerifying) {
-                            currentPin += d
-                            if (currentPin.length >= PIN_MAX) verifyCurrentAndAdvance()
+            if (isKeypadSupported) {
+                PinKeypad(
+                    onDigit = { d ->
+                        when (phase) {
+                            Phase.Current -> if (currentPin.length < PIN_MAX && error == null && !isVerifying) {
+                                currentPin += d
+                                if (currentPin.length >= PIN_MAX) verifyCurrentAndAdvance()
+                            }
+                            Phase.New -> if (newPin.length < PIN_MAX) {
+                                newPin += d
+                                if (newPin.length >= PIN_MAX) phase = Phase.Confirm
+                            }
+                            Phase.Confirm -> if (confirmPin.length < newPin.length && error == null) confirmPin += d
                         }
-                        Phase.New -> if (newPin.length < PIN_MAX) {
-                            newPin += d
-                            if (newPin.length >= PIN_MAX) phase = Phase.Confirm
+                    },
+                    onBackspace = {
+                        when (phase) {
+                            Phase.Current -> if (currentPin.isNotEmpty() && !isVerifying) currentPin = currentPin.dropLast(1)
+                            Phase.New -> if (newPin.isNotEmpty()) newPin = newPin.dropLast(1)
+                            Phase.Confirm -> if (confirmPin.isNotEmpty()) confirmPin = confirmPin.dropLast(1)
                         }
-                        Phase.Confirm -> if (confirmPin.length < newPin.length && error == null) confirmPin += d
-                    }
-                },
-                onBackspace = {
-                    when (phase) {
-                        Phase.Current -> if (currentPin.isNotEmpty() && !isVerifying) currentPin = currentPin.dropLast(1)
-                        Phase.New -> if (newPin.isNotEmpty()) newPin = newPin.dropLast(1)
-                        Phase.Confirm -> if (confirmPin.isNotEmpty()) confirmPin = confirmPin.dropLast(1)
-                    }
-                },
-                actionLabel = null,
-                actionIsCheck = when (phase) {
-                    Phase.Current -> currentPin.length >= PIN_MIN && error == null && !isVerifying
-                    Phase.New -> newPin.length >= PIN_MIN
-                    Phase.Confirm -> false
-                },
-                onAction = {
-                    when (phase) {
-                        Phase.Current -> verifyCurrentAndAdvance()
-                        Phase.New -> if (newPin.length >= PIN_MIN) phase = Phase.Confirm
-                        Phase.Confirm -> {}
-                    }
-                },
-                cancelLabel = if (requireCurrent) strings.cancel else null,
-                onCancel = onCancel
-            )
+                    },
+                    actionLabel = null,
+                    actionIsCheck = when (phase) {
+                        Phase.Current -> currentPin.length >= PIN_MIN && error == null && !isVerifying
+                        Phase.New -> newPin.length >= PIN_MIN
+                        Phase.Confirm -> false
+                    },
+                    onAction = {
+                        when (phase) {
+                            Phase.Current -> verifyCurrentAndAdvance()
+                            Phase.New -> if (newPin.length >= PIN_MIN) phase = Phase.Confirm
+                            Phase.Confirm -> {}
+                        }
+                    },
+                    cancelLabel = if (requireCurrent) strings.cancel else null,
+                    onCancel = onCancel
+                )
+            }
         }
     }
 }
