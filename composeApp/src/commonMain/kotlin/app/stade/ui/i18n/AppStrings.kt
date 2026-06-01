@@ -211,6 +211,7 @@ abstract class AppStrings {
 
     abstract val selectContactHint: String
     abstract val attachPhoto: String
+    abstract val selectMediaTitle: String
     abstract val photoMessage: String
     abstract val photoSendFailed: String
     abstract val photoTooBig: String

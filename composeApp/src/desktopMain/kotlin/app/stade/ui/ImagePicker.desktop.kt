@@ -3,6 +3,7 @@ package app.stade.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import app.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.awt.FileDialog
@@ -35,10 +36,11 @@ private fun openNativeImageDialog(multiSelect: Boolean): Array<File> {
 @Composable
 actual fun rememberImagePickerLauncher(onImage: (ByteArray) -> Unit): ImagePickerLauncher {
     val scope = rememberCoroutineScope()
-    return remember {
+    val title = LocalStrings.current.selectMediaTitle
+    return remember(title) {
         ImagePickerLauncher {
             scope.launch(Dispatchers.IO) {
-                val files = openNativeImageDialog(multiSelect = false)
+                val files = openNativeImageDialog(title, multiSelect = false)
                 val file = files.firstOrNull() ?: return@launch
                 runCatching {
                     onImage(compressImageDesktop(file.readBytes()))
@@ -51,10 +53,11 @@ actual fun rememberImagePickerLauncher(onImage: (ByteArray) -> Unit): ImagePicke
 @Composable
 actual fun rememberMultiImagePickerLauncher(onImages: (List<ByteArray>) -> Unit): ImagePickerLauncher {
     val scope = rememberCoroutineScope()
-    return remember {
+    val title = LocalStrings.current.selectMediaTitle
+    return remember(title) {
         ImagePickerLauncher {
             scope.launch(Dispatchers.IO) {
-                val files = openNativeImageDialog(multiSelect = true)
+                val files = openNativeImageDialog(title, multiSelect = true)
                 if (files.isEmpty()) return@launch
                 val results = files.mapNotNull { f ->
                     runCatching { compressImageDesktop(f.readBytes()) }.getOrNull()

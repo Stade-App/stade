@@ -18,13 +18,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -32,7 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Attachment
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -41,11 +43,11 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -59,8 +61,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -99,13 +99,11 @@ import app.stade.notification.cancelMessagesNotification
 import app.stade.notification.clearAllMessageNotifications
 import app.stade.sync.SyncEngine
 import app.stade.transport.DialAttempt
-import app.stade.ui.ImagePickerLauncher
 import app.stade.ui.components.Avatar
 import app.stade.ui.components.formatChatTime
 import app.stade.ui.components.maskAddress
 import app.stade.ui.decodeToImageBitmap
 import app.stade.ui.i18n.LocalStrings
-import app.stade.ui.rememberImagePickerLauncher
 import app.stade.ui.rememberMultiImagePickerLauncher
 import app.stade.ui.theme.StadeColors
 import kotlinx.coroutines.Dispatchers
@@ -196,12 +194,13 @@ fun ChatScreen(
 
     val MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3 MB
 
+    // Henüz gönderilmemiş, hazırlanmakta olan ek listesi
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
 
-    val imagePicker = rememberMultiImagePickerLauncher { bytesList ->
-        val accepted = bytesList.filter { it.size <= MAX_IMAGE_BYTES }
-        val rejected = bytesList.size - accepted.size
-        if (rejected > 0) {
+    val imagePicker = rememberMultiImagePickerLauncher { imagesList ->
+        // Hemen göndermek yerine giriş listesine ekle (boyut sınırını aşanları ele)
+        val accepted = imagesList.filter { it.size <= MAX_IMAGE_BYTES }
+        if (accepted.size != imagesList.size) {
             showNotification(strings.photoTooBig, NotificationKind.Error)
         }
         if (accepted.isNotEmpty()) {
@@ -247,6 +246,7 @@ fun ChatScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -318,7 +318,6 @@ fun ChatScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .padding(padding)
-                .imePadding()
         ) {
             Column(modifier = Modifier.fillMaxSize().onSizeChanged { size ->
                 if (size.height < prevColumnHeight && messages.isNotEmpty()) {
@@ -411,8 +410,8 @@ fun ChatScreen(
 
                 Composer(
                     draft = draft,
-                    onChange = { draft = it },
                     pendingImages = pendingImages,
+                    onChange = { draft = it },
                     onRemoveImage = { idx ->
                         pendingImages = pendingImages.toMutableList().also { it.removeAt(idx) }
                     },
@@ -424,14 +423,13 @@ fun ChatScreen(
                         draft = TextFieldValue("")
                         pendingImages = emptyList()
                         scope.launch {
-                            // Önce fotoğrafları sırayla gönder, sonra varsa metni gönder.
-                            // Bu sayede mesaj akışında görsel(ler) metnin üstünde görünür.
-                            for (img in images) {
-                                runCatching { container.chat.sendImage(owner, c, img) }
-                                    .onFailure { showNotification(strings.photoSendFailed, NotificationKind.Error) }
-                            }
                             if (text.isNotEmpty()) {
                                 runCatching { container.chat.send(owner, c, text) }
+                                    .onFailure { showNotification(strings.sendFailed(it.message ?: ""), NotificationKind.Error) }
+                            }
+                            images.forEach { imageBytes ->
+                                runCatching { container.chat.sendImage(owner, c, imageBytes) }
+                                    .onFailure { showNotification(strings.photoSendFailed, NotificationKind.Error) }
                             }
                         }
                     },
@@ -650,48 +648,99 @@ private fun DiagnosticsCard(
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Composer(
     draft: TextFieldValue,
-    onChange: (TextFieldValue) -> Unit,
     pendingImages: List<ByteArray>,
+    onChange: (TextFieldValue) -> Unit,
     onRemoveImage: (Int) -> Unit,
     onSend: () -> Unit,
     onPickImage: () -> Unit
 ) {
     val strings = LocalStrings.current
-    val hasContent = draft.text.isNotBlank() || pendingImages.isNotEmpty()
+    val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty()
+
     Column(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .imePadding()
+            .navigationBarsPadding()
     ) {
-        if (pendingImages.isNotEmpty()) {
-            AttachmentStrip(
-                images = pendingImages,
-                onRemove = onRemoveImage
-            )
+        AnimatedVisibility(
+            visible = pendingImages.isNotEmpty(),
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it }
+        ) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(pendingImages) { idx, bytes ->
+                    val bitmap = remember(bytes) {
+                        runCatching { bytes.decodeToImageBitmap() }.getOrNull()
+                    }
+                    Box(modifier = Modifier.size(72.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (bitmap != null) {
+                                androidx.compose.foundation.Image(
+                                    bitmap = bitmap,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.BrokenImage,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.errorContainer)
+                                .clickable { onRemoveImage(idx) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            IconButton(
-                onClick = onPickImage,
-                modifier = Modifier.size(44.dp)
-            ) {
-                Icon(
-                    Icons.Default.AddPhotoAlternate,
-                    contentDescription = strings.attachPhoto,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            TextField(
+            androidx.compose.foundation.text.BasicTextField(
                 value = draft,
                 onValueChange = onChange,
                 modifier = Modifier
                     .weight(1f)
+                    .height(54.dp)
                     .onPreviewKeyEvent { keyEvent ->
                         if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Enter) {
                             if (keyEvent.isShiftPressed) {
@@ -706,107 +755,68 @@ private fun Composer(
                             false
                         }
                     },
-                placeholder = { Text(strings.typeMessagePlaceholder) },
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                 maxLines = 5,
-                shape = RoundedCornerShape(24.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent
-                )
+                decorationBox = { innerTextField ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                shape = RoundedCornerShape(54.dp)
+                            )
+                            .padding(start = 18.dp, end = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (draft.text.isEmpty()) {
+                                Text(
+                                    text = strings.typeMessagePlaceholder,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            innerTextField()
+                        }
+                        IconButton(
+                            onClick = onPickImage,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Attachment,
+                                contentDescription = strings.attachPhoto,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .rotate(270f)
+                            )
+                        }
+                    }
+                }
             )
+
             FilledIconButton(
-                enabled = hasContent,
+                enabled = canSend,
                 onClick = onSend,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(54.dp),
                 shape = CircleShape,
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.sendButton)
+                Icon(
+                    Icons.AutoMirrored.Filled.Send,
+                    contentDescription = strings.sendButton,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     }
 }
 
-@Composable
-private fun AttachmentStrip(
-    images: List<ByteArray>,
-    onRemove: (Int) -> Unit
-) {
-    val strings = LocalStrings.current
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        Text(
-            strings.attachmentCount(images.size),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(6.dp))
-        androidx.compose.foundation.lazy.LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            itemsIndexed(images, key = { idx, _ -> idx }) { idx, bytes ->
-                AttachmentThumb(bytes = bytes, onRemove = { onRemove(idx) })
-            }
-        }
-    }
-}
 
-@Composable
-private fun AttachmentThumb(bytes: ByteArray, onRemove: () -> Unit) {
-    val strings = LocalStrings.current
-    val bitmap: ImageBitmap? = remember(bytes) { bytes.decodeToImageBitmap() }
-    Box(modifier = Modifier.size(72.dp)) {
-        if (bitmap != null) {
-            androidx.compose.foundation.Image(
-                bitmap = bitmap,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.BrokenImage, contentDescription = null)
-            }
-        }
-        // Sağ üst köşedeki kaldırma butonu
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(2.dp)
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.6f))
-                .clickable { onRemove() },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                Icons.Default.Close,
-                contentDescription = strings.removeAttachment,
-                tint = Color.White,
-                modifier = Modifier.size(14.dp)
-            )
-        }
-    }
-}
 
 
 @Composable

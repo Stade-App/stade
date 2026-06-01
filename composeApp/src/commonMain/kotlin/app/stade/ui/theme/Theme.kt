@@ -2,6 +2,7 @@ package app.stade.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
@@ -19,6 +20,10 @@ private val PrimaryDark = Color(0xFF0B3D62)
 private val Accent      = Color(0xFF61A5C2)
 private val AccentSoft  = Color(0xFFA9D6E5)
 private val Success     = Color(0xFF22C55E)
+
+private val BrandLigth = Color(0xFF2B4E6A)
+
+private val BrandDark  = Color(0xFF427195)
 
 private val LightColors = lightColorScheme(
     primary                 = Primary,
@@ -120,3 +125,16 @@ fun StadeTheme(content: @Composable () -> Unit) {
         content     = content
     )
 }
+
+val ColorScheme.BrandColor: Color
+    @Composable
+    get() {
+        val dark = isSystemInDarkTheme()
+        val isDynamicEnabled = getDynamicColorEnabled().value
+
+        return if (isDynamicEnabled && isDynamicColorSupported) {
+            this.primary
+        } else {
+            if (dark) BrandDark else BrandLigth
+        }
+    }
