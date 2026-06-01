@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SettingsEthernet
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -73,10 +74,13 @@ import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
 import app.stade.notification.getNotificationPrivacyEnabled
 import app.stade.notification.getNotificationsEnabled
+import app.stade.notification.getRunInBackgroundEnabledCommon
 import app.stade.notification.isNotificationSupported
+import app.stade.notification.isRunInBackgroundSupported
 import app.stade.notification.openNotificationSettings
 import app.stade.notification.setNotificationPrivacyEnabled
 import app.stade.notification.setNotificationsEnabled
+import app.stade.notification.setRunInBackgroundEnabledCommon
 import app.stade.ui.components.Avatar
 import app.stade.ui.components.PlatformVerticalScrollbar
 import app.stade.ui.components.StadeIdCard
@@ -105,6 +109,7 @@ fun SettingsScreen(
     val dynamicColorEnabled by getDynamicColorEnabled()
     val notificationsEnabled by getNotificationsEnabled()
     val notificationPrivacyEnabled by getNotificationPrivacyEnabled()
+    val runInBackgroundEnabled by getRunInBackgroundEnabledCommon()
     var showLogoutDialog by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
     var fingerprintCopied by remember { mutableStateOf(false) }
@@ -312,6 +317,23 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .background(color = bgColor, shape = shapeBot)
                                 .clip(shapeBot)
+                        )
+                    }
+                }
+            }
+
+            if (isRunInBackgroundSupported) {
+                item {
+                    SettingsSectionLabel(strings.runInBackgroundTitle)
+                    SettingsGroup {
+                        SwitchSettingsRow(
+                            icon = Icons.Default.Sync,
+                            iconTint = MaterialTheme.colorScheme.secondary,
+                            title = strings.runInBackgroundTitle,
+                            subtitle = if (runInBackgroundEnabled) strings.runInBackgroundOnSubtitle
+                                       else strings.runInBackgroundOffSubtitle,
+                            checked = runInBackgroundEnabled,
+                            onCheckedChange = { setRunInBackgroundEnabledCommon(it) }
                         )
                     }
                 }

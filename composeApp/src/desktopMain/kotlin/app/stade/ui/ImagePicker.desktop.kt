@@ -19,10 +19,8 @@ actual class ImagePickerLauncher(private val doLaunch: () -> Unit) {
 
 private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "bmp", "webp")
 
-private fun openNativeImageDialog(multiSelect: Boolean): Array<File> {
-    // java.awt.FileDialog işletim sisteminin native dosya gezginini kullanır
-    // (Windows Explorer / macOS Finder / Linux GTK). JFileChooser yerine bunu kullanıyoruz.
-    val dialog = FileDialog(null as Frame?, "Fotoğraf seç", FileDialog.LOAD)
+private fun openNativeImageDialog(title: String, multiSelect: Boolean): Array<File> {
+    val dialog = FileDialog(null as Frame?, title, FileDialog.LOAD)
     dialog.isMultipleMode = multiSelect
     dialog.setFilenameFilter { _, name ->
         val ext = name.substringAfterLast('.', "").lowercase()

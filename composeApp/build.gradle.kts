@@ -166,6 +166,12 @@ compose.desktop {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.ico"))
                 menuGroup = "Stade"
                 upgradeUuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                // Kurulum sırasında masaüstü kısa yolu oluştur
+                shortcut = true
+                // Kullanıcının kurulum dizinini seçmesine izin ver
+                dirChooser = true
+                // Başlat menüsünde kısa yol
+                perUserInstall = true
             }
             macOS {
                 dmgPackageVersion = "1.0.0"
