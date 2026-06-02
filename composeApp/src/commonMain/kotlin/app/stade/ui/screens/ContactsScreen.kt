@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.contact.Contact
 import app.stade.identity.LocalIdentity
+import app.stade.message.IMAGE_BODY_PREFIX
 import app.stade.ui.PlatformBackHandler
 import app.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.Dispatchers
@@ -400,9 +401,12 @@ fun ContactsScreen(
                     items(groups, key = { "grp_${it.id}" }) { group ->
                         val lastMsg by container.groups.observeLastMessage(group.id).collectAsState(initial = null)
                         val unread by container.groups.observeUnreadCount(group.id).collectAsState(initial = 0L)
+                        val preview by remember(lastMsg?.id) {
+                            derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage) } }
+                        }
                         GroupRow(
                             group = group,
-                            lastMessage = lastMsg?.body,
+                            lastMessage = preview,
                             unread = unread,
                             onClick = { onOpenGroupChat(group.id) }
                         )
@@ -414,10 +418,13 @@ fun ContactsScreen(
                 items(filtered, key = { it.id }) { contact ->
                     val lastMsg by container.messages.observeLastMessage(contact.id).collectAsState(initial = null)
                     val unread by container.messages.observeUnreadCount(contact.id).collectAsState(initial = 0L)
+                    val preview by remember(lastMsg?.id) {
+                        derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage) } }
+                    }
                     ContactRow(
                         contact = contact,
                         connected = connectedSet.contains(contact.id),
-                        lastMessage = lastMsg?.body,
+                        lastMessage = preview,
                         unread = unread,
                         onClick = { onOpenChat(contact.id) },
                         onLongPress = { actionContact = contact }
@@ -635,3 +642,10 @@ private fun GroupRow(
         }
     }
 }
+
+private fun previewBody(body: String, photoLabel: String): String {
+    if (body.startsWith(IMAGE_BODY_PREFIX)) return photoLabel
+    val firstLine = body.lineSequence().firstOrNull() ?: return ""
+    return if (firstLine.length > 120) firstLine.substring(0, 120) else firstLine
+}
+
