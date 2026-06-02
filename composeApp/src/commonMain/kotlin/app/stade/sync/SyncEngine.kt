@@ -1,4 +1,4 @@
-package app.stade.sync
+﻿package app.stade.sync
 
 import app.stade.contact.Contact
 import app.stade.contact.ContactManager
@@ -414,10 +414,6 @@ class SyncEngine(
                             groupManager.handleGroupWelcome(owner.id, bodyStr)
                         }
                         groupManager != null && bodyStr.startsWith(GRP_INV_PREFIX) -> {
-                            // Davet edilen kullanıcı tarafında otomatik olarak importGroupInvite çağrılır.
-                            // pending join saklanır; ContactConnected eventi tetiklendiğinde
-                            // GroupChatService bunu görüp sendJoinRequest çağıracaktır.
-                            // Burada gönderen zaten kişi listesindedir (mesaj geldiğine göre).
                             runCatching {
                                 val inviteCode = bodyStr.removePrefix(GRP_INV_PREFIX)
                                 val parsed = groupManager.parseInviteLink(inviteCode) ?: return@runCatching
@@ -425,7 +421,6 @@ class SyncEngine(
                                     parsed.groupId, parsed.groupName, parsed.inviteToken
                                 )
                                 groupManager.storePendingJoin(parsed.creatorStadeId, pending)
-                                // Bağlantı zaten açık olduğu için anında join request atalım
                                 val msgId2 = Encoding.toHex(crypto.randomBytes(16))
                                 val ts2 = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
                                 val joinBody = "$GRP_JOIN_PREFIX${parsed.groupId}:${parsed.inviteToken}"

@@ -1,4 +1,4 @@
-package app.stade.ui.i18n
+﻿package app.stade.ui.i18n
 
 import app.stade.security.SessionTimeout
 

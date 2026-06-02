@@ -1,4 +1,4 @@
-package app.stade.ui
+﻿package app.stade.ui
 
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -132,7 +132,6 @@ private fun UnlockedApp(
     val scope = rememberCoroutineScope()
     var identity by remember { mutableStateOf<LocalIdentity?>(null) }
     var screen by remember { mutableStateOf<Screen>(Screen.Onboarding) }
-    // Settings scroll pozisyonu: ekranlar arası geçişte kaybolmaması için burada tutulur
     val settingsListState = rememberLazyListState()
 
     val isInForeground by container.isAppInForeground.collectAsState()
@@ -160,10 +159,6 @@ private fun UnlockedApp(
 
     DisposableEffect(container) {
         onDispose {
-            // flushAndKeep burada kasıtlı olarak ÇAĞRILMIYOR.
-            // onLockRequested zaten Dispatchers.Default üzerinde flushAndKeep çağırıyor;
-            // burada main thread'de senkron dosya I/O yapmak LockScreen render edilirken
-            // kare düşürür ve gri ekrana yol açar.
         }
     }
 
@@ -185,9 +180,6 @@ private fun UnlockedApp(
         }
     }
 
-    // Bildirim dispatcher: yeni mesajda platforma özel bildirim göster.
-    // Android'de bu zaten foreground service tarafından yapılıyor (no-op),
-    // masaüstünde sistem tepsisi balonu olarak gösterir.
     LaunchedEffect(identity?.id, container) {
         if (identity == null) return@LaunchedEffect
         container.sync.events.collect { event ->

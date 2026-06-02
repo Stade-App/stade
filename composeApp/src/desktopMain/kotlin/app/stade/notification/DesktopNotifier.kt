@@ -1,4 +1,4 @@
-package app.stade.notification
+﻿package app.stade.notification
 
 import java.awt.AWTException
 import java.awt.MenuItem
@@ -53,7 +53,6 @@ object DesktopNotifier {
                 tray.add(icon)
                 trayIcon = icon
             } catch (_: AWTException) {
-                // Tray eklenemedi
             }
         }
     }
@@ -74,12 +73,9 @@ object DesktopNotifier {
     }
 
     fun cancel(@Suppress("UNUSED_PARAMETER") contactId: String) {
-        // TrayIcon.displayMessage tek seferlik bir balon olduğu için
-        // kişi başına özel kapatma desteklemiyor; no-op.
     }
 
     fun cancelAll() {
-        // Aynı sebeple no-op.
     }
 }
 

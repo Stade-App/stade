@@ -1,4 +1,4 @@
-package app.stade.ui.screens
+﻿package app.stade.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -85,7 +85,6 @@ fun SecuritySettingsScreen(
     onBack: () -> Unit,
     onOpenPinSetup: (requireCurrent: Boolean) -> Unit
 ) {
-    // Kilit aktifse güvenlik ayarlarına girmeden önce PIN doğrulama gerekir.
     val lockEnabled = remember { container.secrets.isLockEnabled() }
     var pinVerified by remember { mutableStateOf(!lockEnabled) }
 
@@ -147,8 +146,6 @@ private fun SecuritySettingsContent(
                 item {
                     SecuritySectionLabel(strings.pinSection)
                     SecurityGroup {
-                        // Masaüstünde tuş takımı olmadığından "PIN değiştir" tek başına tam yuvarlak köşeli gösterilir.
-                        // Android'de altında "Karıştır" satırı olduğu için üst köşeler yuvarlak, alt köşeler küçük kalır.
                         val changePinShape = if (isKeypadSupported) {
                             RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
                         } else {
@@ -185,10 +182,6 @@ private fun SecuritySettingsContent(
                     }
                 }
 
-                // Gizlilik bölümü yalnızca desteklenen platformlarda gösterilir (Android).
-                // Masaüstünde FLAG_SECURE ve benzeri özellikler desteklenmediğinden gizlenir.
-                // İleride masaüstüne özgü gizlilik ayarları eklendikçe PrivacyFeatures.kt
-                // güncellenerek bu blok otomatik olarak görünür hale gelir.
                 if (isScreenPrivacySupported) {
                     item {
                         SecuritySectionLabel(strings.privacySection)
@@ -308,7 +301,6 @@ private fun SecuritySectionLabel(title: String) {
     )
 }
 
-// Eski SecurityGroup fonksiyonunu tamamen bununla değiştir:
 @Composable
 private fun SecurityGroup(content: @Composable () -> Unit) {
     Column(

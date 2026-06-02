@@ -1,4 +1,4 @@
-package app.stade
+﻿package app.stade
 
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.SideEffect
@@ -79,11 +79,9 @@ fun main(args: Array<String>) = application {
     val windowState = rememberWindowState(
         position = WindowPosition.Aligned(Alignment.Center)
     )
-    // Tray etkin ise pencere kapatma uygulamayı sonlandırmaz, sadece pencereyi gizler.
     var visible by remember { mutableStateOf(true) }
     val runInBackground by getRunInBackgroundEnabled()
 
-    // Tray entegrasyonu — desteklenen platformlarda simgeyi tepsiye ekle.
     remember(runInBackground) {
         if (runInBackground && java.awt.SystemTray.isSupported()) {
             DesktopNotifier.setHandlers(
@@ -100,7 +98,6 @@ fun main(args: Array<String>) = application {
     Window(
         onCloseRequest = {
             if (runInBackground && java.awt.SystemTray.isSupported()) {
-                // Tray etkin: pencereyi gizle, uygulama arka planda çalışmaya devam etsin.
                 visible = false
                 DesktopNotifier.showMessage("Stade", "Uygulama arka planda çalışmaya devam ediyor")
             } else {

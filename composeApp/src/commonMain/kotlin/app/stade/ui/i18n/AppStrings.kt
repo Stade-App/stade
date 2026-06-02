@@ -1,4 +1,4 @@
-package app.stade.ui.i18n
+﻿package app.stade.ui.i18n
 
 import androidx.compose.runtime.compositionLocalOf
 
@@ -220,7 +220,6 @@ abstract class AppStrings {
     abstract val removeAttachment: String
     abstract fun attachmentCount(count: Int): String
 
-    // Group chat
     abstract val createGroupTitle: String
     abstract val createGroupAction: String
     abstract val groupNameLabel: String

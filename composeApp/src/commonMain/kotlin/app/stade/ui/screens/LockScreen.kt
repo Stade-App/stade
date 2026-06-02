@@ -1,4 +1,4 @@
-package app.stade.ui.screens
+﻿package app.stade.ui.screens
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.keyframes
@@ -106,7 +106,6 @@ fun LockScreen(
     val keyFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
-        // Pencere tam olarak odaklanana kadar bekle, aksi hâlde requestFocus sessizce başarısız olur
         delay(80)
         runCatching { keyFocusRequester.requestFocus() }
     }
@@ -346,7 +345,6 @@ fun PinSetupScreen(
     val keyFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
-        // Pencere tam olarak odaklanana kadar bekle, aksi hâlde requestFocus sessizce başarısız olur
         delay(80)
         runCatching { keyFocusRequester.requestFocus() }
     }
@@ -561,7 +559,6 @@ fun PinSetupScreen(
                     onCancel = onCancel
                 )
             }
-            // Desktop: tuş takımı olmadığından iptal butonu buraya eklenir
             if (!isKeypadSupported && requireCurrent) {
                 Spacer(Modifier.height(8.dp))
                 TextButton(onClick = onCancel, enabled = !isVerifying) {

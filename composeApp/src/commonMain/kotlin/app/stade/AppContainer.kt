@@ -1,4 +1,4 @@
-package app.stade
+﻿package app.stade
 
 import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlCursor
@@ -124,9 +124,6 @@ class AppContainer(
                 db.stadeDbQueries.wipeKeyValue()
             }
         }
-        // Windows'ta plaintext DB dosyasını silebilmek için sürücüyü kapatmamız şart;
-        // aksi hâlde vault.wipe() dosyayı silemez ve yeni container açıldığında
-        // eski veri/şema kalıntıları çakışmaya yol açar.
         runCatching { driver.close() }
         runCatching { vault.wipe() }
     }

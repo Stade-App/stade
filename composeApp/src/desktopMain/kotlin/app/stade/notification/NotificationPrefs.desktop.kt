@@ -1,4 +1,4 @@
-package app.stade.notification
+﻿package app.stade.notification
 
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
@@ -30,7 +30,6 @@ actual fun setNotificationPrivacyEnabled(value: Boolean) {
 }
 
 actual fun openNotificationSettings() {
-    // Desktop'ta sistem geneli "bildirim ayarları" yok; uygulama içinde yönetiliyor.
 }
 
 actual fun cancelMessagesNotification(contactId: String) {

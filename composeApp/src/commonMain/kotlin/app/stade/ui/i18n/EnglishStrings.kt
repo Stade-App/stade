@@ -1,4 +1,4 @@
-package app.stade.ui.i18n
+﻿package app.stade.ui.i18n
 
 import app.stade.security.SessionTimeout
 
@@ -274,7 +274,6 @@ object EnglishStrings : AppStrings() {
     override val removeAttachment = "Remove"
     override fun attachmentCount(count: Int) = if (count == 1) "1 photo attached" else "$count photos attached"
 
-    // Group chat
     override val createGroupTitle = "Create Group"
     override val createGroupAction = "Create Group"
     override val groupNameLabel = "Group name"

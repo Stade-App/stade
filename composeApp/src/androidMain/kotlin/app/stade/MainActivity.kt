@@ -1,4 +1,4 @@
-package app.stade
+﻿package app.stade
 
 import android.Manifest
 import android.content.Intent
@@ -52,8 +52,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Uygulama arka plana geçtiğinde DB'yi arka planda şifrele.
-        // onDispose yerine burada yapılır; main thread'i bloklamaz.
         val app = (application as StadeApplication)
         val vault = app.container?.vault ?: return
         lifecycleScope.launch(Dispatchers.IO) {
@@ -82,10 +80,7 @@ class MainActivity : ComponentActivity() {
 
     private fun applySecureScreenFlag(app: StadeApplication) {
         val enabled = app.container?.secrets?.isScreenshotBlockingEnabled() ?: false
-        // Durum değişmediyse dokunma.
         if (enabled == lastSecureFlagState) return
-        // FLAG_SECURE hiç etkinleştirilmediyse clearFlags çağırmaya gerek yok;
-        // clearFlags çağrısı bile window surface'ını yeniden oluşturabilir ve gri ekrana yol açar.
         if (lastSecureFlagState == null && !enabled) {
             lastSecureFlagState = false
             return

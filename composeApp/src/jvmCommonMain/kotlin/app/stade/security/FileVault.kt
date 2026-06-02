@@ -1,4 +1,4 @@
-package app.stade.security
+﻿package app.stade.security
 
 import java.io.File
 import java.io.RandomAccessFile
@@ -123,9 +123,6 @@ class FileVault(private val rootDir: File) : Vault {
         zero(kek)
         meta.failedAttempts = 0
         meta.lockoutUntilMillis = 0L
-        // Eski yüksek iteration değerlerini yeni KDF_ITERS değerine düşür.
-        // Bu sayede önceden 600k iteration ile setup edilmiş kasalar bir sonraki
-        // PIN doğrulamasında çok daha hızlı çalışır.
         val finalMeta: Meta = if (meta.iterations > KDF_ITERS) {
             runCatching {
                 val newSalt = ByteArray(SALT_LEN).also { rng.nextBytes(it) }
@@ -468,11 +465,6 @@ class FileVault(private val rootDir: File) : Vault {
         private const val VERIFIER_CT_LEN = 16 + 16
         private const val KEY_BITS = 256
         private const val TAG_BITS = 128
-        // PBKDF2-HMAC-SHA256, OWASP 2023 önerilen minimum değer (210k).
-        // Yanlış 5 denemeden sonra lockout devreye girdiği için daha yüksek bir değer
-        // pratik bir güvenlik avantajı sağlamadan mobil cihazlarda kullanıcıyı bekletiyordu.
-        // Mevcut kasalar kendi orijinal iteration sayılarını korur; sadece yeni setup
-        // ve changePassword bu yeni değeri kullanır.
         private const val KDF_ITERS = 210_000
         private const val LOCKOUT_THRESHOLD = 5
         private const val MIN_META_SIZE =

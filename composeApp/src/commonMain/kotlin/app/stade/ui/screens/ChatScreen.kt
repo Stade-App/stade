@@ -1,4 +1,4 @@
-package app.stade.ui.screens
+﻿package app.stade.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -194,11 +194,9 @@ fun ChatScreen(
 
     val MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3 MB
 
-    // Henüz gönderilmemiş, hazırlanmakta olan ek listesi
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
 
     val imagePicker = rememberMultiImagePickerLauncher { imagesList ->
-        // Hemen göndermek yerine giriş listesine ekle (boyut sınırını aşanları ele)
         val accepted = imagesList.filter { it.size <= MAX_IMAGE_BYTES }
         if (accepted.size != imagesList.size) {
             showNotification(strings.photoTooBig, NotificationKind.Error)
