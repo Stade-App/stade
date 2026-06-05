@@ -17,18 +17,18 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
 
     private val pendingJoins = mutableMapOf<String, PendingJoinData>()
 
-    fun createGroup(ownerId: String, name: String): GroupInfo {
+    fun createGroup(ownerId: String, creatorStadeId: String, name: String): GroupInfo {
         val id = Encoding.toHex(crypto.randomBytes(16))
         val inviteToken = Encoding.toHex(crypto.randomBytes(16))
         val now = Clock.System.now().toEpochMilliseconds()
-        db.stadeDbQueries.insertGroup(id, ownerId, name, inviteToken, now)
-        return GroupInfo(id, ownerId, name, inviteToken, now)
+        db.stadeDbQueries.insertGroup(id, ownerId, name, inviteToken, now, creatorStadeId)
+        return GroupInfo(id, ownerId, name, inviteToken, now, emptyList(), creatorStadeId)
     }
 
     fun getGroup(groupId: String): GroupInfo? =
         db.stadeDbQueries.selectGroup(groupId).executeAsOneOrNull()?.let {
             val members = db.stadeDbQueries.selectGroupMembers(it.id).executeAsList().map { m -> m.contactId }
-            GroupInfo(it.id, it.ownerId, it.name, it.inviteToken, it.createdAt, members)
+            GroupInfo(it.id, it.ownerId, it.name, it.inviteToken, it.createdAt, members, it.creatorStadeId)
         }
 
     fun allGroups(ownerId: String): List<GroupInfo> {
@@ -38,7 +38,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
             .executeAsList()
             .groupBy({ it.groupId }, { it.contactId })
         return rows.map { row ->
-            GroupInfo(row.id, row.ownerId, row.name, row.inviteToken, row.createdAt, membersByGroup[row.id].orEmpty())
+            GroupInfo(row.id, row.ownerId, row.name, row.inviteToken, row.createdAt, membersByGroup[row.id].orEmpty(), row.creatorStadeId)
         }
     }
 
@@ -52,7 +52,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
                     .executeAsList()
                     .groupBy({ it.groupId }, { it.contactId })
                 rows.map { row ->
-                    GroupInfo(row.id, row.ownerId, row.name, row.inviteToken, row.createdAt, membersByGroup[row.id].orEmpty())
+                    GroupInfo(row.id, row.ownerId, row.name, row.inviteToken, row.createdAt, membersByGroup[row.id].orEmpty(), row.creatorStadeId)
                 }
             }
 
@@ -108,6 +108,23 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.insertGroupMessage(messageId, groupId, ownerStadeId, body, timestamp, 1L, 1L)
     }
 
+    fun deleteGroupMessages(messageIds: Collection<String>) {
+        if (messageIds.isEmpty()) return
+        db.stadeDbQueries.transaction {
+            messageIds.forEach { id ->
+                db.stadeDbQueries.deleteGroupMessageById(id)
+            }
+        }
+    }
+
+    fun leaveGroupLocally(groupId: String) {
+        db.stadeDbQueries.transaction {
+            db.stadeDbQueries.deleteGroupMessages(groupId)
+            db.stadeDbQueries.deleteGroupMembers(groupId)
+            db.stadeDbQueries.deleteGroup(groupId)
+        }
+    }
+
     fun handleIncomingGroupMsg(contactId: String, messageId: String, rawBody: String, timestamp: Long): String? {
         val stripped = rawBody.removePrefix(GRP_MSG_PREFIX)
         val colonIdx = stripped.indexOf(':')
@@ -146,7 +163,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
         return "$GRP_WELCOME_PREFIX$groupId:${group.name}\n$memberLine"
     }
 
-    fun handleGroupWelcome(ownerId: String, rawBody: String) {
+    fun handleGroupWelcome(ownerId: String, creatorStadeId: String, rawBody: String) {
         val stripped = rawBody.removePrefix(GRP_WELCOME_PREFIX)
         val colonIdx = stripped.indexOf(':')
         if (colonIdx < 0) return
@@ -161,7 +178,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
         if (db.stadeDbQueries.selectGroup(groupId).executeAsOneOrNull() == null) {
             val now = Clock.System.now().toEpochMilliseconds()
             val newToken = Encoding.toHex(crypto.randomBytes(16))
-            db.stadeDbQueries.insertGroup(groupId, ownerId, groupName, newToken, now)
+            db.stadeDbQueries.insertGroup(groupId, ownerId, groupName, newToken, now, creatorStadeId)
         }
         memberIds.forEach { memberId ->
             runCatching { addMember(groupId, memberId) }

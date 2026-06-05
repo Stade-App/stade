@@ -14,6 +14,7 @@ object DesktopNotifier {
 
     private val flagPrefs: Preferences = Preferences.userRoot().node("app/stade/notifications")
     private const val KEY_BG_NOTICE_SHOWN = "bg_notice_shown"
+    private const val TRAY_TOOLTIP = "Stade"
 
     @Volatile private var trayIcon: TrayIcon? = null
     @Volatile private var onActivate: (() -> Unit)? = null
@@ -26,10 +27,18 @@ object DesktopNotifier {
 
     fun ensureTray() {
         if (!SystemTray.isSupported()) return
-        if (trayIcon != null) return
         synchronized(this) {
-            if (trayIcon != null) return
             val tray = SystemTray.getSystemTray()
+            tray.trayIcons.forEach { existing ->
+                if (existing === trayIcon) return@forEach
+                if (existing.toolTip == TRAY_TOOLTIP) {
+                    runCatching { tray.remove(existing) }
+                }
+            }
+            if (trayIcon != null && trayIcon !in tray.trayIcons) {
+                trayIcon = null
+            }
+            if (trayIcon != null) return
             val image = runCatching {
                 val stream = javaClass.classLoader.getResourceAsStream("drawable/app_tray_icon.png")
                     ?: javaClass.classLoader.getResourceAsStream("composeResources/stade.composeapp.generated.resources/drawable/app_tray_icon.png")
@@ -44,7 +53,7 @@ object DesktopNotifier {
                     addActionListener { onQuit?.invoke() }
                 })
             }
-            val icon = TrayIcon(image, "Stade", popup).apply {
+            val icon = TrayIcon(image, TRAY_TOOLTIP, popup).apply {
                 isImageAutoSize = true
                 addActionListener(ActionListener { onActivate?.invoke() })
             }
@@ -57,9 +66,17 @@ object DesktopNotifier {
     }
 
     fun removeTray() {
-        val icon = trayIcon ?: return
-        runCatching { SystemTray.getSystemTray().remove(icon) }
-        trayIcon = null
+        synchronized(this) {
+            val tray = runCatching { SystemTray.getSystemTray() }.getOrNull()
+            if (tray != null) {
+                tray.trayIcons.forEach { existing ->
+                    if (existing === trayIcon || existing.toolTip == TRAY_TOOLTIP) {
+                        runCatching { tray.remove(existing) }
+                    }
+                }
+            }
+            trayIcon = null
+        }
     }
 
     fun showMessage(title: String, body: String) {

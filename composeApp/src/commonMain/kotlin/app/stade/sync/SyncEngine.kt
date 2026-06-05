@@ -411,7 +411,7 @@ class SyncEngine(
                             }
                         }
                         groupManager != null && bodyStr.startsWith(GRP_WELCOME_PREFIX) -> {
-                            groupManager.handleGroupWelcome(owner.id, bodyStr)
+                            groupManager.handleGroupWelcome(owner.id, contact.id, bodyStr)
                         }
                         groupManager != null && bodyStr.startsWith(GRP_INV_PREFIX) -> {
                             runCatching {

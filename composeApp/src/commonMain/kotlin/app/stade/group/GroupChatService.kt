@@ -4,6 +4,7 @@ import app.stade.contact.ContactManager
 import app.stade.crypto.CryptoApi
 import app.stade.crypto.Encoding
 import app.stade.identity.LocalIdentity
+import app.stade.message.encodeImageBody
 import app.stade.sync.SyncEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.launchIn
@@ -42,6 +43,10 @@ class GroupChatService(
             }
         }
         return true
+    }
+
+    suspend fun sendImage(owner: LocalIdentity, groupId: String, imageBytes: ByteArray): Boolean {
+        return sendMessage(owner, groupId, encodeImageBody(imageBytes))
     }
 
     suspend fun sendJoinRequest(owner: LocalIdentity, creatorContactId: String, pending: PendingJoinData) {

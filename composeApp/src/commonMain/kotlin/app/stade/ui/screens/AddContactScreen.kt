@@ -269,7 +269,6 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                     statusSticky = true
                                     val targetId = parsed.stadeId
 
-                                    // 5 dakika boyunca bağlantı bekle (Tor descriptor yayılması + circuit + handshake)
                                     val added = withTimeoutOrNull(5 * 60_000L) {
                                         container.contacts.observeContacts(owner.id).first { list ->
                                             list.any { it.id == targetId }
@@ -277,7 +276,12 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                         true
                                     } ?: false
                                     if (added || container.contacts.findByStadeId(targetId) != null) {
-                                        status = strings.contactAdded(parsed.nickname)
+                                        val trimmedAlias = alias.trim()
+                                        if (trimmedAlias.isNotEmpty()) {
+                                            runCatching { container.contacts.rename(targetId, trimmedAlias) }
+                                        }
+                                        val displayName = if (trimmedAlias.isNotEmpty()) trimmedAlias else parsed.nickname
+                                        status = strings.contactAdded(displayName)
                                         statusSticky = true
                                         dialingTargetAddrs = emptySet()
                                     } else {

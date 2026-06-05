@@ -285,5 +285,29 @@ object EnglishStrings : AppStrings() {
     override val deleteGroupBody = "All group messages and member records will be permanently deleted. This action cannot be undone."
     override val groupGenerateInvite = "Generate invite link"
     override fun groupMemberCount(count: Int) = "$count members"
+
+    override val addMembersTitle = "Add people to group"
+    override val addMembersAction = "Add"
+    override val addMembersHint = "Select contacts to add:"
+    override val noContactsToAdd = "No contacts available to add. All of your contacts seem to already be in this group."
+    override fun membersAdded(count: Int) = if (count == 1) "1 person invited" else "$count people invited"
+    override val leaveGroupAction = "Leave group"
+    override val leaveGroupTitle = "Leave group?"
+    override val leaveGroupBody = "This group will be removed from your local device. Other members will remain. This action cannot be undone."
+    override val leaveAction = "Leave"
+
+    override val copyMessage = "Copy message"
+    override val deleteMessageForMe = "Delete for me"
+    override val deleteMessagesForMe = "Delete selected messages"
+    override fun selectedCount(count: Int) = "$count selected"
+    override val messageCopied = "Message copied"
+    override val cancelSelection = "Cancel selection"
+
+    override val saveImageAction = "Save"
+    override val copyImageAction = "Copy"
+    override val imageSaved = "Image saved"
+    override val imageSaveFailed = "Failed to save image"
+    override val imageCopied = "Image copied"
+    override val imageCopyFailed = "Failed to copy image"
 }
 

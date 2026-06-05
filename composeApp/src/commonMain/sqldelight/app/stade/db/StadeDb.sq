@@ -176,6 +176,12 @@ DELETE FROM Outbox WHERE id = ?;
 deleteOutboxForMessage:
 DELETE FROM Outbox WHERE messageId = ?;
 
+deleteMessageById:
+DELETE FROM Message WHERE id = ?;
+
+deleteGroupMessageById:
+DELETE FROM GroupMessage WHERE id = ?;
+
 upsertTransport:
 INSERT OR REPLACE INTO TransportSetting(type, enabled, config) VALUES (?, ?, ?);
 
@@ -220,7 +226,8 @@ CREATE TABLE StadeGroup (
     ownerId TEXT NOT NULL,
     name TEXT NOT NULL,
     inviteToken TEXT NOT NULL,
-    createdAt INTEGER NOT NULL
+    createdAt INTEGER NOT NULL,
+    creatorStadeId TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE GroupMember (
@@ -243,7 +250,7 @@ CREATE TABLE GroupMessage (
 CREATE INDEX idxGroupMessage ON GroupMessage(groupId, timestamp);
 
 insertGroup:
-INSERT INTO StadeGroup(id, ownerId, name, inviteToken, createdAt) VALUES (?, ?, ?, ?, ?);
+INSERT INTO StadeGroup(id, ownerId, name, inviteToken, createdAt, creatorStadeId) VALUES (?, ?, ?, ?, ?, ?);
 
 selectGroups:
 SELECT * FROM StadeGroup WHERE ownerId = ? ORDER BY name;

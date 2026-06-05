@@ -6,8 +6,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,7 +40,9 @@ import androidx.compose.material.icons.filled.Attachment
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -86,12 +90,15 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import app.stade.AppContainer
 import app.stade.identity.LocalIdentity
+import app.stade.message.IMAGE_BODY_PREFIX
 import app.stade.message.Message
 import app.stade.message.MessageDirection
 import app.stade.message.MessageType
@@ -99,12 +106,15 @@ import app.stade.notification.cancelMessagesNotification
 import app.stade.notification.clearAllMessageNotifications
 import app.stade.sync.SyncEngine
 import app.stade.transport.DialAttempt
+import app.stade.ui.PlatformBackHandler
 import app.stade.ui.components.Avatar
 import app.stade.ui.components.formatChatTime
 import app.stade.ui.components.maskAddress
+import app.stade.ui.copyImageToClipboard
 import app.stade.ui.decodeToImageBitmap
 import app.stade.ui.i18n.LocalStrings
 import app.stade.ui.rememberMultiImagePickerLauncher
+import app.stade.ui.saveImageToGallery
 import app.stade.ui.theme.StadeColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -126,6 +136,7 @@ fun ChatScreen(
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
     val contact = remember(contactId) { container.contacts.get(contactId) }
     val messages by container.messages.observeMessages(contactId).collectAsState(initial = emptyList())
     val connected by container.sync.connectedContacts.collectAsState()
@@ -136,6 +147,22 @@ fun ChatScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var diagnosticsExpanded by remember(contactId) { mutableStateOf(false) }
+
+    var selectedMessageIds by remember(contactId) { mutableStateOf<Set<String>>(emptySet()) }
+    val inSelectionMode by remember { derivedStateOf { selectedMessageIds.isNotEmpty() } }
+    var showSelectionDeleteDialog by remember { mutableStateOf(false) }
+
+    fun clearSelection() {
+        selectedMessageIds = emptySet()
+    }
+
+    fun toggleSelection(id: String) {
+        selectedMessageIds = if (selectedMessageIds.contains(id)) {
+            selectedMessageIds - id
+        } else {
+            selectedMessageIds + id
+        }
+    }
 
     var notification by remember { mutableStateOf<NotificationData?>(null) }
     var notificationKey by remember { mutableStateOf(0) }
@@ -243,72 +270,139 @@ fun ChatScreen(
         )
     }
 
+    if (showSelectionDeleteDialog && selectedMessageIds.isNotEmpty()) {
+        val toDelete = selectedMessageIds
+        AlertDialog(
+            onDismissRequest = { showSelectionDeleteDialog = false },
+            icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text(strings.deleteMessagesForMe) },
+            text = { Text(strings.selectedCount(toDelete.size)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSelectionDeleteDialog = false
+                    scope.launch {
+                        withContext(Dispatchers.Default) {
+                            runCatching { container.messages.deleteMessages(toDelete) }
+                        }
+                        clearSelection()
+                    }
+                }) { Text(strings.delete, color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSelectionDeleteDialog = false }) { Text(strings.cancel) }
+            }
+        )
+    }
+
+    PlatformBackHandler(enabled = inSelectionMode) { clearSelection() }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(name = contact?.nickname ?: "?", size = 36.dp)
-                        Spacer(Modifier.size(10.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    contact?.nickname ?: "",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                if (contact?.verified == true) {
+            if (inSelectionMode) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    title = {
+                        Text(
+                            strings.selectedCount(selectedMessageIds.size),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { clearSelection() }) {
+                            Icon(Icons.Default.Close, contentDescription = strings.cancelSelection)
+                        }
+                    },
+                    actions = {
+                        val singleSelectedTextMsg = remember(selectedMessageIds, messages) {
+                            if (selectedMessageIds.size != 1) null
+                            else messages.firstOrNull { it.id in selectedMessageIds && it.type == MessageType.TEXT }
+                        }
+                        if (singleSelectedTextMsg != null) {
+                            IconButton(onClick = {
+                                clipboard.setText(AnnotatedString(singleSelectedTextMsg.body))
+                                clearSelection()
+                                showNotification(strings.messageCopied, NotificationKind.Success)
+                            }) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = strings.copyMessage)
+                            }
+                        }
+                        IconButton(onClick = { showSelectionDeleteDialog = true }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = strings.deleteMessagesForMe,
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                )
+            } else {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(name = contact?.nickname ?: "?", size = 36.dp)
+                            Spacer(Modifier.size(10.dp))
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        contact?.nickname ?: "",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    if (contact?.verified == true) {
+                                        Spacer(Modifier.size(6.dp))
+                                        Icon(
+                                            Icons.Default.Verified,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        Modifier.size(7.dp).clip(CircleShape).background(
+                                            if (isOnline) StadeColors.online else StadeColors.offline
+                                        )
+                                    )
                                     Spacer(Modifier.size(6.dp))
-                                    Icon(
-                                        Icons.Default.Verified,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(14.dp)
+                                    Text(
+                                        if (isOnline) strings.online else strings.offline,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    Modifier.size(7.dp).clip(CircleShape).background(
-                                        if (isOnline) StadeColors.online else StadeColors.offline
-                                    )
-                                )
-                                Spacer(Modifier.size(6.dp))
-                                Text(
-                                    if (isOnline) strings.online else strings.offline,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                    }
-                }
-            }
-                },
-                navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
+                        }
+                    },
+                    navigationIcon = {
+                        if (onBack != null) {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
+                            }
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onVerify) {
+                            Icon(Icons.Default.Verified, contentDescription = strings.verifyAction)
+                        }
+                        IconButton(
+                            onClick = { showDeleteDialog = true },
+                            enabled = !deleting
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = strings.deleteContactIconDescription,
+                                tint = MaterialTheme.colorScheme.error
+                            )
                         }
                     }
-                },
-                actions = {
-                    IconButton(onClick = onVerify) {
-                        Icon(Icons.Default.Verified, contentDescription = strings.verifyAction)
-                    }
-                    IconButton(
-                        onClick = { showDeleteDialog = true },
-                        enabled = !deleting
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = strings.deleteContactIconDescription,
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            )
+                )
+            }
         }
     ) { padding ->
         Box(
@@ -397,10 +491,43 @@ fun ChatScreen(
                             val tight = prev != null &&
                                     prev.direction == msg.direction &&
                                     (msg.timestamp - prev.timestamp) < 60_000L
+                            val isSelected = selectedMessageIds.contains(msg.id)
                             if (msg.type == MessageType.IMAGE) {
-                                ImageBubble(msg, tightWithPrev = tight)
+                                ImageBubble(
+                                    msg = msg,
+                                    tightWithPrev = tight,
+                                    selected = isSelected,
+                                    inSelectionMode = inSelectionMode,
+                                    onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                    onLongClick = { toggleSelection(msg.id) },
+                                    onSaveImage = { bytes ->
+                                        scope.launch {
+                                            val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
+                                            showNotification(
+                                                if (ok) strings.imageSaved else strings.imageSaveFailed,
+                                                if (ok) NotificationKind.Success else NotificationKind.Error
+                                            )
+                                        }
+                                    },
+                                    onCopyImage = { bytes ->
+                                        scope.launch {
+                                            val ok = copyImageToClipboard(bytes)
+                                            showNotification(
+                                                if (ok) strings.imageCopied else strings.imageCopyFailed,
+                                                if (ok) NotificationKind.Success else NotificationKind.Error
+                                            )
+                                        }
+                                    }
+                                )
                             } else {
-                                Bubble(msg, tightWithPrev = tight)
+                                Bubble(
+                                    msg = msg,
+                                    tightWithPrev = tight,
+                                    selected = isSelected,
+                                    inSelectionMode = inSelectionMode,
+                                    onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                    onLongClick = { toggleSelection(msg.id) }
+                                )
                             }
                         }
                     }
@@ -817,8 +944,16 @@ private fun Composer(
 
 
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Bubble(msg: Message, tightWithPrev: Boolean) {
+private fun Bubble(
+    msg: Message,
+    tightWithPrev: Boolean,
+    selected: Boolean,
+    inSelectionMode: Boolean,
+    onShortClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
     val outgoing = msg.direction == MessageDirection.OUT
     val align = if (outgoing) Alignment.End else Alignment.Start
     val bg = if (outgoing) MaterialTheme.colorScheme.primary
@@ -831,8 +966,13 @@ private fun Bubble(msg: Message, tightWithPrev: Boolean) {
     val cornerSelf = 18.dp
     val cornerTail = if (tightWithPrev) 18.dp else 4.dp
 
+    val selectionTint = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
+
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = if (tightWithPrev) 1.dp else 6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(selectionTint)
+            .padding(top = if (tightWithPrev) 1.dp else 6.dp),
         horizontalAlignment = align
     ) {
         Box(
@@ -846,6 +986,10 @@ private fun Bubble(msg: Message, tightWithPrev: Boolean) {
                     )
                 )
                 .background(bg)
+                .combinedClickable(
+                    onClick = onShortClick,
+                    onLongClick = onLongClick
+                )
                 .padding(horizontal = 14.dp, vertical = 9.dp)
         ) {
             Column {
@@ -871,8 +1015,18 @@ private fun Bubble(msg: Message, tightWithPrev: Boolean) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ImageBubble(msg: Message, tightWithPrev: Boolean) {
+private fun ImageBubble(
+    msg: Message,
+    tightWithPrev: Boolean,
+    selected: Boolean,
+    inSelectionMode: Boolean,
+    onShortClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onSaveImage: (ByteArray) -> Unit,
+    onCopyImage: (ByteArray) -> Unit
+) {
     val strings = LocalStrings.current
     val outgoing = msg.direction == MessageDirection.OUT
     val align = if (outgoing) Alignment.End else Alignment.Start
@@ -886,13 +1040,19 @@ private fun ImageBubble(msg: Message, tightWithPrev: Boolean) {
     val cornerSelf = 18.dp
     val cornerTail = if (tightWithPrev) 18.dp else 4.dp
 
+    val imageBytes: ByteArray? = remember(msg.id) { msg.imageBytes() }
     val bitmap: ImageBitmap? = remember(msg.id) {
-        msg.imageBytes()?.decodeToImageBitmap()
+        imageBytes?.decodeToImageBitmap()
     }
     var showFullscreen by remember { mutableStateOf(false) }
 
+    val selectionTint = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
+
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = if (tightWithPrev) 1.dp else 6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(selectionTint)
+            .padding(top = if (tightWithPrev) 1.dp else 6.dp),
         horizontalAlignment = align
     ) {
         Box(
@@ -906,7 +1066,13 @@ private fun ImageBubble(msg: Message, tightWithPrev: Boolean) {
                     )
                 )
                 .background(bg)
-                .clickable(enabled = bitmap != null) { showFullscreen = true }
+                .combinedClickable(
+                    onClick = {
+                        if (inSelectionMode) onShortClick()
+                        else if (bitmap != null) showFullscreen = true
+                    },
+                    onLongClick = onLongClick
+                )
                 .padding(4.dp)
         ) {
             Column {
@@ -969,13 +1135,12 @@ private fun ImageBubble(msg: Message, tightWithPrev: Boolean) {
         }
     }
 
-    if (showFullscreen && bitmap != null) {
+    if (showFullscreen && bitmap != null && imageBytes != null) {
         Dialog(onDismissRequest = { showFullscreen = false }) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.92f))
-                    .clickable { showFullscreen = false },
+                    .background(Color.Black.copy(alpha = 0.92f)),
                 contentAlignment = Alignment.Center
             ) {
                 androidx.compose.foundation.Image(
@@ -986,17 +1151,33 @@ private fun ImageBubble(msg: Message, tightWithPrev: Boolean) {
                         .padding(16.dp),
                     contentScale = ContentScale.Fit
                 )
-                IconButton(
-                    onClick = { showFullscreen = false },
+                Row(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp)
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = strings.closePhoto,
-                        tint = Color.White
-                    )
+                    IconButton(onClick = { onSaveImage(imageBytes) }) {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = strings.saveImageAction,
+                            tint = Color.White
+                        )
+                    }
+                    IconButton(onClick = { onCopyImage(imageBytes) }) {
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            contentDescription = strings.copyImageAction,
+                            tint = Color.White
+                        )
+                    }
+                    IconButton(onClick = { showFullscreen = false }) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = strings.closePhoto,
+                            tint = Color.White
+                        )
+                    }
                 }
             }
         }

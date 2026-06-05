@@ -1,18 +1,48 @@
 ﻿package app.stade
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CropSquare
+import androidx.compose.material.icons.filled.FilterNone
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.foundation.window.WindowDraggableArea
 import java.awt.Dimension
 import app.stade.crypto.Encoding
 import app.stade.db.DriverFactory
@@ -28,12 +58,21 @@ import app.stade.transport.TransportType
 import app.stade.transport.tor.EmbeddedTorManager
 import app.stade.transport.tor.TorBinaryLoader
 import app.stade.ui.StadeApp
+import app.stade.ui.theme.StadeTheme
 import java.security.SecureRandom
-import androidx.compose.ui.Alignment
 import stade.composeapp.generated.resources.Res
 import stade.composeapp.generated.resources.app_icon_desktop
 import org.jetbrains.compose.resources.painterResource
 
+
+@Volatile
+private var desktopContainerRef: AppContainer? = null
+
+fun setDesktopContainer(container: AppContainer?) {
+    desktopContainerRef = container
+}
+
+fun desktopContainer(): AppContainer? = desktopContainerRef
 
 fun main(args: Array<String>) = application {
     val boot = remember {
@@ -61,6 +100,7 @@ fun main(args: Array<String>) = application {
             },
             onContainerCreated = { c ->
                 pendingInviteAtBoot?.let { c.pendingInvite.value = it }
+                setDesktopContainer(c)
             }
         )
     }
@@ -77,7 +117,8 @@ fun main(args: Array<String>) = application {
         Unit
     }
     val windowState = rememberWindowState(
-        position = WindowPosition.Aligned(Alignment.Center)
+        position = WindowPosition.Aligned(Alignment.Center),
+        size = DpSize(1100.dp, 740.dp)
     )
     var visible by remember { mutableStateOf(true) }
     val runInBackground by getRunInBackgroundEnabled()
@@ -110,10 +151,146 @@ fun main(args: Array<String>) = application {
         state = windowState,
         title = "Stade",
         icon = painterResource(Res.drawable.app_icon_desktop),
-        visible = visible
+        visible = visible,
+        undecorated = true
     ) {
         SideEffect { window.minimumSize = Dimension(700, 660) }
-        Surface { StadeApp(boot) }
+
+        LaunchedEffect(visible) {
+            desktopContainer()?.isAppInForeground?.value = visible
+        }
+        LaunchedEffect(windowState.isMinimized) {
+            if (windowState.isMinimized) {
+                desktopContainer()?.isAppInForeground?.value = false
+            } else if (visible) {
+                desktopContainer()?.isAppInForeground?.value = true
+            }
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                StadeTitleBar(
+                    windowState = windowState,
+                    onMinimize = { windowState.isMinimized = true },
+                    onToggleMaximize = {
+                        windowState.placement = if (windowState.placement == WindowPlacement.Maximized)
+                            WindowPlacement.Floating else WindowPlacement.Maximized
+                    },
+                    onClose = {
+                        if (runInBackground && java.awt.SystemTray.isSupported()) {
+                            visible = false
+                            DesktopNotifier.notifyBackgroundIfFirstTime(
+                                "Stade",
+                                "Uygulama arka planda çalışmaya devam ediyor"
+                            )
+                        } else {
+                            exitApplication()
+                        }
+                    }
+                )
+                Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+                    StadeApp(boot)
+                }
+            }
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun androidx.compose.ui.window.FrameWindowScope.StadeTitleBar(
+    windowState: WindowState,
+    onMinimize: () -> Unit,
+    onToggleMaximize: () -> Unit,
+    onClose: () -> Unit
+) {
+    StadeTheme {
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 1.dp,
+            modifier = Modifier.fillMaxWidth().height(36.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                WindowDraggableArea(modifier = Modifier.weight(1f).fillMaxSize()) {
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(start = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier
+                                .size(14.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "Stade",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+                TitleBarButton(onMinimize, isClose = false) {
+                    Icon(Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(15.dp))
+                }
+                TitleBarButton(onToggleMaximize, isClose = false) {
+                    if (windowState.placement == WindowPlacement.Maximized) {
+                        Icon(Icons.Default.FilterNone, contentDescription = null, modifier = Modifier.size(13.dp))
+                    } else {
+                        Icon(Icons.Default.CropSquare, contentDescription = null, modifier = Modifier.size(13.dp))
+                    }
+                }
+                TitleBarButton(onClose, isClose = true) {
+                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(15.dp))
+                }
+            }
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun TitleBarButton(
+    onClick: () -> Unit,
+    isClose: Boolean,
+    content: @androidx.compose.runtime.Composable () -> Unit
+) {
+    var hovered by remember { mutableStateOf(false) }
+    val baseColor = if (isClose && hovered) Color(0xFFE81123)
+    else if (hovered) MaterialTheme.colorScheme.surfaceVariant
+    else Color.Transparent
+    val fg = if (isClose && hovered) Color.White else MaterialTheme.colorScheme.onSurface
+    Box(
+        modifier = Modifier
+            .size(width = 46.dp, height = 36.dp)
+            .background(baseColor)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        when (event.type) {
+                            PointerEventType.Enter -> hovered = true
+                            PointerEventType.Exit -> hovered = false
+                            PointerEventType.Press -> {
+                                onClick()
+                                event.changes.forEach { it.consume() }
+                            }
+                            else -> {}
+                        }
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides fg
+        ) {
+            content()
+        }
     }
 }
 

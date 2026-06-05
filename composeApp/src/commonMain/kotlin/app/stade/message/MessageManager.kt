@@ -69,6 +69,16 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
         return Message(messageId, contactId, MessageDirection.IN, body, timestamp, true, false)
     }
 
+    fun deleteMessages(messageIds: Collection<String>) {
+        if (messageIds.isEmpty()) return
+        db.stadeDbQueries.transaction {
+            messageIds.forEach { id ->
+                db.stadeDbQueries.deleteOutboxForMessage(id)
+                db.stadeDbQueries.deleteMessageById(id)
+            }
+        }
+    }
+
     private fun app.stade.db.Message.toMessage(): Message =
         Message(
             id, contactId,

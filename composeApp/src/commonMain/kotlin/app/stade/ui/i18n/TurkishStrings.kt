@@ -284,5 +284,29 @@ object TurkishStrings : AppStrings() {
     override val deleteGroupBody = "Tüm grup mesajları ve üye kayıtları kalıcı olarak silinecek. Bu işlem geri alınamaz."
     override val groupGenerateInvite = "Davet linki oluştur"
     override fun groupMemberCount(count: Int) = "$count üye"
+
+    override val addMembersTitle = "Gruba kişi ekle"
+    override val addMembersAction = "Ekle"
+    override val addMembersHint = "Eklenecek kişileri seç:"
+    override val noContactsToAdd = "Eklenebilecek kişi yok. Bütün kişilerin grupta zaten kayıtlı görünüyor."
+    override fun membersAdded(count: Int) = if (count == 1) "1 kişi davet edildi" else "$count kişi davet edildi"
+    override val leaveGroupAction = "Gruptan ayrıl"
+    override val leaveGroupTitle = "Gruptan ayrılınsın mı?"
+    override val leaveGroupBody = "Bu grup yerel cihazından kaldırılacak. Diğer üyeler grupta kalmaya devam eder. Bu işlem geri alınamaz."
+    override val leaveAction = "Ayrıl"
+
+    override val copyMessage = "Mesajı kopyala"
+    override val deleteMessageForMe = "Kendinden sil"
+    override val deleteMessagesForMe = "Seçili mesajları sil"
+    override fun selectedCount(count: Int) = "$count seçili"
+    override val messageCopied = "Mesaj kopyalandı"
+    override val cancelSelection = "Seçimi iptal et"
+
+    override val saveImageAction = "Kaydet"
+    override val copyImageAction = "Kopyala"
+    override val imageSaved = "Görsel kaydedildi"
+    override val imageSaveFailed = "Görsel kaydedilemedi"
+    override val imageCopied = "Görsel kopyalandı"
+    override val imageCopyFailed = "Görsel kopyalanamadı"
 }
 

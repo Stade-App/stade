@@ -168,7 +168,7 @@ fun CreateGroupScreen(
                     creating = true
                     scope.launch {
                         val group = withContext(Dispatchers.Default) {
-                            val g = container.groups.createGroup(owner.id, groupName.trim())
+                            val g = container.groups.createGroup(owner.id, owner.stadeId, groupName.trim())
 
                             runCatching { container.groups.addMember(g.id, owner.id) }
                             g

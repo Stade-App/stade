@@ -231,6 +231,30 @@ abstract class AppStrings {
     abstract val deleteGroupBody: String
     abstract val groupGenerateInvite: String
     abstract fun groupMemberCount(count: Int): String
+
+    abstract val addMembersTitle: String
+    abstract val addMembersAction: String
+    abstract val addMembersHint: String
+    abstract val noContactsToAdd: String
+    abstract fun membersAdded(count: Int): String
+    abstract val leaveGroupAction: String
+    abstract val leaveGroupTitle: String
+    abstract val leaveGroupBody: String
+    abstract val leaveAction: String
+
+    abstract val copyMessage: String
+    abstract val deleteMessageForMe: String
+    abstract val deleteMessagesForMe: String
+    abstract fun selectedCount(count: Int): String
+    abstract val messageCopied: String
+    abstract val cancelSelection: String
+
+    abstract val saveImageAction: String
+    abstract val copyImageAction: String
+    abstract val imageSaved: String
+    abstract val imageSaveFailed: String
+    abstract val imageCopied: String
+    abstract val imageCopyFailed: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

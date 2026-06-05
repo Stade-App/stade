@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.BootContext
@@ -109,10 +110,15 @@ fun StadeApp(boot: BootContext) {
                         },
                         onWipeRequested = {
                             scope.launch {
-                                active.wipeAllData()
+                                val toWipe = container
                                 container = null
-                                initialized = vault.isInitialized()
                                 unlocked = false
+                                kotlinx.coroutines.delay(120)
+                                if (toWipe != null) {
+                                    runCatching { toWipe.wipeAllData() }
+                                }
+                                initialized = vault.isInitialized()
+                                autoUnlockTried = false
                             }
                         }
                     )
@@ -135,6 +141,12 @@ private fun UnlockedApp(
     val settingsListState = rememberLazyListState()
 
     val isInForeground by container.isAppInForeground.collectAsState()
+    val windowInfo = LocalWindowInfo.current
+    LaunchedEffect(windowInfo) {
+        androidx.compose.runtime.snapshotFlow { windowInfo.isWindowFocused }.collect { focused ->
+            container.isAppInForeground.value = focused
+        }
+    }
     var leftForegroundAt by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(isInForeground) {
         if (!isInForeground) {
