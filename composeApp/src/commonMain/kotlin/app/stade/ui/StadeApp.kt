@@ -45,7 +45,7 @@ sealed interface Screen {
     data class Chat(val contactId: String) : Screen
     data class GroupChat(val groupId: String) : Screen
     data object CreateGroup : Screen
-    data class Verify(val contactId: String) : Screen
+    data class Verify(val contactId: String, val fromScreen: Screen) : Screen
     data object Settings : Screen
     data object Security : Screen
     data object Transports : Screen
@@ -235,7 +235,9 @@ private fun UnlockedApp(
                 is Screen.Chat -> screen = Screen.Contacts
                 is Screen.GroupChat -> screen = Screen.Contacts
                 Screen.CreateGroup -> screen = Screen.Contacts
-                is Screen.Verify -> screen = Screen.Contacts
+
+                is Screen.Verify -> screen = s.fromScreen
+
                 Screen.Settings -> screen = Screen.Contacts
                 Screen.Security -> screen = Screen.Settings
                 Screen.Transports -> screen = Screen.Settings
@@ -306,16 +308,24 @@ private fun UnlockedApp(
                 container = container,
                 owner = identity!!,
                 contactId = (screen as Screen.Verify).contactId,
-                onBack = { screen = Screen.Contacts }
+                onBack = {
+                    screen = (screen as Screen.Verify).fromScreen
+                }
             )
-            screen is Screen.Chat -> ChatScreen(
-                container = container,
-                owner = identity!!,
-                contactId = (screen as Screen.Chat).contactId,
-                onBack = { screen = Screen.Contacts },
-                onVerify = { screen = Screen.Verify((screen as Screen.Chat).contactId) },
-                onContactDeleted = { screen = Screen.Contacts }
-            )
+            screen is Screen.Chat -> {
+                val currentChat = screen as Screen.Chat
+
+                ChatScreen(
+                    container = container,
+                    owner = identity!!,
+                    contactId = currentChat.contactId,
+                    onBack = { screen = Screen.Contacts },
+                    onVerify = {
+                        screen = Screen.Verify(contactId = currentChat.contactId, fromScreen = currentChat)
+                    },
+                    onContactDeleted = { screen = Screen.Contacts }
+                )
+            }
             screen is Screen.GroupChat -> GroupChatScreen(
                 container = container,
                 owner = identity!!,
@@ -328,16 +338,22 @@ private fun UnlockedApp(
                 onBack = { screen = Screen.Contacts },
                 onGroupCreated = { groupId -> screen = Screen.GroupChat(groupId) }
             )
-            else -> ContactsScreen(
-                container = container,
-                owner = identity!!,
-                onOpenChat = { screen = Screen.Chat(it) },
-                onOpenGroupChat = { screen = Screen.GroupChat(it) },
-                onOpenSettings = { screen = Screen.Settings },
-                onAddContact = { screen = Screen.AddContact },
-                onCreateGroup = { screen = Screen.CreateGroup },
-                onLongPressVerify = { screen = Screen.Verify(it) }
-            )
+            else -> {
+                val currentContactsScreen = screen
+
+                ContactsScreen(
+                    container = container,
+                    owner = identity!!,
+                    onOpenChat = { screen = Screen.Chat(it) },
+                    onOpenGroupChat = { screen = Screen.GroupChat(it) },
+                    onOpenSettings = { screen = Screen.Settings },
+                    onAddContact = { screen = Screen.AddContact },
+                    onCreateGroup = { screen = Screen.CreateGroup },
+                    onLongPressVerify = { contactId ->
+                        screen = Screen.Verify(contactId = contactId, fromScreen = currentContactsScreen)
+                    }
+                )
+            }
         }
     }
 }
