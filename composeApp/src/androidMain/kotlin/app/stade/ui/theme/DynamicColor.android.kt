@@ -17,7 +17,7 @@ actual val isDynamicColorSupported: Boolean
 private val _dynamicColorEnabled by lazy {
     val prefs = StadeApplication.instance
         .getSharedPreferences("stade_ui", Context.MODE_PRIVATE)
-    mutableStateOf(prefs.getBoolean("dynamic_color", true))
+    mutableStateOf(prefs.getBoolean("dynamic_color", false))
 }
 
 actual fun getDynamicColorEnabled(): State<Boolean> = _dynamicColorEnabled
