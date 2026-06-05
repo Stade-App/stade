@@ -81,6 +81,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.contact.Contact
+import app.stade.group.GroupInfo
 import app.stade.identity.LocalIdentity
 import app.stade.message.previewBody
 import app.stade.ui.components.Avatar
@@ -100,6 +101,7 @@ import app.stade.ui.theme.StadeColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.combine
 
 private sealed class PanelRight {
     data object Empty : PanelRight()
@@ -114,6 +116,22 @@ private sealed class PanelRight {
     data class PinSetup(val requireCurrent: Boolean, val ret: PanelRight) : PanelRight()
 }
 
+private sealed class PanelChatItem {
+    data class ContactItem(val contact: Contact, val lastMessageTs: Long? = null) : PanelChatItem()
+    data class GroupItem(val group: GroupInfo, val lastMessageTs: Long? = null) : PanelChatItem()
+    val displayName: String get() = when (this) {
+        is ContactItem -> contact.nickname
+        is GroupItem   -> group.name
+    }
+    val key: String get() = when (this) {
+        is ContactItem -> contact.id
+        is GroupItem   -> "grp_${group.id}"
+    }
+    val sortKey: Long get() = when (this) {
+        is ContactItem -> lastMessageTs ?: 0L
+        is GroupItem   -> lastMessageTs ?: 0L
+    }
+}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TwoPanelLayout(
@@ -131,6 +149,20 @@ fun TwoPanelLayout(
     var isFabExpanded by remember { mutableStateOf(false) }
     val settingsListState = rememberLazyListState()
 
+    val contactLastMessages by remember(contacts) {
+        combine(
+            contacts.map { c -> container.messages.observeLastMessage(c.id) }
+                .ifEmpty { listOf(kotlinx.coroutines.flow.flowOf(null)) }
+        ) { it.toList() }
+    }.collectAsState(initial = emptyList())
+
+    val groupLastMessages by remember(groups) {
+        combine(
+            groups.map { g -> container.groups.observeLastMessage(g.id) }
+                .ifEmpty { listOf(kotlinx.coroutines.flow.flowOf(null)) }
+        ) { it.toList() }
+    }.collectAsState(initial = emptyList())
+
     val pendingInvite by container.pendingInvite.collectAsState()
     LaunchedEffect(pendingInvite) {
         if (pendingInvite != null && right !is PanelRight.AddContact && right !is PanelRight.PinSetup) {
@@ -145,6 +177,22 @@ fun TwoPanelLayout(
     val filtered = remember(contacts, query) {
         if (query.isBlank()) contacts
         else contacts.filter { it.nickname.contains(query.trim(), ignoreCase = true) }
+    }
+
+    val combinedPanelItems = remember(filtered, groups, query, contactLastMessages, groupLastMessages) {
+        val q = query.trim()
+        val result = mutableListOf<PanelChatItem>()
+        groups
+            .filter { q.isBlank() || it.name.contains(q, ignoreCase = true) }
+            .forEachIndexed { i, g ->
+                result.add(PanelChatItem.GroupItem(g, groupLastMessages.getOrNull(i)?.timestamp))
+            }
+        filtered.forEachIndexed { i, c ->
+            val origIdx = contacts.indexOf(c)
+            result.add(PanelChatItem.ContactItem(c, contactLastMessages.getOrNull(origIdx)?.timestamp))
+        }
+        result.sortByDescending { it.sortKey }
+        result
     }
 
     if (showDeleteConfirm && deleteTargetContact != null) {
@@ -308,25 +356,77 @@ fun TwoPanelLayout(
                     } else {
                         Box(modifier = Modifier.fillMaxSize()) {
                             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                                if (groups.isNotEmpty()) {
-                                        items(groups, key = { "grp_${it.id}" }) { group ->
-                                        val lastGroupMsg = remember(group.id) { container.groups.lastMessage(group.id) }
-                                        val groupUnread = remember(group.id) { container.groups.unreadCount(group.id) }
-                                        val groupPreview by remember(lastGroupMsg?.id) {
-                                            derivedStateOf { lastGroupMsg?.body?.let { previewBody(it, strings.photoMessage) } }
+                                items(combinedPanelItems, key = { it.key }) { item ->
+                                    when (item) {
+                                        is PanelChatItem.ContactItem -> {
+                                            val contact = item.contact
+                                            val lastMsg by container.messages.observeLastMessage(contact.id)
+                                                .collectAsState(initial = null)
+                                            val unread by container.messages.observeUnreadCount(contact.id)
+                                                .collectAsState(initial = 0L)
+                                            val preview by remember(lastMsg?.id) {
+                                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage) } }
+                                            }
+                                            val isSelected by remember(contact.id) {
+                                                derivedStateOf {
+                                                    when (val r = right) {
+                                                        is PanelRight.Chat   -> r.contactId == contact.id
+                                                        is PanelRight.Verify -> r.contactId == contact.id
+                                                        else -> false
+                                                    }
+                                                }
+                                            }
+                                            PanelContactRow(
+                                                contact = contact,
+                                                selected = isSelected,
+                                                connected = connectedSet.contains(contact.id),
+                                                lastMessage = preview,
+                                                lastMessageTs = lastMsg?.timestamp,
+                                                unread = unread,
+                                                onClick = { right = PanelRight.Chat(contact.id) },
+                                                onVerifyRequest = { right = PanelRight.Verify(contact.id) },
+                                                onDeleteRequest = {
+                                                    deleteTargetContact = contact
+                                                    showDeleteConfirm = true
+                                                }
+                                            )
                                         }
-                                        val isGroupSelected by remember(group.id) { derivedStateOf { right is PanelRight.GroupChat && (right as? PanelRight.GroupChat)?.groupId == group.id } }
-                                        Surface(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            color = if (isGroupSelected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
-                                        ) {
+                                        is PanelChatItem.GroupItem -> {
+                                            val group = item.group
+                                            val lastGroupMsg by container.groups.observeLastMessage(group.id)
+                                                .collectAsState(initial = null)
+                                            val groupUnread by container.groups.observeUnreadCount(group.id)
+                                                .collectAsState(initial = 0L)
+                                            val groupPreview by remember(lastGroupMsg?.id) {
+                                                derivedStateOf { lastGroupMsg?.body?.let { previewBody(it, strings.photoMessage) } }
+                                            }
+                                            val isGroupSelected by remember(group.id) {
+                                                derivedStateOf {
+                                                    right is PanelRight.GroupChat &&
+                                                            (right as? PanelRight.GroupChat)?.groupId == group.id
+                                                }
+                                            }
+                                            val bg = if (isGroupSelected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
+                                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                                                    .clip(RoundedCornerShape(14.dp))
+                                                    .background(bg)
                                                     .clickable { right = PanelRight.GroupChat(group.id) }
-                                                    .padding(horizontal = 16.dp, vertical = 13.dp),
+                                                    .padding(horizontal = 10.dp, vertical = 10.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
+                                                Box(
+                                                    Modifier
+                                                        .size(width = 3.dp, height = 36.dp)
+                                                        .clip(RoundedCornerShape(2.dp))
+                                                        .background(
+                                                            if (isGroupSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                                        )
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+
                                                 Box(
                                                     Modifier
                                                         .size(44.dp)
@@ -341,28 +441,53 @@ fun TwoPanelLayout(
                                                         modifier = Modifier.size(22.dp)
                                                     )
                                                 }
+
                                                 Spacer(Modifier.width(12.dp))
+
                                                 Column(Modifier.weight(1f)) {
-                                                    Text(group.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
-                                                    if (groupPreview != null) {
-                                                        Spacer(Modifier.height(2.dp))
+                                                    Text(
+                                                        group.name,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        style = MaterialTheme.typography.bodyLarge,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Spacer(Modifier.height(2.dp))
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
                                                         Text(
-                                                            groupPreview!!,
+                                                            groupPreview ?: "",
                                                             style = MaterialTheme.typography.bodySmall,
                                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                             maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            modifier = Modifier.weight(1f)
                                                         )
+                                                        if (lastGroupMsg?.timestamp != null) {
+                                                            Spacer(Modifier.width(6.dp))
+                                                            Text(
+                                                                formatChatTime(lastGroupMsg!!.timestamp),
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            )
+                                                        }
                                                     }
                                                 }
+
                                                 if (groupUnread > 0) {
+                                                    Spacer(Modifier.width(8.dp))
                                                     Box(
-                                                        Modifier.size(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                                                        Modifier
+                                                            .size(22.dp)
+                                                            .clip(CircleShape)
+                                                            .background(MaterialTheme.colorScheme.primary),
                                                         contentAlignment = Alignment.Center
                                                     ) {
                                                         Text(
-                                                            groupUnread.toString(),
-                                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                            if (groupUnread > 99) "99+" else groupUnread.toString(),
+                                                            color = MaterialTheme.colorScheme.onPrimary,
                                                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                                                         )
                                                     }
@@ -370,43 +495,8 @@ fun TwoPanelLayout(
                                             }
                                         }
                                     }
-                                    item { HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp)) }
                                 }
-                                items(filtered, key = { it.id }) { contact ->
-                                    val lastMsg by container.messages.observeLastMessage(contact.id)
-                                        .collectAsState(initial = null)
-                                    val unread by container.messages.observeUnreadCount(contact.id)
-                                        .collectAsState(initial = 0L)
-                                    val preview by remember(lastMsg?.id) {
-                                        derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage) } }
-                                    }
-                                    val isSelected by remember(contact.id) {
-                                        derivedStateOf {
-                                            when (val r = right) {
-                                                is PanelRight.Chat   -> r.contactId == contact.id
-                                                is PanelRight.Verify -> r.contactId == contact.id
-                                                else -> false
-                                            }
-                                        }
-                                    }
-                                    PanelContactRow(
-                                        contact = contact,
-                                        selected = isSelected,
-                                        connected = connectedSet.contains(contact.id),
-                                        lastMessage = preview,
-                                        lastMessageTs = lastMsg?.timestamp,
-                                        unread = unread,
-                                        onClick = { right = PanelRight.Chat(contact.id) },
-                                        onVerifyRequest = {
-                                            right = PanelRight.Verify(contact.id)
-                                        },
-                                        onDeleteRequest = {
-                                            deleteTargetContact = contact
-                                            showDeleteConfirm = true
-                                        }
-                                    )
-                                }
-                                if (filtered.isEmpty()) {
+                                if (combinedPanelItems.isEmpty()) {
                                     item {
                                         Box(
                                             modifier = Modifier.fillMaxWidth().padding(24.dp),
@@ -703,10 +793,11 @@ private fun PanelContactRow(
                     )
                     if (contact.verified) {
                         Spacer(Modifier.width(4.dp))
-                        Text(
-                            "✓",
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.labelMedium
+                        Icon(
+                            Icons.Default.Verified,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }

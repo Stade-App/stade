@@ -54,7 +54,7 @@ fun Avatar(
             color = Color.White,
             textAlign = TextAlign.Center,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.offset(y = (-1).dp),
+            modifier = Modifier.offset(y = (0).dp),
             style = MaterialTheme.typography.titleSmall.copy(
                 fontSize = fontSize,
                 lineHeight = fontSize

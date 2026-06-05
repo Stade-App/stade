@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,6 +15,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import app.stade.ui.components.Avatar
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -42,12 +45,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.SmallFloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -75,6 +79,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.contact.Contact
@@ -85,6 +90,24 @@ import app.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.combine
+
+private sealed class ChatListItem {
+    data class ContactItem(val contact: Contact, val lastMessageTs: Long? = null) : ChatListItem()
+    data class GroupItem(val group: GroupInfo, val lastMessageTs: Long? = null) : ChatListItem()
+    val displayName: String get() = when (this) {
+        is ContactItem -> contact.nickname
+        is GroupItem   -> group.name
+    }
+    val key: String get() = when (this) {
+        is ContactItem -> contact.id
+        is GroupItem   -> "grp_${group.id}"
+    }
+    val sortKey: Long get() = when (this) {
+        is ContactItem -> lastMessageTs ?: 0L
+        is GroupItem   -> lastMessageTs ?: 0L
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,6 +127,20 @@ fun ContactsScreen(
     val scope = rememberCoroutineScope()
     val strings = LocalStrings.current
 
+    val contactLastMessages by remember(contacts) {
+        combine(
+            contacts.map { c -> container.messages.observeLastMessage(c.id) }
+                .ifEmpty { listOf(kotlinx.coroutines.flow.flowOf(null)) }
+        ) { it.toList() }
+    }.collectAsState(initial = emptyList())
+
+    val groupLastMessages by remember(groups) {
+        combine(
+            groups.map { g -> container.groups.observeLastMessage(g.id) }
+                .ifEmpty { listOf(kotlinx.coroutines.flow.flowOf(null)) }
+        ) { it.toList() }
+    }.collectAsState(initial = emptyList())
+
     var searchActive by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var isFabExpanded by remember { mutableStateOf(false) }
@@ -117,52 +154,73 @@ fun ContactsScreen(
         val c = actionContact!!
         AlertDialog(
             onDismissRequest = { actionContact = null },
+            shape = RoundedCornerShape(28.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+
+            icon = {
+                Avatar(
+                    c.nickname,
+                    size = 56.dp
+                )
+            },
+
             title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(c.nickname)
-                    Spacer(Modifier.width(12.dp))
-                    Text(c.nickname, style = MaterialTheme.typography.titleMedium)
-                }
+                Text(
+                    text = c.nickname,
+                    style = MaterialTheme.typography.titleLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             },
+
             text = {
-                Column {
-                    HorizontalDivider()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                actionContact = null
-                                onLongPressVerify(c.id)
-                            }
-                            .padding(vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            actionContact = null
+                            onLongPressVerify(c.id)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
-                        Icon(Icons.Default.Verified, null, tint = MaterialTheme.colorScheme.primary)
-                        Text(strings.showVerificationCode, style = MaterialTheme.typography.bodyLarge)
-                    }
-                    HorizontalDivider()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showDeleteConfirm = true }
-                            .padding(vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
-                        Text(
-                            strings.deleteContact,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.error
+                        Icon(
+                            imageVector = Icons.Default.Verified,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
                         )
+                        Spacer(Modifier.width(8.dp))
+                        Text(strings.showVerificationCode)
                     }
-                    HorizontalDivider()
+
+                    OutlinedButton(
+                        onClick = { showDeleteConfirm = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                        ),
+                        contentPadding = PaddingValues(vertical = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(strings.deleteContact)
+                    }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { actionContact = null }) { Text(strings.cancel) }
-            }
+
+            confirmButton = {}
         )
     }
 
@@ -243,6 +301,24 @@ fun ContactsScreen(
         }
     }
 
+    val combinedItems by remember(filtered, groups, searchActive, query, contactLastMessages, groupLastMessages) {
+        derivedStateOf {
+            val q = query.trim()
+            val result = mutableListOf<ChatListItem>()
+            groups
+                .filter { !searchActive || q.isBlank() || it.name.contains(q, ignoreCase = true) }
+                .forEachIndexed { i, g ->
+                    result.add(ChatListItem.GroupItem(g, groupLastMessages.getOrNull(i)?.timestamp))
+                }
+            filtered.forEachIndexed { i, c ->
+                val origIdx = contacts.indexOf(c)
+                result.add(ChatListItem.ContactItem(c, contactLastMessages.getOrNull(origIdx)?.timestamp))
+            }
+            result.sortByDescending { it.sortKey }
+            result
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -299,7 +375,25 @@ fun ContactsScreen(
                                 )
                             )
                         } else {
-                            Text(strings.appTitle)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Avatar(
+                                    name = owner.nickname,
+                                    size = 38.dp,
+                                    shape = RoundedCornerShape(25)
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        strings.appTitle,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(
+                                        owner.nickname,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 },
@@ -397,40 +491,41 @@ fun ContactsScreen(
             EmptyContacts(Modifier.fillMaxSize().padding(padding))
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-                if (groups.isNotEmpty()) {
-                    items(groups, key = { "grp_${it.id}" }) { group ->
-                        val lastMsg by container.groups.observeLastMessage(group.id).collectAsState(initial = null)
-                        val unread by container.groups.observeUnreadCount(group.id).collectAsState(initial = 0L)
-                        val preview by remember(lastMsg?.id) {
-                            derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage) } }
+                items(combinedItems, key = { it.key }) { item ->
+                    when (item) {
+                        is ChatListItem.ContactItem -> {
+                            val contact = item.contact
+                            val lastMsg by container.messages.observeLastMessage(contact.id).collectAsState(initial = null)
+                            val unread by container.messages.observeUnreadCount(contact.id).collectAsState(initial = 0L)
+                            val preview by remember(lastMsg?.id) {
+                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage) } }
+                            }
+                            ContactRow(
+                                contact = contact,
+                                connected = connectedSet.contains(contact.id),
+                                lastMessage = preview,
+                                unread = unread,
+                                onClick = { onOpenChat(contact.id) },
+                                onLongPress = { actionContact = contact }
+                            )
                         }
-                        GroupRow(
-                            group = group,
-                            lastMessage = preview,
-                            unread = unread,
-                            onClick = { onOpenGroupChat(group.id) }
-                        )
-                    }
-                    if (contacts.isNotEmpty()) {
-                        item { HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp)) }
+                        is ChatListItem.GroupItem -> {
+                            val group = item.group
+                            val lastMsg by container.groups.observeLastMessage(group.id).collectAsState(initial = null)
+                            val unread by container.groups.observeUnreadCount(group.id).collectAsState(initial = 0L)
+                            val preview by remember(lastMsg?.id) {
+                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage) } }
+                            }
+                            GroupRow(
+                                group = group,
+                                lastMessage = preview,
+                                unread = unread,
+                                onClick = { onOpenGroupChat(group.id) }
+                            )
+                        }
                     }
                 }
-                items(filtered, key = { it.id }) { contact ->
-                    val lastMsg by container.messages.observeLastMessage(contact.id).collectAsState(initial = null)
-                    val unread by container.messages.observeUnreadCount(contact.id).collectAsState(initial = 0L)
-                    val preview by remember(lastMsg?.id) {
-                        derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage) } }
-                    }
-                    ContactRow(
-                        contact = contact,
-                        connected = connectedSet.contains(contact.id),
-                        lastMessage = preview,
-                        unread = unread,
-                        onClick = { onOpenChat(contact.id) },
-                        onLongPress = { actionContact = contact }
-                    )
-                }
-                if (searchActive && filtered.isEmpty()) {
+                if (searchActive && combinedItems.isEmpty()) {
                     item {
                         Box(
                             modifier = Modifier.fillMaxWidth().padding(32.dp),
@@ -564,12 +659,12 @@ private fun ContactRow(
                     Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         unread.toString(),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
@@ -587,7 +682,10 @@ private fun GroupRow(
 ) {
     val strings = LocalStrings.current
     val subtleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-    Surface(modifier = Modifier.fillMaxWidth(), color = Color.Transparent) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.Transparent,
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -609,7 +707,9 @@ private fun GroupRow(
                     modifier = Modifier.size(26.dp)
                 )
             }
+
             Spacer(Modifier.width(16.dp))
+
             Column(Modifier.weight(1f)) {
                 Text(
                     group.name,
@@ -624,17 +724,18 @@ private fun GroupRow(
                     maxLines = 1
                 )
             }
+
             if (unread > 0) {
                 Box(
                     Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         unread.toString(),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
