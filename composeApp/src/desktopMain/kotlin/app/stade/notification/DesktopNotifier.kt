@@ -31,8 +31,8 @@ object DesktopNotifier {
             if (trayIcon != null) return
             val tray = SystemTray.getSystemTray()
             val image = runCatching {
-                val stream = javaClass.classLoader.getResourceAsStream("drawable/app_icon.png")
-                    ?: javaClass.classLoader.getResourceAsStream("composeResources/stade.composeapp.generated.resources/drawable/app_icon.png")
+                val stream = javaClass.classLoader.getResourceAsStream("drawable/app_tray_icon.png")
+                    ?: javaClass.classLoader.getResourceAsStream("composeResources/stade.composeapp.generated.resources/drawable/app_tray_icon.png")
                 if (stream != null) ImageIO.read(stream) else null
             }.getOrNull() ?: Toolkit.getDefaultToolkit().getImage("")
             val popup = PopupMenu().apply {
