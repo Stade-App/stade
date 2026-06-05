@@ -7,14 +7,13 @@ import java.awt.SystemTray
 import java.awt.Toolkit
 import java.awt.TrayIcon
 import java.awt.event.ActionListener
+import java.util.prefs.Preferences
 import javax.imageio.ImageIO
 
-/**
- * Masaüstünde sistem tepsisinden bildirim göstermeyi ve uygulamayı arka planda
- * tutmayı sağlayan singleton. Pencere kapatıldığında uygulama tray'e iner ve
- * yeni mesaj geldiğinde TrayIcon.displayMessage ile balon bildirim atar.
- */
 object DesktopNotifier {
+
+    private val flagPrefs: Preferences = Preferences.userRoot().node("app/stade/notifications")
+    private const val KEY_BG_NOTICE_SHOWN = "bg_notice_shown"
 
     @Volatile private var trayIcon: TrayIcon? = null
     @Volatile private var onActivate: (() -> Unit)? = null
@@ -69,6 +68,16 @@ object DesktopNotifier {
         val icon = trayIcon ?: return
         runCatching {
             icon.displayMessage(title, body, TrayIcon.MessageType.NONE)
+        }
+    }
+
+    fun notifyBackgroundIfFirstTime(title: String, body: String) {
+        if (flagPrefs.getBoolean(KEY_BG_NOTICE_SHOWN, false)) return
+        ensureTray()
+        val icon = trayIcon ?: return
+        runCatching {
+            icon.displayMessage(title, body, TrayIcon.MessageType.NONE)
+            flagPrefs.putBoolean(KEY_BG_NOTICE_SHOWN, true)
         }
     }
 

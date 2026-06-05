@@ -10,6 +10,8 @@ import app.stade.StadeApplication
 
 actual val isNotificationSupported: Boolean = true
 
+actual val isSystemNotificationSettingsSupported: Boolean = true
+
 private val prefs get() = StadeApplication.instance
     .getSharedPreferences("stade_notifications", Context.MODE_PRIVATE)
 
@@ -76,5 +78,5 @@ actual fun showIncomingMessageNotification(
 actual val isRunInBackgroundSupported: Boolean = false
 private val _androidBg = mutableStateOf(true)
 actual fun getRunInBackgroundEnabledCommon(): State<Boolean> = _androidBg
-actual fun setRunInBackgroundEnabledCommon(value: Boolean) { /* Android'de daima true */ }
+actual fun setRunInBackgroundEnabledCommon(value: Boolean) {}
 

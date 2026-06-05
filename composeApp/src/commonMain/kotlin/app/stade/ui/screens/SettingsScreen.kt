@@ -77,6 +77,7 @@ import app.stade.notification.getNotificationsEnabled
 import app.stade.notification.getRunInBackgroundEnabledCommon
 import app.stade.notification.isNotificationSupported
 import app.stade.notification.isRunInBackgroundSupported
+import app.stade.notification.isSystemNotificationSettingsSupported
 import app.stade.notification.openNotificationSettings
 import app.stade.notification.setNotificationPrivacyEnabled
 import app.stade.notification.setNotificationsEnabled
@@ -259,21 +260,37 @@ fun SettingsScreen(
                 item {
                     SettingsSectionLabel(strings.notificationsSection)
                     val bgColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                    val shapeTop = RoundedCornerShape(
-                        topStart = 16.dp, topEnd = 16.dp,
-                        bottomStart = 4.dp, bottomEnd = 4.dp
+                    val largeCorner = 16.dp
+                    val smallCorner = 4.dp
+                    val showSystemRow = isSystemNotificationSettingsSupported
+                    val showPrivacyRow = notificationsEnabled
+
+                    val topShape = if (showPrivacyRow || showSystemRow) {
+                        RoundedCornerShape(
+                            topStart = largeCorner, topEnd = largeCorner,
+                            bottomStart = smallCorner, bottomEnd = smallCorner
+                        )
+                    } else {
+                        RoundedCornerShape(largeCorner)
+                    }
+                    val privacyShape = if (showSystemRow) {
+                        RoundedCornerShape(smallCorner)
+                    } else {
+                        RoundedCornerShape(
+                            topStart = smallCorner, topEnd = smallCorner,
+                            bottomStart = largeCorner, bottomEnd = largeCorner
+                        )
+                    }
+                    val systemShape = RoundedCornerShape(
+                        topStart = smallCorner, topEnd = smallCorner,
+                        bottomStart = largeCorner, bottomEnd = largeCorner
                     )
-                    val shapeMid = RoundedCornerShape(4.dp)
-                    val shapeBot = RoundedCornerShape(
-                        topStart = 4.dp, topEnd = 4.dp,
-                        bottomStart = 16.dp, bottomEnd = 16.dp
-                    )
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                     ) {
-                        // ── Bildirimler toggle — her zaman en üstte ──────
                         SwitchSettingsRow(
                             icon = if (notificationsEnabled) Icons.Default.Notifications
                                    else Icons.Default.NotificationsOff,
@@ -285,12 +302,11 @@ fun SettingsScreen(
                             checked = notificationsEnabled,
                             onCheckedChange = { setNotificationsEnabled(it) },
                             modifier = Modifier
-                                .padding(bottom = 2.dp)
-                                .background(color = bgColor, shape = shapeTop)
-                                .clip(shapeTop)
+                                .padding(bottom = if (showPrivacyRow || showSystemRow) 2.dp else 0.dp)
+                                .background(color = bgColor, shape = topShape)
+                                .clip(topShape)
                         )
-                        // ── Gizlilik toggle — yalnızca bildirimler açıkken ──
-                        if (notificationsEnabled) {
+                        if (showPrivacyRow) {
                             SwitchSettingsRow(
                                 icon = Icons.Default.VisibilityOff,
                                 iconTint = MaterialTheme.colorScheme.tertiary,
@@ -302,22 +318,23 @@ fun SettingsScreen(
                                 checked = notificationPrivacyEnabled,
                                 onCheckedChange = { setNotificationPrivacyEnabled(it) },
                                 modifier = Modifier
-                                    .padding(bottom = 2.dp)
-                                    .background(color = bgColor, shape = shapeMid)
-                                    .clip(shapeMid)
+                                    .padding(bottom = if (showSystemRow) 2.dp else 0.dp)
+                                    .background(color = bgColor, shape = privacyShape)
+                                    .clip(privacyShape)
                             )
                         }
-                        // ── Sistem bildirimleri — her zaman en altta ──────
-                        NavigationSettingsRow(
-                            icon = Icons.Default.OpenInNew,
-                            iconTint = MaterialTheme.colorScheme.secondary,
-                            title = strings.systemNotificationsTitle,
-                            subtitle = strings.systemNotificationsSubtitle,
-                            onClick = { openNotificationSettings() },
-                            modifier = Modifier
-                                .background(color = bgColor, shape = shapeBot)
-                                .clip(shapeBot)
-                        )
+                        if (showSystemRow) {
+                            NavigationSettingsRow(
+                                icon = Icons.Default.OpenInNew,
+                                iconTint = MaterialTheme.colorScheme.secondary,
+                                title = strings.systemNotificationsTitle,
+                                subtitle = strings.systemNotificationsSubtitle,
+                                onClick = { openNotificationSettings() },
+                                modifier = Modifier
+                                    .background(color = bgColor, shape = systemShape)
+                                    .clip(systemShape)
+                            )
+                        }
                     }
                 }
             }

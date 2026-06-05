@@ -4,6 +4,8 @@ import androidx.compose.runtime.State
 
 expect val isNotificationSupported: Boolean
 
+expect val isSystemNotificationSettingsSupported: Boolean
+
 expect fun getNotificationsEnabled(): State<Boolean>
 
 expect fun setNotificationsEnabled(value: Boolean)
@@ -18,11 +20,6 @@ expect fun cancelMessagesNotification(contactId: String)
 
 expect fun clearAllMessageNotifications()
 
-/**
- * Platform tarafına yeni gelen bir mesaj için bildirim talebi.
- * Mobil tarafta uygulama foreground service'inden çağrılır,
- * masaüstünde tray icon balonu olarak gösterilir.
- */
 expect fun showIncomingMessageNotification(
     contactId: String,
     senderName: String,
@@ -31,7 +28,6 @@ expect fun showIncomingMessageNotification(
     unreadTotal: Int
 )
 
-/** Sadece masaüstünde anlamlı: kapatınca tray'e gizleme desteği. Android'de daima false. */
 expect val isRunInBackgroundSupported: Boolean
 
 expect fun getRunInBackgroundEnabledCommon(): androidx.compose.runtime.State<Boolean>

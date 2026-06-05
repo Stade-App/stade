@@ -82,6 +82,7 @@ import androidx.compose.ui.unit.dp
 import app.stade.AppContainer
 import app.stade.contact.Contact
 import app.stade.identity.LocalIdentity
+import app.stade.message.previewBody
 import app.stade.ui.components.Avatar
 import app.stade.ui.components.BrandMark
 import app.stade.ui.components.formatChatTime
@@ -128,7 +129,6 @@ fun TwoPanelLayout(
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
     var query by remember { mutableStateOf("") }
     var isFabExpanded by remember { mutableStateOf(false) }
-    // Settings scroll pozisyonu: Settings→Security→Settings geçişinde kaybolmaması için burada tutulur
     val settingsListState = rememberLazyListState()
 
     val pendingInvite by container.pendingInvite.collectAsState()
@@ -312,6 +312,9 @@ fun TwoPanelLayout(
                                         items(groups, key = { "grp_${it.id}" }) { group ->
                                         val lastGroupMsg = remember(group.id) { container.groups.lastMessage(group.id) }
                                         val groupUnread = remember(group.id) { container.groups.unreadCount(group.id) }
+                                        val groupPreview by remember(lastGroupMsg?.id) {
+                                            derivedStateOf { lastGroupMsg?.body?.let { previewBody(it, strings.photoMessage) } }
+                                        }
                                         val isGroupSelected by remember(group.id) { derivedStateOf { right is PanelRight.GroupChat && (right as? PanelRight.GroupChat)?.groupId == group.id } }
                                         Surface(
                                             modifier = Modifier.fillMaxWidth(),
@@ -341,10 +344,10 @@ fun TwoPanelLayout(
                                                 Spacer(Modifier.width(12.dp))
                                                 Column(Modifier.weight(1f)) {
                                                     Text(group.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
-                                                    if (lastGroupMsg != null) {
+                                                    if (groupPreview != null) {
                                                         Spacer(Modifier.height(2.dp))
                                                         Text(
-                                                            lastGroupMsg.body,
+                                                            groupPreview!!,
                                                             style = MaterialTheme.typography.bodySmall,
                                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                             maxLines = 1,
@@ -374,6 +377,9 @@ fun TwoPanelLayout(
                                         .collectAsState(initial = null)
                                     val unread by container.messages.observeUnreadCount(contact.id)
                                         .collectAsState(initial = 0L)
+                                    val preview by remember(lastMsg?.id) {
+                                        derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage) } }
+                                    }
                                     val isSelected by remember(contact.id) {
                                         derivedStateOf {
                                             when (val r = right) {
@@ -387,7 +393,7 @@ fun TwoPanelLayout(
                                         contact = contact,
                                         selected = isSelected,
                                         connected = connectedSet.contains(contact.id),
-                                        lastMessage = lastMsg?.body,
+                                        lastMessage = preview,
                                         lastMessageTs = lastMsg?.timestamp,
                                         unread = unread,
                                         onClick = { right = PanelRight.Chat(contact.id) },

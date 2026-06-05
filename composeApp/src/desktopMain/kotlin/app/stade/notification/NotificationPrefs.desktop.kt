@@ -12,6 +12,8 @@ private const val KEY_BACKGROUND = "background"
 
 actual val isNotificationSupported: Boolean = java.awt.SystemTray.isSupported()
 
+actual val isSystemNotificationSettingsSupported: Boolean = false
+
 private val _enabled = mutableStateOf(prefs.getBoolean(KEY_ENABLED, true))
 private val _privacy = mutableStateOf(prefs.getBoolean(KEY_PRIVACY, false))
 private val _runInBackground = mutableStateOf(prefs.getBoolean(KEY_BACKGROUND, true))
@@ -55,7 +57,6 @@ actual fun showIncomingMessageNotification(
     }
 }
 
-/** Sadece masaüstüne özel: uygulama kapatıldığında tray'e simge bırakılsın mı? */
 fun getRunInBackgroundEnabled(): State<Boolean> = _runInBackground
 fun setRunInBackgroundEnabled(value: Boolean) {
     _runInBackground.value = value

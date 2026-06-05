@@ -99,7 +99,10 @@ fun main(args: Array<String>) = application {
         onCloseRequest = {
             if (runInBackground && java.awt.SystemTray.isSupported()) {
                 visible = false
-                DesktopNotifier.showMessage("Stade", "Uygulama arka planda çalışmaya devam ediyor")
+                DesktopNotifier.notifyBackgroundIfFirstTime(
+                    "Stade",
+                    "Uygulama arka planda çalışmaya devam ediyor"
+                )
             } else {
                 exitApplication()
             }
