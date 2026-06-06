@@ -37,9 +37,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
-import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.foundation.window.WindowDraggableArea
@@ -133,7 +131,6 @@ fun main(args: Array<String>) = application {
         } else {
             DesktopNotifier.removeTray()
         }
-        Unit
     }
 
     Window(
@@ -173,12 +170,8 @@ fun main(args: Array<String>) = application {
         ) {
             Column(Modifier.fillMaxSize()) {
                 StadeTitleBar(
-                    windowState = windowState,
                     onMinimize = { windowState.isMinimized = true },
-                    onToggleMaximize = {
-                        windowState.placement = if (windowState.placement == WindowPlacement.Maximized)
-                            WindowPlacement.Floating else WindowPlacement.Maximized
-                    },
+                    onToggleMaximize = { toggleManualMaximize(window) },
                     onClose = {
                         if (runInBackground && java.awt.SystemTray.isSupported()) {
                             visible = false
@@ -201,20 +194,22 @@ fun main(args: Array<String>) = application {
 
 @androidx.compose.runtime.Composable
 private fun androidx.compose.ui.window.FrameWindowScope.StadeTitleBar(
-    windowState: WindowState,
     onMinimize: () -> Unit,
     onToggleMaximize: () -> Unit,
     onClose: () -> Unit
 ) {
     StadeTheme {
-        Surface(
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 1.dp,
-            modifier = Modifier.fillMaxWidth().height(36.dp)
+        val barColor = MaterialTheme.colorScheme.surface
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+                .background(barColor)
         ) {
             Row(
                 modifier = Modifier.fillMaxSize(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
             ) {
                 WindowDraggableArea(modifier = Modifier.weight(1f).fillMaxSize()) {
                     Row(
@@ -239,7 +234,7 @@ private fun androidx.compose.ui.window.FrameWindowScope.StadeTitleBar(
                     Icon(Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(15.dp))
                 }
                 TitleBarButton(onToggleMaximize, isClose = false) {
-                    if (windowState.placement == WindowPlacement.Maximized) {
+                    if (isWindowManuallyMaximized(window)) {
                         Icon(Icons.Default.FilterNone, contentDescription = null, modifier = Modifier.size(13.dp))
                     } else {
                         Icon(Icons.Default.CropSquare, contentDescription = null, modifier = Modifier.size(13.dp))
@@ -260,9 +255,12 @@ private fun TitleBarButton(
     content: @androidx.compose.runtime.Composable () -> Unit
 ) {
     var hovered by remember { mutableStateOf(false) }
-    val baseColor = if (isClose && hovered) Color(0xFFE81123)
-    else if (hovered) MaterialTheme.colorScheme.surfaceVariant
-    else Color.Transparent
+    var pressed by remember { mutableStateOf(false) }
+    val baseColor = when {
+        isClose && hovered -> Color(0xFFE81123)
+        hovered -> MaterialTheme.colorScheme.surfaceVariant
+        else -> Color.Transparent
+    }
     val fg = if (isClose && hovered) Color.White else MaterialTheme.colorScheme.onSurface
     Box(
         modifier = Modifier
@@ -274,9 +272,19 @@ private fun TitleBarButton(
                         val event = awaitPointerEvent()
                         when (event.type) {
                             PointerEventType.Enter -> hovered = true
-                            PointerEventType.Exit -> hovered = false
+                            PointerEventType.Exit -> {
+                                hovered = false
+                                pressed = false
+                            }
                             PointerEventType.Press -> {
-                                onClick()
+                                pressed = true
+                                event.changes.forEach { it.consume() }
+                            }
+                            PointerEventType.Release -> {
+                                if (pressed && hovered) {
+                                    onClick()
+                                }
+                                pressed = false
                                 event.changes.forEach { it.consume() }
                             }
                             else -> {}
@@ -291,6 +299,32 @@ private fun TitleBarButton(
         ) {
             content()
         }
+    }
+}
+
+
+private data class SavedBounds(val x: Int, val y: Int, val w: Int, val h: Int)
+
+private val savedBoundsByWindow = java.util.WeakHashMap<java.awt.Window, SavedBounds>()
+
+private fun isWindowManuallyMaximized(window: java.awt.Window): Boolean =
+    savedBoundsByWindow.containsKey(window)
+
+private fun toggleManualMaximize(window: java.awt.Window) {
+    val saved = savedBoundsByWindow[window]
+    if (saved != null) {
+        window.setBounds(saved.x, saved.y, saved.w, saved.h)
+        savedBoundsByWindow.remove(window)
+    } else {
+        val gc = window.graphicsConfiguration ?: return
+        val screenBounds = gc.bounds
+        val insets = java.awt.Toolkit.getDefaultToolkit().getScreenInsets(gc)
+        val x = screenBounds.x + insets.left
+        val y = screenBounds.y + insets.top
+        val w = screenBounds.width - insets.left - insets.right
+        val h = screenBounds.height - insets.top - insets.bottom
+        savedBoundsByWindow[window] = SavedBounds(window.x, window.y, window.width, window.height)
+        window.setBounds(x, y, w, h)
     }
 }
 
