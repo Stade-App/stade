@@ -40,7 +40,6 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import androidx.compose.foundation.window.WindowDraggableArea
 import java.awt.Dimension
 import app.stade.crypto.Encoding
 import app.stade.db.DriverFactory
@@ -211,7 +210,7 @@ private fun androidx.compose.ui.window.FrameWindowScope.StadeTitleBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Start
             ) {
-                WindowDraggableArea(modifier = Modifier.weight(1f).fillMaxSize()) {
+                WindowDragArea(window, modifier = Modifier.weight(1f).fillMaxSize()) {
                     Row(
                         modifier = Modifier.fillMaxSize().padding(start = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -306,6 +305,58 @@ private fun TitleBarButton(
 private data class SavedBounds(val x: Int, val y: Int, val w: Int, val h: Int)
 
 private val savedBoundsByWindow = java.util.WeakHashMap<java.awt.Window, SavedBounds>()
+
+@androidx.compose.runtime.Composable
+private fun WindowDragArea(
+    window: java.awt.Window,
+    modifier: Modifier,
+    content: @androidx.compose.runtime.Composable () -> Unit
+) {
+    Box(
+        modifier = modifier.pointerInput(window) {
+            var startMouse: java.awt.Point? = null
+            var startWin: java.awt.Point? = null
+            var pendingMove = false
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent()
+                    when (event.type) {
+                        PointerEventType.Press -> {
+                            val info = java.awt.MouseInfo.getPointerInfo()
+                            if (info != null) {
+                                startMouse = info.location
+                                startWin = window.location
+                            }
+                            event.changes.forEach { it.consume() }
+                        }
+                        PointerEventType.Move -> {
+                            val sm = startMouse
+                            val sw = startWin
+                            if (sm != null && sw != null && !pendingMove) {
+                                val info = java.awt.MouseInfo.getPointerInfo() ?: continue
+                                val tx = sw.x + (info.location.x - sm.x)
+                                val ty = sw.y + (info.location.y - sm.y)
+                                if (tx != window.x || ty != window.y) {
+                                    pendingMove = true
+                                    java.awt.EventQueue.invokeLater {
+                                        window.setLocation(tx, ty)
+                                        pendingMove = false
+                                    }
+                                }
+                            }
+                        }
+                        PointerEventType.Release -> {
+                            startMouse = null
+                            startWin = null
+                        }
+                        else -> {}
+                    }
+                }
+            }
+        },
+        content = { content() }
+    )
+}
 
 private fun isWindowManuallyMaximized(window: java.awt.Window): Boolean =
     savedBoundsByWindow.containsKey(window)

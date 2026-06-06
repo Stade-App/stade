@@ -12,9 +12,7 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.File
 import javax.imageio.ImageIO
-import javax.swing.JFileChooser
 import javax.swing.SwingUtilities
-import javax.swing.filechooser.FileNameExtensionFilter
 
 actual suspend fun saveImageToGallery(bytes: ByteArray, suggestedName: String): Boolean =
     withContext(Dispatchers.IO) {
@@ -26,7 +24,7 @@ actual suspend fun saveImageToGallery(bytes: ByteArray, suggestedName: String): 
                 else -> "jpg"
             }
             val defaultName = "stade_" + System.currentTimeMillis() + "." + ext
-            val chosen = askUserForSaveLocation(defaultName, ext) ?: return@withContext false
+            val chosen = askUserForSaveLocation(defaultName) ?: return@withContext false
             val finalFile =
                 if (chosen.extension.isNotEmpty()) chosen
                 else File(chosen.parentFile, chosen.name + "." + ext)
@@ -36,11 +34,7 @@ actual suspend fun saveImageToGallery(bytes: ByteArray, suggestedName: String): 
         }.getOrDefault(false)
     }
 
-/**
- * Modal bir kayıt iletişim kutusu açar ve kullanıcının seçtiği [File]'ı döndürür.
- * Kullanıcı iptal ederse `null` döner.
- */
-private fun askUserForSaveLocation(defaultName: String, ext: String): File? {
+private fun askUserForSaveLocation(defaultName: String): File? {
     val ref = java.util.concurrent.atomic.AtomicReference<File?>(null)
     val task = Runnable {
         val parent: Frame? = Frame.getFrames().firstOrNull { it.isShowing }
@@ -61,17 +55,6 @@ private fun askUserForSaveLocation(defaultName: String, ext: String): File? {
         val name = dialog.file
         if (dir != null && name != null) {
             ref.set(File(dir, name))
-            return@Runnable
-        }
-
-        val chooser = JFileChooser().apply {
-            dialogTitle = "Medyayı kaydet"
-            selectedFile = File(defaultName)
-            fileFilter = FileNameExtensionFilter("Görüntü (*.${ext})", ext)
-        }
-        val result = chooser.showSaveDialog(parent)
-        if (result == JFileChooser.APPROVE_OPTION) {
-            ref.set(chooser.selectedFile)
         }
     }
     if (SwingUtilities.isEventDispatchThread()) {
