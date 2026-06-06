@@ -199,7 +199,7 @@ private fun androidx.compose.ui.window.FrameWindowScope.StadeTitleBar(
     onClose: () -> Unit
 ) {
     StadeTheme {
-        val barColor = MaterialTheme.colorScheme.surface
+        val barColor = MaterialTheme.colorScheme.onPrimary
         Box(
             modifier = Modifier
                 .fillMaxWidth()
