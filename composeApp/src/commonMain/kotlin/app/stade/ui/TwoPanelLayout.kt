@@ -87,6 +87,7 @@ import app.stade.message.previewBody
 import app.stade.ui.components.Avatar
 import app.stade.ui.components.BrandMark
 import app.stade.ui.components.formatChatTime
+import app.stade.ui.screens.AboutScreen
 import app.stade.ui.screens.AddContactScreen
 import app.stade.ui.screens.ChatScreen
 import app.stade.ui.screens.CreateGroupScreen
@@ -111,6 +112,7 @@ private sealed class PanelRight {
     data object Settings : PanelRight()
     data object Security : PanelRight()
     data object Transports : PanelRight()
+    data object About : PanelRight()
     data object AddContact : PanelRight()
     data class Verify(val contactId: String) : PanelRight()
     data class PinSetup(val requireCurrent: Boolean, val ret: PanelRight) : PanelRight()
@@ -640,6 +642,7 @@ fun TwoPanelLayout(
                     onBack = { right = PanelRight.Empty },
                     onOpenTransports = { right = PanelRight.Transports },
                     onOpenSecurity = { right = PanelRight.Security },
+                    onOpenAbout = { right = PanelRight.About },
                     onLogout = onLogout,
                     listState = settingsListState
                 )
@@ -661,6 +664,10 @@ fun TwoPanelLayout(
 
                 is PanelRight.Transports -> TransportsScreen(
                     container = container,
+                    onBack = { right = PanelRight.Settings }
+                )
+
+                is PanelRight.About -> AboutScreen(
                     onBack = { right = PanelRight.Settings }
                 )
 

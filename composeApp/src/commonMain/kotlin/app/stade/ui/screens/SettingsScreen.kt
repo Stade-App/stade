@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Grid3x3
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -102,6 +103,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenTransports: () -> Unit,
     onOpenSecurity: () -> Unit = {},
+    onOpenAbout: () -> Unit = {},
     onLogout: () -> Unit,
     listState: LazyListState = rememberLazyListState()
 ) {
@@ -378,6 +380,19 @@ fun SettingsScreen(
                         title = strings.securitySettingsTitle,
                         subtitle = strings.securitySettingsSubtitle,
                         onClick = onOpenSecurity
+                    )
+                }
+            }
+
+            item {
+                SettingsSectionLabel(strings.aboutSection)
+                SettingsGroup {
+                    NavigationSettingsRow(
+                        icon = Icons.Default.Info,
+                        iconTint = MaterialTheme.colorScheme.tertiary,
+                        title = strings.aboutTitle,
+                        subtitle = strings.aboutSubtitle,
+                        onClick = onOpenAbout
                     )
                 }
             }

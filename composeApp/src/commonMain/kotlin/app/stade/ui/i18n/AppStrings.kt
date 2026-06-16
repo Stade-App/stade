@@ -147,6 +147,13 @@ abstract class AppStrings {
     abstract val securitySection: String
     abstract val securitySettingsTitle: String
     abstract val securitySettingsSubtitle: String
+    abstract val aboutSection: String
+    abstract val aboutTitle: String
+    abstract val aboutSubtitle: String
+    abstract val aboutAppDescription: String
+    abstract val aboutFollowUs: String
+    abstract val aboutLinkComingSoon: String
+    abstract val aboutVersionLabel: String
     abstract val accountSection: String
     abstract val logoutTitle: String
     abstract val logoutSubtitle: String

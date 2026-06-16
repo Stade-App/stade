@@ -17,6 +17,7 @@ import app.stade.AppContainer
 import app.stade.BootContext
 import app.stade.identity.LocalIdentity
 import app.stade.security.SessionTimeout
+import app.stade.ui.screens.AboutScreen
 import app.stade.ui.screens.AddContactScreen
 import app.stade.ui.screens.ChatScreen
 import app.stade.ui.screens.ContactsScreen
@@ -49,6 +50,7 @@ sealed interface Screen {
     data object Settings : Screen
     data object Security : Screen
     data object Transports : Screen
+    data object About : Screen
     data object AddContact : Screen
     data class PinSetup(val requireCurrent: Boolean, val returnTo: Screen) : Screen
 }
@@ -246,6 +248,7 @@ private fun UnlockedApp(
                 Screen.Settings -> screen = Screen.Contacts
                 Screen.Security -> screen = Screen.Settings
                 Screen.Transports -> screen = Screen.Settings
+                Screen.About -> screen = Screen.Settings
                 Screen.AddContact -> screen = Screen.Contacts
                 is Screen.PinSetup -> screen = s.returnTo
                 else -> {}
@@ -282,6 +285,7 @@ private fun UnlockedApp(
                 onBack = { screen = Screen.Contacts },
                 onOpenTransports = { screen = Screen.Transports },
                 onOpenSecurity = { screen = Screen.Security },
+                onOpenAbout = { screen = Screen.About },
                 onLogout = {
                     scope.launch {
                         container.connections.stop()
@@ -299,6 +303,9 @@ private fun UnlockedApp(
             )
             screen == Screen.Transports -> TransportsScreen(
                 container = container,
+                onBack = { screen = Screen.Settings }
+            )
+            screen == Screen.About -> AboutScreen(
                 onBack = { screen = Screen.Settings }
             )
             screen == Screen.AddContact -> AddContactScreen(
