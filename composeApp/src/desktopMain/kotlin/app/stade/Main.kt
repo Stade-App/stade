@@ -49,6 +49,7 @@ import app.stade.notification.getRunInBackgroundEnabled
 import app.stade.security.Vault
 import app.stade.security.VaultFactory
 import app.stade.transport.LanTransport
+import app.stade.transport.RemovableTransport
 import app.stade.transport.TorTransport
 import app.stade.transport.TransportSettings
 import app.stade.transport.TransportType
@@ -92,6 +93,10 @@ fun main(args: Array<String>) = application {
                     TorTransport(
                         configProvider = { settings.get(TransportType.TOR).config },
                         embedded = embeddedTor
+                    ),
+                    RemovableTransport(
+                        nodeId = nodeId,
+                        configProvider = { settings.get(TransportType.REMOVABLE).config }
                     )
                 )
             },

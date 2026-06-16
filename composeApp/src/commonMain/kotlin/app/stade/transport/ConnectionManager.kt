@@ -310,6 +310,7 @@ class ConnectionManager(
         val type = when {
             address.startsWith("tor://") -> TransportType.TOR
             address.startsWith("lan://") -> TransportType.LAN
+            address.startsWith("removable://") -> TransportType.REMOVABLE
             else -> return null
         }
         return registry.get(type)
