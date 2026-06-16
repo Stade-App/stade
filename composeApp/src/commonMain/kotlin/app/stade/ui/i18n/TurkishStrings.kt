@@ -249,9 +249,6 @@ object TurkishStrings : AppStrings() {
     override val saveAndRestart = "Kaydet ve kanalı yeniden başlat"
     override val lanLabel = "Yerel ağ"
     override val torLabel = "Uzak ağ kanalı"
-    override val removableLabel = "Çıkarılabilir medya"
-    override val removableDirLabel = "Paylaşılan klasör / USB yolu"
-    override val removableDirNote = "İki cihazın da eriştiği bir klasör seçin (ör. USB sürücü). Mesajlar şifreli dosyalar olarak bu klasör üzerinden değiş tokuş edilir."
 
     override val verifyContactTitle = "Kişiyi doğrula"
     override val safetyNumber = "Güvenlik numarası"

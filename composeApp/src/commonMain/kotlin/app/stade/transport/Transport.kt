@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class TransportType { TOR, LAN, REMOVABLE }
+enum class TransportType { TOR, LAN }
 
 data class TransportInfo(
     val type: TransportType,

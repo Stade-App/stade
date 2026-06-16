@@ -117,19 +117,6 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            if (cfg.type == TransportType.REMOVABLE) {
-                                Spacer(Modifier.height(12.dp))
-                                RemovableConfigEditor(
-                                    initial = cfg.config,
-                                    onSave = { newCfg ->
-                                        container.transportSettings.setConfig(TransportType.REMOVABLE, newCfg)
-                                        configs = container.transportSettings.all()
-                                        scope.launch {
-                                            runCatching { container.connections.restart(TransportType.REMOVABLE) }
-                                        }
-                                    }
-                                )
-                            }
                             if (cfg.type == TransportType.TOR) {
                                 Spacer(Modifier.height(12.dp))
                                 if (isTorBuiltIn) {
@@ -248,46 +235,7 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
     }
 }
 
-@Composable
-private fun RemovableConfigEditor(initial: String, onSave: (String) -> Unit) {
-    val strings = LocalStrings.current
-    val initialDir = remember(initial) {
-        initial.lineSequence()
-            .map { it.trim() }
-            .firstOrNull { it.startsWith("dir=") }
-            ?.substringAfter('=')
-            ?.trim()
-            ?: ""
-    }
-    var dir by remember(initial) { mutableStateOf(initialDir) }
-
-    Column {
-        Text(
-            strings.removableDirNote,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = dir,
-            onValueChange = { dir = it },
-            label = { Text(strings.removableDirLabel) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-        Spacer(Modifier.height(8.dp))
-        Button(
-            onClick = {
-                val cleaned = dir.trim()
-                onSave(if (cleaned.isEmpty()) "" else "dir=$cleaned\n")
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(strings.saveAndRestart) }
-    }
-}
-
 private fun transportLabel(type: TransportType, strings: app.stade.ui.i18n.AppStrings): String = when (type) {
     TransportType.LAN -> strings.lanLabel
     TransportType.TOR -> strings.torLabel
-    TransportType.REMOVABLE -> strings.removableLabel
 }

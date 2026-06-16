@@ -77,12 +77,6 @@ kotlin {
             }
             resources.srcDir(layout.buildDirectory.dir("torBinaries"))
         }
-        val desktopTest by getting {
-            dependencies {
-                implementation(kotlin("test"))
-                implementation(libs.kotlinx.coroutines.core)
-            }
-        }
     }
 }
 

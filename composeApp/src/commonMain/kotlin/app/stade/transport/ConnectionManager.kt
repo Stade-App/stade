@@ -202,7 +202,6 @@ class ConnectionManager(
             val transportLabel = when (plugin.type) {
                 TransportType.TOR -> "Tor"
                 TransportType.LAN -> "LAN"
-                TransportType.REMOVABLE -> "Removable"
             }
             recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.TRYING, "$transportLabel üzerinden bağlanılıyor (deneme #$attemptIdx)…"))
             // Bağlantı denemesi çalışırken aynı adrese paralel deneme açılmasın
@@ -310,7 +309,6 @@ class ConnectionManager(
         val type = when {
             address.startsWith("tor://") -> TransportType.TOR
             address.startsWith("lan://") -> TransportType.LAN
-            address.startsWith("removable://") -> TransportType.REMOVABLE
             else -> return null
         }
         return registry.get(type)

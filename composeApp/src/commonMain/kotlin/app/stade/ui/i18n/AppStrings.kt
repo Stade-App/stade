@@ -198,9 +198,6 @@ abstract class AppStrings {
     abstract val saveAndRestart: String
     abstract val lanLabel: String
     abstract val torLabel: String
-    abstract val removableLabel: String
-    abstract val removableDirLabel: String
-    abstract val removableDirNote: String
 
     abstract val verifyContactTitle: String
     abstract val safetyNumber: String

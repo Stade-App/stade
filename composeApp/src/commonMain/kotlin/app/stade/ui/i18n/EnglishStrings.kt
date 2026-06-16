@@ -250,9 +250,6 @@ object EnglishStrings : AppStrings() {
     override val saveAndRestart = "Save and restart channel"
     override val lanLabel = "Local network"
     override val torLabel = "Remote network channel"
-    override val removableLabel = "Removable media"
-    override val removableDirLabel = "Shared folder / USB path"
-    override val removableDirNote = "Choose a folder both devices can access (e.g. a USB drive). Messages are exchanged as encrypted files through it."
 
     override val verifyContactTitle = "Verify contact"
     override val safetyNumber = "Safety number"
