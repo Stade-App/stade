@@ -250,7 +250,6 @@ object EnglishStrings : AppStrings() {
     override val saveAndRestart = "Save and restart channel"
     override val lanLabel = "Local network"
     override val torLabel = "Remote network channel"
-    override val bluetoothLabel = "Bluetooth"
     override val removableLabel = "Removable media"
 
     override val verifyContactTitle = "Verify contact"

@@ -238,6 +238,5 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
 private fun transportLabel(type: TransportType, strings: app.stade.ui.i18n.AppStrings): String = when (type) {
     TransportType.LAN -> strings.lanLabel
     TransportType.TOR -> strings.torLabel
-    TransportType.BLUETOOTH -> strings.bluetoothLabel
     TransportType.REMOVABLE -> strings.removableLabel
 }

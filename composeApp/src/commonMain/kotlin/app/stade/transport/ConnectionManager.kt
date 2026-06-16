@@ -202,7 +202,6 @@ class ConnectionManager(
             val transportLabel = when (plugin.type) {
                 TransportType.TOR -> "Tor"
                 TransportType.LAN -> "LAN"
-                TransportType.BLUETOOTH -> "Bluetooth"
                 TransportType.REMOVABLE -> "Removable"
             }
             recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.TRYING, "$transportLabel üzerinden bağlanılıyor (deneme #$attemptIdx)…"))

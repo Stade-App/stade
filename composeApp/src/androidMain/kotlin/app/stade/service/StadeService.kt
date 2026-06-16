@@ -69,7 +69,7 @@ class StadeService : Service() {
 
     private fun buildForegroundNotification(): Notification =
         NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setSmallIcon(android.R.drawable.stat_notify_chat)
             .setContentTitle("Stade çalışıyor")
             .setContentText("Eşler arası bağlantılar etkin")
             .setPriority(NotificationCompat.PRIORITY_MIN)

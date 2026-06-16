@@ -2,16 +2,12 @@ package app.stade
 
 import android.app.Activity
 import android.app.Application
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothManager
-import android.content.Context
 import android.os.Bundle
 import app.stade.crypto.Encoding
 import app.stade.db.DriverFactory
 import app.stade.db.StadeDb
 import app.stade.security.Vault
 import app.stade.security.VaultFactory
-import app.stade.transport.BluetoothTransport
 import app.stade.transport.LanTransport
 import app.stade.transport.TorTransport
 import app.stade.transport.TransportSettings
@@ -53,8 +49,7 @@ class StadeApplication : Application() {
                     TorTransport(
                         configProvider = { settings.get(TransportType.TOR).config },
                         embedded = embeddedTor
-                    ),
-                    BluetoothTransport { bluetoothAdapter() }
+                    )
                 )
             },
             onContainerCreated = { c ->
@@ -89,11 +84,6 @@ class StadeApplication : Application() {
     override fun onTerminate() {
         runCatching { vault.flushAndClose() }
         super.onTerminate()
-    }
-
-    private fun bluetoothAdapter(): BluetoothAdapter? {
-        val mgr = getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-        return mgr?.adapter
     }
 
     private fun deriveNodeId(db: StadeDb): String {

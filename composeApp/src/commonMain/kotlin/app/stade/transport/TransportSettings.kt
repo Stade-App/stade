@@ -33,7 +33,6 @@ class TransportSettings(private val db: StadeDb) {
     private fun defaultEnabled(type: TransportType): Boolean = when (type) {
         TransportType.LAN -> true
         TransportType.TOR -> true
-        TransportType.BLUETOOTH -> false
         TransportType.REMOVABLE -> false
     }
 }

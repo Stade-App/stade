@@ -249,7 +249,6 @@ object TurkishStrings : AppStrings() {
     override val saveAndRestart = "Kaydet ve kanalı yeniden başlat"
     override val lanLabel = "Yerel ağ"
     override val torLabel = "Uzak ağ kanalı"
-    override val bluetoothLabel = "Bluetooth"
     override val removableLabel = "Çıkarılabilir medya"
 
     override val verifyContactTitle = "Kişiyi doğrula"
