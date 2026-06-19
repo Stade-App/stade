@@ -170,6 +170,15 @@ compose.desktop {
                 dirChooser = true
                 perUserInstall = true
             }
+            linux {
+                iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.png"))
+                packageName = "stade"
+                menuGroup = "Network"
+                appCategory = "Network"
+                debMaintainer = "Stade Development <contact@stade.dev>"
+                appRelease = "1"
+                shortcut = true
+            }
             macOS {
                 dmgPackageVersion = "1.0.0"
             }
