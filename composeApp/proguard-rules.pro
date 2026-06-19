@@ -53,11 +53,11 @@
 -keepclasseswithmembers class kotlinx.serialization.json.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
--keep,includedescriptorclasses class app.stade.**$$serializer { *; }
--keepclassmembers class app.stade.** {
+-keep,includedescriptorclasses class dev.stade.**$$serializer { *; }
+-keepclassmembers class dev.stade.** {
     *** Companion;
 }
--keepclasseswithmembers class app.stade.** {
+-keepclasseswithmembers class dev.stade.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
 -keep @kotlinx.serialization.Serializable class * { *; }
@@ -88,7 +88,7 @@
 # --------------------------------------------------------------------------
 # 7. SQLDelight
 # --------------------------------------------------------------------------
--keep class app.stade.db.** { *; }
+-keep class dev.stade.db.** { *; }
 -keep class app.cash.sqldelight.** { *; }
 -keepclassmembers class app.cash.sqldelight.** { *; }
 -dontwarn app.cash.sqldelight.**
@@ -126,17 +126,17 @@
 #     Vault / SecretStore şifreleme altyapısı: reflection/JCA üzerinden
 #     erişildiği için tam korunmalı.
 # --------------------------------------------------------------------------
--keep class app.stade.AppContainer { *; }
--keep class app.stade.BootContext { *; }
--keep class app.stade.security.** { *; }
--keep class app.stade.crypto.** { *; }
--keep class app.stade.identity.** { *; }
--keep class app.stade.transport.** { *; }
+-keep class dev.stade.AppContainer { *; }
+-keep class dev.stade.BootContext { *; }
+-keep class dev.stade.security.** { *; }
+-keep class dev.stade.crypto.** { *; }
+-keep class dev.stade.identity.** { *; }
+-keep class dev.stade.transport.** { *; }
 
 # Entry point sınıfları
--keep class app.stade.MainActivity { *; }
--keep class app.stade.StadeApplication { *; }
--keep class app.stade.service.StadeService { *; }
+-keep class dev.stade.MainActivity { *; }
+-keep class dev.stade.StadeApplication { *; }
+-keep class dev.stade.service.StadeService { *; }
 
 # --------------------------------------------------------------------------
 # 13. Genel güvenli varsayılanlar

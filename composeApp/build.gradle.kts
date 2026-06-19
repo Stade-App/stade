@@ -81,11 +81,11 @@ kotlin {
 }
 
 android {
-    namespace = "app.stade"
+    namespace = "dev.stade"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.stade"
+        applicationId = "dev.stade"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -144,7 +144,7 @@ android {
 
 compose.desktop {
     application {
-        mainClass = "app.stade.MainKt"
+        mainClass = "dev.stade.MainKt"
         val localProps = Properties()
         rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { localProps.load(it) }
         javaHome = localProps.getProperty("java.home") ?: System.getProperty("java.home")
@@ -180,7 +180,7 @@ compose.desktop {
 sqldelight {
     databases {
         create("StadeDb") {
-            packageName.set("app.stade.db")
+            packageName.set("dev.stade.db")
             deriveSchemaFromMigrations.set(false)
         }
     }

@@ -16,7 +16,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:name="app.stade.StadeApplication"
+        android:name="dev.stade.StadeApplication"
         android:label="Stade"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -26,7 +26,7 @@
         android:theme="@style/Theme.Stade">
 
         <activity
-            android:name="app.stade.MainActivity"
+            android:name="dev.stade.MainActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|fontScale|fontWeightAdjustment|keyboard|layoutDirection|locale|mcc|navigation|smallestScreenSize|touchscreen|uiMode">
@@ -64,7 +64,7 @@
         </activity>
 
         <service
-            android:name="app.stade.service.StadeService"
+            android:name="dev.stade.service.StadeService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 
