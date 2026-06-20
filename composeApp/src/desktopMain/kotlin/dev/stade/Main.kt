@@ -152,8 +152,15 @@ fun main(args: Array<String>) {
 
     Window(
         onCloseRequest = {
-            runCatching { DesktopNotifier.removeTray() }
-            exitApplication()
+            if (runInBackground && java.awt.SystemTray.isSupported()) {
+                visible = false
+                DesktopNotifier.notifyBackgroundIfFirstTime(
+                    "Stade",
+                    "Uygulama arka planda çalışmaya devam ediyor"
+                )
+            } else {
+                exitApplication()
+            }
         },
         state = windowState,
         title = "Stade",
@@ -197,8 +204,15 @@ fun main(args: Array<String>) {
                     onMinimize = { windowState.isMinimized = true },
                     onToggleMaximize = { toggleManualMaximize(window) },
                     onClose = {
-                        runCatching { DesktopNotifier.removeTray() }
-                        exitApplication()
+                        if (runInBackground && java.awt.SystemTray.isSupported()) {
+                            visible = false
+                            DesktopNotifier.notifyBackgroundIfFirstTime(
+                                "Stade",
+                                "Uygulama arka planda çalışmaya devam ediyor"
+                            )
+                        } else {
+                            exitApplication()
+                        }
                     }
                 )
                 Box(modifier = Modifier.fillMaxSize().weight(1f)) {
