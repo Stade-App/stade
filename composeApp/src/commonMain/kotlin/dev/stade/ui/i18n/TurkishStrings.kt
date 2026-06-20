@@ -133,6 +133,10 @@ object TurkishStrings : AppStrings() {
     override val unknownNickname = "Bilinmeyen"
     override fun contactNameFallback(last4: String) = "Kişi-$last4"
 
+    override val backgroundRunningNotice = "Uygulama arka planda çalışmaya devam ediyor"
+    override val trayOpen = "Aç"
+    override val trayExit = "Çıkış"
+
     override val addContactTitle = "Kişi ekle"
     override val step1Title = "Kendi davetini paylaş"
     override val step1Description =

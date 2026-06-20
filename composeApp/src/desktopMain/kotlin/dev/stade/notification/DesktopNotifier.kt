@@ -45,11 +45,11 @@ object DesktopNotifier {
                 if (stream != null) ImageIO.read(stream) else null
             }.getOrNull() ?: Toolkit.getDefaultToolkit().getImage("")
             val popup = PopupMenu().apply {
-                add(MenuItem("Aç").apply {
+                add(MenuItem(dev.stade.ui.i18n.I18n.current.trayOpen).apply {
                     addActionListener { onActivate?.invoke() }
                 })
                 addSeparator()
-                add(MenuItem("Çıkış").apply {
+                add(MenuItem(dev.stade.ui.i18n.I18n.current.trayExit).apply {
                     addActionListener { onQuit?.invoke() }
                 })
             }

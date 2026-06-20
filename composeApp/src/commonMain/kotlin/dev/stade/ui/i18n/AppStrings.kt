@@ -117,6 +117,10 @@ abstract class AppStrings {
     abstract val unknownNickname: String
     abstract fun contactNameFallback(last4: String): String
 
+    abstract val backgroundRunningNotice: String
+    abstract val trayOpen: String
+    abstract val trayExit: String
+
     abstract val addContactTitle: String
     abstract val step1Title: String
     abstract val step1Description: String

@@ -133,6 +133,10 @@ object EnglishStrings : AppStrings() {
     override val unknownNickname = "Unknown"
     override fun contactNameFallback(last4: String) = "Contact-$last4"
 
+    override val backgroundRunningNotice = "The app keeps running in the background"
+    override val trayOpen = "Open"
+    override val trayExit = "Exit"
+
     override val addContactTitle = "Add contact"
     override val step1Title = "Share your own invite"
     override val step1Description =

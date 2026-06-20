@@ -156,7 +156,7 @@ fun main(args: Array<String>) {
                 visible = false
                 DesktopNotifier.notifyBackgroundIfFirstTime(
                     "Stade",
-                    "Uygulama arka planda çalışmaya devam ediyor"
+                    dev.stade.ui.i18n.I18n.current.backgroundRunningNotice
                 )
             } else {
                 exitApplication()
@@ -208,7 +208,7 @@ fun main(args: Array<String>) {
                             visible = false
                             DesktopNotifier.notifyBackgroundIfFirstTime(
                                 "Stade",
-                                "Uygulama arka planda çalışmaya devam ediyor"
+                                dev.stade.ui.i18n.I18n.current.backgroundRunningNotice
                             )
                         } else {
                             exitApplication()
