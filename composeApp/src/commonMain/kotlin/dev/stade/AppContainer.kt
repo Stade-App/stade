@@ -26,6 +26,9 @@ import dev.stade.transport.ConnectionManager
 import dev.stade.transport.ConnectionRegistry
 import dev.stade.transport.TransportPlugin
 import dev.stade.transport.TransportSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class AppContainer(
@@ -111,6 +114,8 @@ class AppContainer(
     var isAppInForeground = MutableStateFlow(true)
 
     val pendingInvite = MutableStateFlow<String?>(null)
+
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     suspend fun wipeAllData() {
         runCatching { connections.stop() }

@@ -4,6 +4,7 @@ import dev.stade.contact.ContactManager
 import dev.stade.contact.Contact
 import dev.stade.identity.LocalIdentity
 import dev.stade.sync.SyncEngine
+import dev.stade.ui.i18n.I18n
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -78,7 +79,7 @@ class ConnectionManager(
                 if (a.isNotBlank() && a !in selfSet) {
                     pendingDial.add(a)
                     pendingAttempts.remove(a)
-                    recordPending(DialAttempt(a, nowMs(), DialAttempt.Status.TRYING, "kuyrukta…"))
+                    recordPending(DialAttempt(a, nowMs(), DialAttempt.Status.TRYING, I18n.current.dialQueued))
                 }
             }
         }
@@ -187,13 +188,13 @@ class ConnectionManager(
             if ((backoff[key] ?: 0L) > now) continue
             val plugin = pluginForAddress(addr)
             if (plugin == null) {
-                recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, "taşıma hazır değil — bekleniyor"))
+                recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, I18n.current.dialTransportNotReady))
                 backoff[key] = nowMs() + 4_000L
                 continue
             }
             val pluginInfo = plugin.info.value
             if (!pluginInfo.running) {
-                recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.TRYING, "taşıma başlatılıyor (${pluginInfo.message ?: ""})"))
+                recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.TRYING, I18n.current.dialTransportStarting(pluginInfo.message ?: "")))
                 backoff[key] = nowMs() + 4_000L
                 continue
             }
@@ -203,26 +204,26 @@ class ConnectionManager(
                 TransportType.TOR -> "Tor"
                 TransportType.LAN -> "LAN"
             }
-            recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.TRYING, "$transportLabel üzerinden bağlanılıyor (deneme #$attemptIdx)…"))
+            recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.TRYING, I18n.current.dialConnectingVia(transportLabel, attemptIdx)))
             // Bağlantı denemesi çalışırken aynı adrese paralel deneme açılmasın
             backoff[key] = nowMs() + 180_000L
             scope.launch {
                 val connResult = runCatching { plugin.connect(addr) }
                 val conn = connResult.getOrNull()
                 if (conn == null) {
-                    val err = connResult.exceptionOrNull()?.message?.take(120) ?: "bağlanılamadı"
-                    recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, "$err — yeniden denenecek"))
+                    val err = connResult.exceptionOrNull()?.message?.take(120) ?: I18n.current.dialUnreachableTimeout
+                    recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, I18n.current.dialConnectFailedRetry(err)))
                     backoff[key] = nowMs() + nextPendingBackoffMs(attemptIdx)
                     pendingWake.trySend(Unit)
                     return@launch
                 }
-                recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, "handshake yapılıyor…"))
+                recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, I18n.current.dialHandshaking))
                 val sessionConnected = runCatching { sync.handleConnection(owner, conn) }.getOrDefault(false)
                 if (sessionConnected) {
-                    recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_OK, "bağlandı ✓"))
+                    recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_OK, I18n.current.dialConnectedOk))
                     consumePendingAddress(addr)
                 } else {
-                    recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, "handshake başarısız — yeniden denenecek"))
+                    recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, I18n.current.dialHandshakeFailedRetry))
                     backoff[key] = nowMs() + nextPendingBackoffMs(attemptIdx)
                     pendingWake.trySend(Unit)
                 }
@@ -245,14 +246,14 @@ class ConnectionManager(
         for (addr in contact.addresses) {
             if (sync.isConnected(contact.id)) return attempted
             if (addr in selfSet) {
-                recordAttempt(contact.id, DialAttempt(addr, now, DialAttempt.Status.CONNECT_FAIL, "bu kendi adresin (bayat) — güncellenmeli"))
+                recordAttempt(contact.id, DialAttempt(addr, now, DialAttempt.Status.CONNECT_FAIL, I18n.current.dialOwnStaleAddress))
                 continue
             }
             val key = "${contact.id}|$addr"
             if ((backoff[key] ?: 0L) > now) continue
             val plugin = pluginForAddress(addr)
             if (plugin == null) {
-                recordAttempt(contact.id, DialAttempt(addr, now, DialAttempt.Status.CONNECT_FAIL, "taşıma kapalı"))
+                recordAttempt(contact.id, DialAttempt(addr, now, DialAttempt.Status.CONNECT_FAIL, I18n.current.dialTransportClosed))
                 continue
             }
             attempted = true
@@ -262,19 +263,19 @@ class ConnectionManager(
             val connection = conn.getOrNull()
             if (connection == null) {
                 dialing -= contact.id
-                val err = conn.exceptionOrNull()?.message?.take(80) ?: "ulaşılamadı / zaman aşımı"
+                val err = conn.exceptionOrNull()?.message?.take(80) ?: I18n.current.dialUnreachableTimeout
                 recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, err))
                 backoff[key] = nowMs() + 30_000L
                 continue
             }
-            recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, "handshake yapılıyor…"))
+            recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, I18n.current.dialHandshaking))
             scope.launch {
                 try {
                     val sessionConnected = sync.handleConnection(owner, connection)
                     if (sessionConnected) {
-                        recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_OK, "bağlandı ✓"))
+                        recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_OK, I18n.current.dialConnectedOk))
                     } else {
-                        recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, "handshake başarısız"))
+                        recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, I18n.current.dialHandshakeFailed))
                         backoff[key] = nowMs() + 30_000L
                     }
                 } finally {

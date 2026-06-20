@@ -59,8 +59,12 @@ sealed interface Screen {
 fun StadeApp(boot: BootContext) {
     val vault = boot.vault
     val locale by getLocalePreference()
+    val activeStrings = localeToStrings(locale)
+    LaunchedEffect(activeStrings) {
+        dev.stade.ui.i18n.I18n.current = activeStrings
+    }
     StadeTheme {
-        CompositionLocalProvider(LocalStrings provides localeToStrings(locale)) {
+        CompositionLocalProvider(LocalStrings provides activeStrings) {
             var initialized by remember { mutableStateOf(vault.isInitialized()) }
             var unlocked by remember { mutableStateOf(vault.isUnlocked()) }
             var autoUnlockTried by remember { mutableStateOf(false) }
@@ -170,12 +174,6 @@ private fun UnlockedApp(
     }
 
     val pendingInvite by container.pendingInvite.collectAsState()
-    LaunchedEffect(pendingInvite, identity?.id) {
-        if (pendingInvite != null && identity != null &&
-            screen !is Screen.AddContact && screen !is Screen.PinSetup) {
-            screen = Screen.AddContact
-        }
-    }
 
     LaunchedEffect(identity?.id) {
         val current = identity
@@ -366,6 +364,21 @@ private fun UnlockedApp(
                     }
                 )
             }
+        }
+
+        val pending = pendingInvite
+        val owner = identity
+        if (pending != null && owner != null &&
+            screen != Screen.Onboarding &&
+            screen !is Screen.PinSetup &&
+            screen !is Screen.AddContact
+        ) {
+            IncomingInviteDialog(
+                container = container,
+                owner = owner,
+                code = pending,
+                onDismiss = { container.pendingInvite.value = null }
+            )
         }
     }
 }

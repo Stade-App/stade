@@ -105,6 +105,34 @@ object TurkishStrings : AppStrings() {
     override val addressesCleared = "Adresler temizlendi"
     override fun diagnosticError(msg: String) = "Hata: $msg"
 
+    override val dialQueued = "kuyrukta…"
+    override val dialTransportNotReady = "taşıma hazır değil — bekleniyor"
+    override fun dialTransportStarting(msg: String) = "taşıma başlatılıyor ($msg)…"
+    override fun dialConnectingVia(transport: String, attempt: Int) =
+        "$transport üzerinden bağlanılıyor (deneme #$attempt)…"
+    override fun dialConnectFailedRetry(err: String) = "$err — yeniden denenecek"
+    override val dialHandshaking = "handshake yapılıyor…"
+    override val dialConnectedOk = "bağlandı ✓"
+    override val dialHandshakeFailedRetry = "handshake başarısız — yeniden denenecek"
+    override val dialOwnStaleAddress = "bu kendi adresin (bayat) — güncellenmeli"
+    override val dialTransportClosed = "taşıma kapalı"
+    override val dialUnreachableTimeout = "ulaşılamadı / zaman aşımı"
+    override val dialHandshakeFailed = "handshake başarısız"
+
+    override fun hsProtocolMismatch(peer: Int, app: Int) =
+        "Protokol uyumsuz: v$peer (uygulama v$app)"
+    override val hsKeySizeBad = "Anahtar boyutları hatalı"
+    override val hsSelfConnected = "Kendine bağlandın (bayat adres)"
+    override val hsStadeIdMismatch = "Stade ID anahtarlarla eşleşmiyor"
+    override val hsTranscriptMismatch = "Transcript commitment uyumsuz (downgrade?)"
+    override val hsAuthStadeIdMismatch = "AUTH Stade ID HELLO ile eşleşmiyor"
+    override val hsSignaturesInvalid = "İmzalar doğrulanamadı"
+    override val hsEdInvalid = "Ed25519 imzası geçersiz"
+    override val hsMldsaInvalid = "ML-DSA imzası geçersiz (post-quantum doğrulama başarısız)"
+    override val hsMlkemDecapFailed = "ML-KEM decapsulate başarısız"
+    override val unknownNickname = "Bilinmeyen"
+    override fun contactNameFallback(last4: String) = "Kişi-$last4"
+
     override val addContactTitle = "Kişi ekle"
     override val step1Title = "Kendi davetini paylaş"
     override val step1Description =
@@ -155,6 +183,20 @@ object TurkishStrings : AppStrings() {
         "Uygulamayı açık bırak; bağlantı kurulunca kişi otomatik eklenir."
     override val torStartingInviteHint =
         "Tor henüz başlatılıyor — bu davet kodunu paylaşmadan önce tam olarak hazır olmasını bekle."
+    override val inviteLanOnlyWarning =
+        "Bu davet yalnızca yerel ağ (Wi-Fi) adresi içeriyor — sadece aynı ağda bağlanabilir. " +
+        "Uzaktaki birine ulaşmak için, karşı taraf Tor hazır olduktan sonra oluşturduğu bir davet paylaşmalı."
+    override val inviteNotReadyForRemote =
+        "Tor henüz başlatılıyor, bu yüzden davetin uzaktan erişilebilir değil. " +
+        "Hazır olmasını bekle; aksi halde karşı taraf yalnızca aynı Wi-Fi'da bağlanabilir."
+    override val addContactDialogTitle = "Kişi eklensin mi?"
+    override fun addContactQuestion(name: String) = "\"$name\" kişisini eklemek istiyor musun?"
+    override val incomingInviteMessage = "Bu kullanıcıyı eklemek üzeresin."
+    override val confirmAddCheckbox = "Bu kişiyi eklemek istediğimi onaylıyorum"
+    override val addAction = "Ekle"
+    override val notNowAction = "Şimdi değil"
+    override fun connectingInBackground(name: String) =
+        "$name ile bağlantı kuruluyor… bu pencereyi kapatabilirsin; bağlanınca kişi listene eklenir."
     override fun error(msg: String) = "Hata: $msg"
 
     override val settingsTitle = "Ayarlar"

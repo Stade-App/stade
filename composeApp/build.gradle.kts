@@ -162,6 +162,13 @@ compose.desktop {
             )
             packageName = "Stade"
             packageVersion = "0.1.0"
+            if (!System.getProperty("os.name").lowercase().contains("win")) {
+                fileAssociation(
+                    mimeType = "application/x-stade-invite",
+                    extension = "stadeid",
+                    description = "Stade Invite"
+                )
+            }
             windows {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.ico"))
                 menuGroup = "Stade"

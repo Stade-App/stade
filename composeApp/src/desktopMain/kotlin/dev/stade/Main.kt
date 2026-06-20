@@ -71,7 +71,34 @@ fun setDesktopContainer(container: AppContainer?) {
 
 fun desktopContainer(): AppContainer? = desktopContainerRef
 
-fun main(args: Array<String>) = application {
+private val foregroundTick = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+private fun readInviteArg(args: Array<String>): String? {
+    val path = args.firstOrNull { it.endsWith(".stadeid", ignoreCase = true) } ?: return null
+    return runCatching {
+        val text = java.io.File(path).readText().trim()
+        if (text.startsWith("STADE2-")) text else null
+    }.getOrNull()
+}
+
+private fun deliverForwardedInvite(invite: String) {
+    val trimmed = invite.trim()
+    if (trimmed.startsWith("STADE2-")) {
+        val c = desktopContainer()
+        if (c != null) c.pendingInvite.value = trimmed else pendingInviteAtBoot = trimmed
+    }
+    foregroundTick.value = foregroundTick.value + 1
+}
+
+fun main(args: Array<String>) {
+    val singleInstanceRoot = java.io.File(System.getProperty("user.home") ?: ".", ".stade")
+    val initialInvite = readInviteArg(args)
+    val isPrimary = SingleInstance.acquireOrForward(singleInstanceRoot, initialInvite) { invite ->
+        deliverForwardedInvite(invite)
+    }
+    if (!isPrimary) return
+    if (initialInvite != null) pendingInviteAtBoot = initialInvite
+    application {
     val boot = remember {
         val vault: Vault = VaultFactory().create()
         val torAppRoot = java.io.File(System.getProperty("user.home") ?: ".", ".stade")
@@ -101,17 +128,8 @@ fun main(args: Array<String>) = application {
             }
         )
     }
-    remember(args) {
-        val path = args.firstOrNull { it.endsWith(".stadeid", ignoreCase = true) }
-        if (path != null) {
-            runCatching {
-                val text = java.io.File(path).readText().trim()
-                if (text.startsWith("STADE2-")) {
-                    pendingInviteAtBoot = text
-                }
-            }
-        }
-        Unit
+    remember {
+        dev.stade.share.DesktopFileAssociation.ensureRegistered()
     }
     val windowState = rememberWindowState(
         position = WindowPosition.Aligned(Alignment.Center),
@@ -162,6 +180,20 @@ fun main(args: Array<String>) = application {
                 desktopContainer()?.isAppInForeground?.value = true
             }
         }
+        LaunchedEffect(Unit) {
+            foregroundTick.collect { tick ->
+                if (tick > 0) {
+                    visible = true
+                    windowState.isMinimized = false
+                    java.awt.EventQueue.invokeLater {
+                        runCatching {
+                            window.toFront()
+                            window.requestFocus()
+                        }
+                    }
+                }
+            }
+        }
 
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -188,6 +220,7 @@ fun main(args: Array<String>) = application {
                 }
             }
         }
+    }
     }
 }
 

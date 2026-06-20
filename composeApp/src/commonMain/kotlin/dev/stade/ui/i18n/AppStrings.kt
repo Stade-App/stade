@@ -91,6 +91,32 @@ abstract class AppStrings {
     abstract val addressesCleared: String
     abstract fun diagnosticError(msg: String): String
 
+    abstract val dialQueued: String
+    abstract val dialTransportNotReady: String
+    abstract fun dialTransportStarting(msg: String): String
+    abstract fun dialConnectingVia(transport: String, attempt: Int): String
+    abstract fun dialConnectFailedRetry(err: String): String
+    abstract val dialHandshaking: String
+    abstract val dialConnectedOk: String
+    abstract val dialHandshakeFailedRetry: String
+    abstract val dialOwnStaleAddress: String
+    abstract val dialTransportClosed: String
+    abstract val dialUnreachableTimeout: String
+    abstract val dialHandshakeFailed: String
+
+    abstract fun hsProtocolMismatch(peer: Int, app: Int): String
+    abstract val hsKeySizeBad: String
+    abstract val hsSelfConnected: String
+    abstract val hsStadeIdMismatch: String
+    abstract val hsTranscriptMismatch: String
+    abstract val hsAuthStadeIdMismatch: String
+    abstract val hsSignaturesInvalid: String
+    abstract val hsEdInvalid: String
+    abstract val hsMldsaInvalid: String
+    abstract val hsMlkemDecapFailed: String
+    abstract val unknownNickname: String
+    abstract fun contactNameFallback(last4: String): String
+
     abstract val addContactTitle: String
     abstract val step1Title: String
     abstract val step1Description: String
@@ -122,6 +148,15 @@ abstract class AppStrings {
     abstract fun contactAdded(name: String): String
     abstract val connectionTimeout: String
     abstract val torStartingInviteHint: String
+    abstract val inviteLanOnlyWarning: String
+    abstract val inviteNotReadyForRemote: String
+    abstract val addContactDialogTitle: String
+    abstract fun addContactQuestion(name: String): String
+    abstract val incomingInviteMessage: String
+    abstract val confirmAddCheckbox: String
+    abstract val addAction: String
+    abstract val notNowAction: String
+    abstract fun connectingInBackground(name: String): String
     abstract fun error(msg: String): String
 
     abstract val settingsTitle: String
@@ -263,4 +298,9 @@ abstract class AppStrings {
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }
+
+object I18n {
+    @Volatile
+    var current: AppStrings = EnglishStrings
+}
 

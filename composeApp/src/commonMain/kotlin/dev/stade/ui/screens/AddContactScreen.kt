@@ -69,12 +69,13 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
         torPlugin?.info ?: kotlinx.coroutines.flow.MutableStateFlow(null)
     }.collectAsState(initial = null)
 
-    var invite by remember {
-        mutableStateOf(container.handshake.createInvite(owner, container.connections.selfAddresses()))
-    }
+    var selfAddrs by remember { mutableStateOf(container.connections.selfAddresses()) }
+    var invite by remember { mutableStateOf(container.handshake.createInvite(owner, selfAddrs)) }
     LaunchedEffect(torInfo?.running) {
-        invite = container.handshake.createInvite(owner, container.connections.selfAddresses())
+        selfAddrs = container.connections.selfAddresses()
+        invite = container.handshake.createInvite(owner, selfAddrs)
     }
+    val inviteHasTor = selfAddrs.any { it.startsWith("tor://") }
     var alias by remember { mutableStateOf("") }
     var pastedCode by remember { mutableStateOf("") }
     var status by remember { mutableStateOf<String?>(null) }
@@ -123,16 +124,17 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                if (torInfo?.running != true) {
+                if (!inviteHasTor) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        strings.torStartingInviteHint,
+                        strings.inviteNotReadyForRemote,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error
                     )
                 }
                 Spacer(Modifier.height(12.dp))
                 FilledTonalButton(
+                    enabled = inviteHasTor,
                     onClick = {
                         clipboard.setText(AnnotatedString(invite.display))
                         status = strings.inviteCodeCopied(invite.display.length)
@@ -148,6 +150,7 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                 }
                 Spacer(Modifier.height(8.dp))
                 TextButton(
+                    enabled = inviteHasTor,
                     onClick = {
                         status = InviteShare.share(invite.display, owner.nickname)
                         statusSticky = false
@@ -263,9 +266,14 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                     status = strings.inviteAcceptedNoAddr
                                     statusSticky = true
                                 } else {
+                                    val lanOnly = addrs.none { it.startsWith("tor://") }
                                     container.connections.queueDial(addrs)
                                     dialingTargetAddrs = addrs.toSet()
-                                    status = strings.inviteAccepted(parsed.nickname, addrs.size)
+                                    status = if (lanOnly)
+                                        strings.inviteAccepted(parsed.nickname, addrs.size) +
+                                            "\n" + strings.inviteLanOnlyWarning
+                                    else
+                                        strings.inviteAccepted(parsed.nickname, addrs.size)
                                     statusSticky = true
                                     val targetId = parsed.stadeId
 

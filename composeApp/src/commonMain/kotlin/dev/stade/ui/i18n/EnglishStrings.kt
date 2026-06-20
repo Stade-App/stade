@@ -105,6 +105,34 @@ object EnglishStrings : AppStrings() {
     override val addressesCleared = "Addresses cleared"
     override fun diagnosticError(msg: String) = "Error: $msg"
 
+    override val dialQueued = "queued…"
+    override val dialTransportNotReady = "transport not ready — waiting"
+    override fun dialTransportStarting(msg: String) = "starting transport ($msg)…"
+    override fun dialConnectingVia(transport: String, attempt: Int) =
+        "connecting via $transport (attempt #$attempt)…"
+    override fun dialConnectFailedRetry(err: String) = "$err — will retry"
+    override val dialHandshaking = "handshaking…"
+    override val dialConnectedOk = "connected ✓"
+    override val dialHandshakeFailedRetry = "handshake failed — will retry"
+    override val dialOwnStaleAddress = "this is your own address (stale) — needs updating"
+    override val dialTransportClosed = "transport off"
+    override val dialUnreachableTimeout = "unreachable / timed out"
+    override val dialHandshakeFailed = "handshake failed"
+
+    override fun hsProtocolMismatch(peer: Int, app: Int) =
+        "Protocol mismatch: v$peer (app v$app)"
+    override val hsKeySizeBad = "Key sizes are invalid"
+    override val hsSelfConnected = "Connected to yourself (stale address)"
+    override val hsStadeIdMismatch = "Stade ID does not match the keys"
+    override val hsTranscriptMismatch = "Transcript commitment mismatch (downgrade?)"
+    override val hsAuthStadeIdMismatch = "AUTH Stade ID does not match HELLO"
+    override val hsSignaturesInvalid = "Signatures could not be verified"
+    override val hsEdInvalid = "Ed25519 signature invalid"
+    override val hsMldsaInvalid = "ML-DSA signature invalid (post-quantum verification failed)"
+    override val hsMlkemDecapFailed = "ML-KEM decapsulation failed"
+    override val unknownNickname = "Unknown"
+    override fun contactNameFallback(last4: String) = "Contact-$last4"
+
     override val addContactTitle = "Add contact"
     override val step1Title = "Share your own invite"
     override val step1Description =
@@ -153,6 +181,20 @@ object EnglishStrings : AppStrings() {
         "Leave the app open; the contact will be added automatically when a connection is established."
     override val torStartingInviteHint =
         "Tor is still starting — wait until it is fully ready before sharing this invite code."
+    override val inviteLanOnlyWarning =
+        "This invite only carries a local-network (Wi-Fi) address — it can only connect on the same network. " +
+        "To reach someone remotely, they must share an invite created after Tor is ready."
+    override val inviteNotReadyForRemote =
+        "Tor is still starting, so your invite is not reachable remotely yet. " +
+        "Wait until it is ready, otherwise the other person can only connect on the same Wi-Fi."
+    override val addContactDialogTitle = "Add contact?"
+    override fun addContactQuestion(name: String) = "Do you want to add \"$name\"?"
+    override val incomingInviteMessage = "You are about to add this user."
+    override val confirmAddCheckbox = "I confirm I want to add this contact"
+    override val addAction = "Add"
+    override val notNowAction = "Not now"
+    override fun connectingInBackground(name: String) =
+        "Connecting to $name… you can close this; the contact appears once connected."
     override fun error(msg: String) = "Error: $msg"
 
     override val settingsTitle = "Settings"

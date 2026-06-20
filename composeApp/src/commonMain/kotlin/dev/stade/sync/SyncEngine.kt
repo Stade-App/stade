@@ -17,6 +17,7 @@ import dev.stade.identity.LocalIdentity
 import dev.stade.identity.StadeId
 import dev.stade.message.MessageManager
 import dev.stade.transport.Connection
+import dev.stade.ui.i18n.I18n
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -147,7 +148,7 @@ class SyncEngine(
         }.getOrNull() ?: return null
 
         if (peerHello.protocolVersion != protocolVersion) {
-            _events.tryEmit(SyncEvent.HandshakeRejected("Protokol uyumsuz: v${peerHello.protocolVersion} (uygulama v$protocolVersion)"))
+            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsProtocolMismatch(peerHello.protocolVersion, protocolVersion)))
             return null
         }
         if (peerHello.signingPublicKey.size != 32 ||
@@ -155,17 +156,17 @@ class SyncEngine(
             peerHello.mlkemPublicKey.size != 1184 ||
             peerHello.mldsaPublicKey.size != 1952
         ) {
-            _events.tryEmit(SyncEvent.HandshakeRejected("Anahtar boyutları hatalı"))
+            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsKeySizeBad))
             return null
         }
         if (peerHello.signingPublicKey.contentEquals(owner.publicSigningKey)) {
-            _events.tryEmit(SyncEvent.HandshakeRejected("Kendine bağlandın (bayat adres)"))
+            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsSelfConnected))
             return null
         }
 
         val derivedPeerId = StadeId.derive(peerHello.signingPublicKey, peerHello.mldsaPublicKey, crypto::hash)
         if (derivedPeerId != peerHello.stadeId) {
-            _events.tryEmit(SyncEvent.HandshakeRejected("Stade ID anahtarlarla eşleşmiyor"))
+            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsStadeIdMismatch))
             return null
         }
         if (peerHello.stadeId in forgottenIds) return null
@@ -178,7 +179,7 @@ class SyncEngine(
             peerHello.mldsaPublicKey
         )
         if (!expectedPeerTc.contentEquals(peerHello.transcriptCommitment)) {
-            _events.tryEmit(SyncEvent.HandshakeRejected("Transcript commitment uyumsuz (downgrade?)"))
+            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsTranscriptMismatch))
             return null
         }
 
@@ -197,7 +198,7 @@ class SyncEngine(
             json.decodeFromString(AuthPayload.serializer(), authRecord.payload.decodeToString())
         }.getOrNull() ?: return null
         if (peerAuth.stadeId != peerHello.stadeId) {
-            _events.tryEmit(SyncEvent.HandshakeRejected("AUTH Stade ID HELLO ile eşleşmiyor"))
+            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsAuthStadeIdMismatch))
             return null
         }
 
@@ -206,9 +207,9 @@ class SyncEngine(
         val dsaOk = pq.verifyMlDsa(peerHello.mldsaPublicKey, peerAuthMessage, peerAuth.mldsaSignature)
         if (!edOk || !dsaOk) {
             _events.tryEmit(SyncEvent.HandshakeRejected(
-                if (!edOk && !dsaOk) "İmzalar doğrulanamadı"
-                else if (!edOk) "Ed25519 imzası geçersiz"
-                else "ML-DSA imzası geçersiz (post-quantum doğrulama başarısız)"
+                if (!edOk && !dsaOk) I18n.current.hsSignaturesInvalid
+                else if (!edOk) I18n.current.hsEdInvalid
+                else I18n.current.hsMldsaInvalid
             ))
             return null
         }
@@ -228,7 +229,7 @@ class SyncEngine(
 
         val invite = InvitePayload(
             stadeId = peerHello.stadeId,
-            nickname = peerHello.nickname.ifBlank { "Bilinmeyen" },
+            nickname = peerHello.nickname.ifBlank { I18n.current.unknownNickname },
             signingPublicKey = peerHello.signingPublicKey,
             handshakePublicKey = peerHello.handshakePublicKey,
             mlkemPublicKey = peerHello.mlkemPublicKey,
@@ -254,7 +255,7 @@ class SyncEngine(
             }.getOrNull() ?: return null
             kemCt = offer.ciphertext
             kemSs = runCatching { handshakeService.decapsulate(owner, kemCt) }.getOrNull() ?: run {
-                _events.tryEmit(SyncEvent.HandshakeRejected("ML-KEM decapsulate başarısız"))
+                _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsMlkemDecapFailed))
                 return null
             }
         }
@@ -263,7 +264,7 @@ class SyncEngine(
             handshakeService.deriveRootKey(owner, invite, kemCt, kemSs)
         }.getOrNull() ?: return null
 
-        val nickname = peerHello.nickname.ifBlank { "Kişi-${peerHello.stadeId.takeLast(4)}" }
+        val nickname = peerHello.nickname.ifBlank { I18n.current.contactNameFallback(peerHello.stadeId.takeLast(4)) }
         val newContact = runCatching {
             contacts.addFromHandshake(
                 owner = owner,

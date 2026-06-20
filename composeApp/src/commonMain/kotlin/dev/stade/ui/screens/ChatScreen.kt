@@ -21,9 +21,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -410,6 +412,7 @@ fun ChatScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .padding(padding)
+                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
         ) {
             Column(modifier = Modifier.fillMaxSize().onSizeChanged { size ->
                 if (size.height < prevColumnHeight && messages.isNotEmpty()) {
@@ -790,8 +793,6 @@ private fun Composer(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
-            .imePadding()
-            .navigationBarsPadding()
     ) {
         AnimatedVisibility(
             visible = pendingImages.isNotEmpty(),
