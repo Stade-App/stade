@@ -33,6 +33,8 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import dev.stade.ui.i18n.I18n
+import dev.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.delay
 
 @Composable
@@ -42,6 +44,7 @@ fun StadeIdCard(
     modifier: Modifier = Modifier
 ) {
     val clipboard = LocalClipboardManager.current
+    val strings = LocalStrings.current
     var copied by remember(stadeId) { mutableStateOf(false) }
 
     val cardShape = MaterialTheme.shapes.medium
@@ -88,7 +91,7 @@ fun StadeIdCard(
             Spacer(Modifier.width(12.dp))
             androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    if (copied) "Kopyalandı" else title,
+                    if (copied) strings.copiedLabel else title,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -103,7 +106,7 @@ fun StadeIdCard(
             Spacer(Modifier.width(8.dp))
             Icon(
                 Icons.Default.ContentCopy,
-                contentDescription = "Kopyala",
+                contentDescription = strings.copyButton,
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -112,17 +115,18 @@ fun StadeIdCard(
 }
 
 fun maskAddress(addr: String): String {
+    val strings = I18n.current
     return when {
         addr.startsWith("tor://", ignoreCase = true) -> {
             val rest = addr.removePrefix("tor://").substringBefore(':')
             val first = rest.firstOrNull()?.toString() ?: "?"
             val last = rest.lastOrNull()?.toString() ?: "?"
-            "Uzak ağ • $first…$last"
+            strings.addrRemoteNetwork(first, last)
         }
         addr.startsWith("lan://", ignoreCase = true) -> {
-            "Yerel ağ"
+            strings.addrLocalNetwork
         }
-        else -> "Ağ"
+        else -> strings.addrNetwork
     }
 }
 

@@ -6,20 +6,21 @@ import java.io.File
 
 actual object InviteShare {
     actual fun share(invite: String, ownerNickname: String): String {
+        val strings = dev.stade.ui.i18n.I18n.current
         val safeNick = ownerNickname.filter { it.isLetterOrDigit() }.take(16).ifBlank { "stade" }
         val suggested = "stade-$safeNick.stadeid"
         return runCatching {
-            val dialog = FileDialog(null as Frame?, "Davet dosyasını kaydet", FileDialog.SAVE).apply {
+            val dialog = FileDialog(null as Frame?, strings.shareSaveDialogTitle, FileDialog.SAVE).apply {
                 file = suggested
                 setFilenameFilter { _, name -> name.endsWith(".stadeid", ignoreCase = true) }
             }
             dialog.isVisible = true
             val dir = dialog.directory
-            val name = dialog.file ?: return@runCatching "İptal edildi"
+            val name = dialog.file ?: return@runCatching strings.shareCancelled
             val finalName = if (name.endsWith(".stadeid", ignoreCase = true)) name else "$name.stadeid"
             val target = if (dir != null) File(dir, finalName) else File(finalName)
             target.writeText(invite)
-            "Davet dosyası kaydedildi: ${target.absolutePath}"
-        }.getOrElse { "Dosya yazılamadı: ${it.message}" }
+            strings.shareSaved(target.absolutePath)
+        }.getOrElse { strings.shareWriteFailed(it.message ?: "") }
     }
 }

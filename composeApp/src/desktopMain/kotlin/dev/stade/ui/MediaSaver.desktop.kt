@@ -38,7 +38,7 @@ private fun askUserForSaveLocation(defaultName: String): File? {
     val ref = java.util.concurrent.atomic.AtomicReference<File?>(null)
     val task = Runnable {
         val parent: Frame? = Frame.getFrames().firstOrNull { it.isShowing }
-        val dialog = FileDialog(parent, "Medyayı kaydet", FileDialog.SAVE)
+        val dialog = FileDialog(parent, dev.stade.ui.i18n.I18n.current.saveMediaDialogTitle, FileDialog.SAVE)
         dialog.file = defaultName
         val home = System.getProperty("user.home")
         if (home != null) {

@@ -87,7 +87,7 @@ class FileVault(private val rootDir: File) : Vault {
 
     override fun unlock(password: String): UnlockOutcome {
         if (!isInitialized()) return UnlockOutcome.NotInitialized
-        val meta = readMeta() ?: return UnlockOutcome.Error("Meta okunamadı")
+        val meta = readMeta() ?: return UnlockOutcome.Error(dev.stade.ui.i18n.I18n.current.vaultMetaUnreadable)
         val now = nowMillis()
         if (meta.lockoutUntilMillis > now) {
             return UnlockOutcome.LockedOut(meta.lockoutUntilMillis)
@@ -95,7 +95,7 @@ class FileVault(private val rootDir: File) : Vault {
         val kek = try {
             deriveKey(password, meta.salt, meta.iterations)
         } catch (t: Throwable) {
-            return UnlockOutcome.Error(t.message ?: "Anahtar türetilemedi")
+            return UnlockOutcome.Error(t.message ?: dev.stade.ui.i18n.I18n.current.vaultKeyDerivationFailed)
         }
         val verifierOk = runCatching {
             val pt = gcmDecrypt(kek, meta.verifierNonce, meta.verifierCipher)
@@ -118,7 +118,7 @@ class FileVault(private val rootDir: File) : Vault {
             gcmDecrypt(kek, meta.dekNonce, meta.dekCipher)
         }.getOrElse {
             zero(kek)
-            return UnlockOutcome.Error(it.message ?: "DEK çözülemedi")
+            return UnlockOutcome.Error(it.message ?: dev.stade.ui.i18n.I18n.current.vaultDekDecryptFailed)
         }
         zero(kek)
         meta.failedAttempts = 0

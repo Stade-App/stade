@@ -137,6 +137,35 @@ object TurkishStrings : AppStrings() {
     override val trayOpen = "Aç"
     override val trayExit = "Çıkış"
 
+    override val copiedLabel = "Kopyalandı"
+    override fun addrRemoteNetwork(first: String, last: String) = "Uzak ağ • $first…$last"
+    override val addrLocalNetwork = "Yerel ağ"
+    override val addrNetwork = "Ağ"
+    override fun timeYesterday(time: String) = "dün $time"
+
+    override val shareSaveDialogTitle = "Davet dosyasını kaydet"
+    override val shareCancelled = "İptal edildi"
+    override fun shareSaved(path: String) = "Davet dosyası kaydedildi: $path"
+    override fun shareWriteFailed(msg: String) = "Dosya yazılamadı: $msg"
+    override val shareInviteSubject = "Stade davet kodu"
+    override val shareChooserTitle = "Davet dosyasını paylaş"
+    override fun shareOpened(name: String) = "Paylaşım açıldı ($name)"
+    override fun shareFailed(msg: String) = "Paylaşım açılamadı: $msg"
+    override val saveMediaDialogTitle = "Medyayı kaydet"
+
+    override val vaultMetaUnreadable = "Meta okunamadı"
+    override val vaultKeyDerivationFailed = "Anahtar türetilemedi"
+    override val vaultDekDecryptFailed = "DEK çözülemedi"
+
+    override val notifConnectionChannelName = "Bağlantı"
+    override val notifConnectionChannelDesc = "Stade eşlerle bağlantı durumunu korur"
+    override val notifMessagesChannelName = "Mesajlar"
+    override val notifMessagesChannelDesc = "Gelen şifreli mesajlar için bildirimler"
+    override val notifRunningTitle = "Stade çalışıyor"
+    override val notifRunningText = "Eşler arası bağlantılar etkin"
+    override fun notifNewMessages(count: Int) = "$count yeni mesajınız var"
+    override val notifNewMessageFallback = "Yeni mesaj"
+
     override val addContactTitle = "Kişi ekle"
     override val step1Title = "Kendi davetini paylaş"
     override val step1Description =

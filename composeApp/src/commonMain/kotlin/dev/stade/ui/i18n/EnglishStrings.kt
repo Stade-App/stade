@@ -137,6 +137,35 @@ object EnglishStrings : AppStrings() {
     override val trayOpen = "Open"
     override val trayExit = "Exit"
 
+    override val copiedLabel = "Copied"
+    override fun addrRemoteNetwork(first: String, last: String) = "Remote network • $first…$last"
+    override val addrLocalNetwork = "Local network"
+    override val addrNetwork = "Network"
+    override fun timeYesterday(time: String) = "yesterday $time"
+
+    override val shareSaveDialogTitle = "Save invite file"
+    override val shareCancelled = "Cancelled"
+    override fun shareSaved(path: String) = "Invite file saved: $path"
+    override fun shareWriteFailed(msg: String) = "Could not write file: $msg"
+    override val shareInviteSubject = "Stade invite code"
+    override val shareChooserTitle = "Share invite file"
+    override fun shareOpened(name: String) = "Share opened ($name)"
+    override fun shareFailed(msg: String) = "Could not open share: $msg"
+    override val saveMediaDialogTitle = "Save media"
+
+    override val vaultMetaUnreadable = "Could not read metadata"
+    override val vaultKeyDerivationFailed = "Could not derive key"
+    override val vaultDekDecryptFailed = "Could not decrypt key"
+
+    override val notifConnectionChannelName = "Connectivity"
+    override val notifConnectionChannelDesc = "Stade keeps peer connections alive"
+    override val notifMessagesChannelName = "Messages"
+    override val notifMessagesChannelDesc = "Notifications for incoming encrypted messages"
+    override val notifRunningTitle = "Stade is running"
+    override val notifRunningText = "Peer-to-peer connections active"
+    override fun notifNewMessages(count: Int) = "You have $count new messages"
+    override val notifNewMessageFallback = "New message"
+
     override val addContactTitle = "Add contact"
     override val step1Title = "Share your own invite"
     override val step1Description =

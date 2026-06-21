@@ -47,19 +47,20 @@ class StadeService : Service() {
 
 
     private fun ensureChannels() {
+        val strings = dev.stade.ui.i18n.I18n.current
         val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         if (mgr.getNotificationChannel(channelId) == null) {
             mgr.createNotificationChannel(
-                NotificationChannel(channelId, "Bağlantı", NotificationManager.IMPORTANCE_MIN).apply {
-                    description = "Stade eşlerle bağlantı durumunu korur"
+                NotificationChannel(channelId, strings.notifConnectionChannelName, NotificationManager.IMPORTANCE_MIN).apply {
+                    description = strings.notifConnectionChannelDesc
                     setShowBadge(false)
                 }
             )
         }
         if (mgr.getNotificationChannel(msgChannelId) == null) {
             mgr.createNotificationChannel(
-                NotificationChannel(msgChannelId, "Mesajlar", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Gelen şifreli mesajlar için bildirimler"
+                NotificationChannel(msgChannelId, strings.notifMessagesChannelName, NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = strings.notifMessagesChannelDesc
                     setShowBadge(true)
                 }
             )
@@ -70,8 +71,8 @@ class StadeService : Service() {
     private fun buildForegroundNotification(): Notification =
         NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.stat_notify_chat)
-            .setContentTitle("Stade çalışıyor")
-            .setContentText("Eşler arası bağlantılar etkin")
+            .setContentTitle(dev.stade.ui.i18n.I18n.current.notifRunningTitle)
+            .setContentText(dev.stade.ui.i18n.I18n.current.notifRunningText)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setOngoing(true)
             .build()
@@ -94,9 +95,9 @@ class StadeService : Service() {
                                     if (total > 0) showPrivacyNotification(total)
                                 } else {
                                     val contact = container.contacts.get(event.contactId)
-                                    val senderName = contact?.nickname ?: "Bilinmeyen"
+                                    val senderName = contact?.nickname ?: dev.stade.ui.i18n.I18n.current.unknownNickname
                                     val preview = container.messages.lastMessage(event.contactId)?.body
-                                        ?: "Yeni mesaj"
+                                        ?: dev.stade.ui.i18n.I18n.current.notifNewMessageFallback
                                     showMessageNotification(event.contactId, senderName, preview)
                                 }
                             }
@@ -131,7 +132,7 @@ class StadeService : Service() {
         val notif = NotificationCompat.Builder(this, msgChannelId)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
             .setContentTitle("Stade")
-            .setContentText("$count yeni mesajınız var")
+            .setContentText(dev.stade.ui.i18n.I18n.current.notifNewMessages(count))
             .setNumber(count)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)

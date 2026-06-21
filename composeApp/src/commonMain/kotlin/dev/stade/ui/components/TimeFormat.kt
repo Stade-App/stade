@@ -21,7 +21,7 @@ fun formatChatTime(epochMillis: Long): String {
     val msgDate = LocalDateTime(msg.year, msg.monthNumber, msg.dayOfMonth, 0, 0)
     val nowDate = LocalDateTime(now.year, now.monthNumber, now.dayOfMonth, 0, 0)
     val diffDays = epochDays(nowDate) - epochDays(msgDate)
-    if (diffDays == 1L) return "dün $timeOnly"
+    if (diffDays == 1L) return dev.stade.ui.i18n.I18n.current.timeYesterday(timeOnly)
 
     val dd = msg.dayOfMonth.toString().padStart(2, '0')
     val mo = msg.monthNumber.toString().padStart(2, '0')

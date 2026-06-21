@@ -121,6 +121,35 @@ abstract class AppStrings {
     abstract val trayOpen: String
     abstract val trayExit: String
 
+    abstract val copiedLabel: String
+    abstract fun addrRemoteNetwork(first: String, last: String): String
+    abstract val addrLocalNetwork: String
+    abstract val addrNetwork: String
+    abstract fun timeYesterday(time: String): String
+
+    abstract val shareSaveDialogTitle: String
+    abstract val shareCancelled: String
+    abstract fun shareSaved(path: String): String
+    abstract fun shareWriteFailed(msg: String): String
+    abstract val shareInviteSubject: String
+    abstract val shareChooserTitle: String
+    abstract fun shareOpened(name: String): String
+    abstract fun shareFailed(msg: String): String
+    abstract val saveMediaDialogTitle: String
+
+    abstract val vaultMetaUnreadable: String
+    abstract val vaultKeyDerivationFailed: String
+    abstract val vaultDekDecryptFailed: String
+
+    abstract val notifConnectionChannelName: String
+    abstract val notifConnectionChannelDesc: String
+    abstract val notifMessagesChannelName: String
+    abstract val notifMessagesChannelDesc: String
+    abstract val notifRunningTitle: String
+    abstract val notifRunningText: String
+    abstract fun notifNewMessages(count: Int): String
+    abstract val notifNewMessageFallback: String
+
     abstract val addContactTitle: String
     abstract val step1Title: String
     abstract val step1Description: String
