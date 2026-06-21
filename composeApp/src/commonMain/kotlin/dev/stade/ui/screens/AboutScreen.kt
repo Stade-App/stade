@@ -20,14 +20,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AlternateEmail
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,6 +42,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import dev.stade.ui.components.BrandIcons
 import dev.stade.ui.components.BrandMark
 import dev.stade.ui.components.PlatformVerticalScrollbar
 import dev.stade.ui.i18n.LocalStrings
@@ -61,11 +57,11 @@ private data class SocialLink(
 )
 
 private val socialLinks = listOf(
-    SocialLink("X", "@stadeapp", Icons.Default.AlternateEmail, "https://x.com/stadeapp"),
-    SocialLink("Instagram", "", Icons.Default.PhotoCamera, ""),
-    SocialLink("GitHub", "Stade-App", Icons.Default.Code, "https://github.com/Stade-App"),
-    SocialLink("Discord", "", Icons.Default.Forum, ""),
-    SocialLink("Telegram", "", Icons.Default.Send, ""),
+    SocialLink("X", "@stadeapp", BrandIcons.X, "https://x.com/stadeapp"),
+    SocialLink("Instagram", "", BrandIcons.Instagram, ""),
+    SocialLink("GitHub", "Stade-App", BrandIcons.GitHub, "https://github.com/Stade-App"),
+    SocialLink("Discord", "", BrandIcons.Discord, ""),
+    SocialLink("Telegram", "", BrandIcons.Telegram, ""),
     SocialLink("Website", "stade.dev", Icons.Default.Public, "https://stade.dev"),
     SocialLink("Email", "contact@stade.dev", Icons.Default.Email, "mailto:contact@stade.dev")
 )
