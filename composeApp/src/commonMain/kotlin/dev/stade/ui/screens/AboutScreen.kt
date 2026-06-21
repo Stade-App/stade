@@ -61,13 +61,13 @@ private data class SocialLink(
 )
 
 private val socialLinks = listOf(
-    SocialLink("X", "", Icons.Default.AlternateEmail, ""),
+    SocialLink("X", "@stadeapp", Icons.Default.AlternateEmail, "https://x.com/stadeapp"),
     SocialLink("Instagram", "", Icons.Default.PhotoCamera, ""),
-    SocialLink("GitHub", "", Icons.Default.Code, ""),
+    SocialLink("GitHub", "Stade-App", Icons.Default.Code, "https://github.com/Stade-App"),
     SocialLink("Discord", "", Icons.Default.Forum, ""),
     SocialLink("Telegram", "", Icons.Default.Send, ""),
-    SocialLink("Website", "", Icons.Default.Public, ""),
-    SocialLink("Email", "", Icons.Default.Email, "")
+    SocialLink("Website", "stade.dev", Icons.Default.Public, "https://stade.dev"),
+    SocialLink("Email", "contact@stade.dev", Icons.Default.Email, "mailto:contact@stade.dev")
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
