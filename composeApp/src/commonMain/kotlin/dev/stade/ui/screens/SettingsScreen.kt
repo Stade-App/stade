@@ -85,7 +85,6 @@ import dev.stade.notification.setNotificationsEnabled
 import dev.stade.notification.setRunInBackgroundEnabledCommon
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.PlatformVerticalScrollbar
-import dev.stade.ui.components.StadeIdCard
 import dev.stade.ui.theme.getDynamicColorEnabled
 import dev.stade.ui.theme.isDynamicColorSupported
 import dev.stade.ui.theme.setDynamicColorEnabled
@@ -192,13 +191,6 @@ fun SettingsScreen(
                         fingerprintCopied = true
                     }
                 )
-            }
-
-            item {
-                SettingsSectionLabel(strings.identitySection)
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    StadeIdCard(stadeId = owner.stadeId)
-                }
             }
 
             if (isDynamicColorSupported) {
