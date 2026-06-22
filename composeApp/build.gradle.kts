@@ -189,7 +189,7 @@ compose.desktop {
                 shortcut = true
             }
             macOS {
-                dmgPackageVersion = "0.1.0"
+                dmgPackageVersion = "1.0.0"
             }
         }
     }
