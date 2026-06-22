@@ -74,6 +74,8 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.sqldelight.sqlite.driver)
                 runtimeOnly(libs.slf4j.nop)
+                implementation("net.java.dev.jna:jna:5.14.0")
+                implementation("net.java.dev.jna:jna-platform:5.14.0")
             }
             resources.srcDir(layout.buildDirectory.dir("torBinaries"))
         }
@@ -187,7 +189,7 @@ compose.desktop {
                 shortcut = true
             }
             macOS {
-                dmgPackageVersion = "1.0.0"
+                dmgPackageVersion = "0.1.0"
             }
         }
     }
