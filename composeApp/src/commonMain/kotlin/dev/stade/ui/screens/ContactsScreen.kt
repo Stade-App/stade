@@ -47,7 +47,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -431,46 +430,48 @@ fun ContactsScreen(
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Surface(
+                            onClick = {
+                                isFabExpanded = false
+                                onCreateGroup()
+                            },
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            shadowElevation = 6.dp
                         ) {
-                            Text(
-                                text = strings.createGroupAction,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            SmallFloatingActionButton(
-                                onClick = {
-                                    isFabExpanded = false
-                                    onCreateGroup()
-                                },
-                                shape = CircleShape,
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            Row(
+                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Icon(Icons.Default.GroupAdd, contentDescription = strings.createGroupAction)
+                                Text(
+                                    text = strings.createGroupAction,
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                                Icon(Icons.Default.GroupAdd, contentDescription = null)
                             }
                         }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Surface(
+                            onClick = {
+                                isFabExpanded = false
+                                onAddContact()
+                            },
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            shadowElevation = 6.dp
                         ) {
-                            Text(
-                                text = strings.addContactAction,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            SmallFloatingActionButton(
-                                onClick = {
-                                    isFabExpanded = false
-                                    onAddContact()
-                                },
-                                shape = CircleShape,
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            Row(
+                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Icon(Icons.Default.PersonAdd, contentDescription = strings.addContactAction)
+                                Text(
+                                    text = strings.addContactAction,
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                                Icon(Icons.Default.PersonAdd, contentDescription = null)
                             }
                         }
                     }
