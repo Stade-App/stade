@@ -31,6 +31,8 @@ class StadeService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        dev.stade.ui.i18n.I18n.current =
+            dev.stade.ui.i18n.localeToStrings(dev.stade.ui.i18n.getLocalePreference().value)
         ensureChannels()
         startForeground(notificationId, buildForegroundNotification())
         observeMessages()

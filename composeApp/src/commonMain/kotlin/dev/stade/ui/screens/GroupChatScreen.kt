@@ -210,7 +210,9 @@ fun GroupChatScreen(
     var prevColumnHeight by remember { mutableStateOf(Int.MAX_VALUE) }
 
     if (showAddMembersDialog && group != null) {
-        val currentMembers = group.memberIds.toSet()
+        val currentMembers = remember(showAddMembersDialog) {
+            container.groups.getMembers(groupId).toSet()
+        }
         val candidates = remember(contacts, currentMembers) {
             contacts.filter { it.id !in currentMembers }
         }
@@ -231,13 +233,14 @@ fun GroupChatScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
                                         .clickable {
                                             selectedContactIds = if (checked)
                                                 selectedContactIds - contact.id
                                             else
                                                 selectedContactIds + contact.id
                                         }
-                                        .padding(vertical = 8.dp),
+                                        .padding(horizontal = 8.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(

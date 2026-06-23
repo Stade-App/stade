@@ -445,6 +445,7 @@ fun ContactsScreen(
                                     isFabExpanded = false
                                     onCreateGroup()
                                 },
+                                shape = CircleShape,
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                             ) {
@@ -465,6 +466,7 @@ fun ContactsScreen(
                                     isFabExpanded = false
                                     onAddContact()
                                 },
+                                shape = CircleShape,
                                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                             ) {

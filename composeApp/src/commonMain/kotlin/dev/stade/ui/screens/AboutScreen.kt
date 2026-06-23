@@ -22,8 +22,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Public
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -102,18 +100,34 @@ fun AboutScreen(onBack: () -> Unit) {
 
                 item {
                     AboutSectionLabel(strings.aboutFollowUs)
-                    AboutGroup {
+                    val bgColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    val largeCorner = 16.dp
+                    val smallCorner = 4.dp
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
                         socialLinks.forEachIndexed { index, link ->
+                            val isFirst = index == 0
+                            val isLast = index == socialLinks.lastIndex
+                            val shape = RoundedCornerShape(
+                                topStart = if (isFirst) largeCorner else smallCorner,
+                                topEnd = if (isFirst) largeCorner else smallCorner,
+                                bottomStart = if (isLast) largeCorner else smallCorner,
+                                bottomEnd = if (isLast) largeCorner else smallCorner
+                            )
                             SocialRow(
                                 link = link,
                                 comingSoonLabel = strings.aboutLinkComingSoon,
                                 onClick = {
                                     if (link.url.isNotBlank()) uriHandler.openUri(link.url)
-                                }
+                                },
+                                modifier = Modifier
+                                    .padding(bottom = if (isLast) 0.dp else 2.dp)
+                                    .background(color = bgColor, shape = shape)
+                                    .clip(shape)
                             )
-                            if (index < socialLinks.lastIndex) {
-                                Spacer(Modifier.height(2.dp))
-                            }
                         }
                     }
                 }
@@ -178,30 +192,18 @@ private fun AboutSectionLabel(title: String) {
 }
 
 @Composable
-private fun AboutGroup(content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        content()
-    }
-}
-
-@Composable
 private fun SocialRow(
     link: SocialLink,
     comingSoonLabel: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val hasLink = link.url.isNotBlank()
     val subtitle = if (hasLink) link.handle.ifBlank { link.url } else comingSoonLabel
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(modifier)
             .clickable(enabled = hasLink, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
