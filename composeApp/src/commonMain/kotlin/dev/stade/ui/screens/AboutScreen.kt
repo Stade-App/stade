@@ -43,16 +43,13 @@ import dev.stade.ui.components.BrandIcons
 import dev.stade.ui.components.BrandMark
 import dev.stade.ui.components.PlatformVerticalScrollbar
 import dev.stade.ui.i18n.LocalStrings
-import org.jetbrains.compose.resources.painterResource
-import stade.composeapp.generated.resources.Res
-import stade.composeapp.generated.resources.discord_icon
 
 private const val APP_VERSION = "0.1.0"
 
 private data class SocialLink(
     val label: String,
     val handle: String,
-    val icon: Any,
+    val icon: ImageVector,
     val url: String
 )
 
@@ -60,7 +57,7 @@ private val socialLinks = listOf(
     SocialLink("X", "@stadeapp", BrandIcons.X, "https://x.com/stadeapp"),
     SocialLink("Instagram", "", BrandIcons.Instagram, ""),
     SocialLink("GitHub", "Stade-App", BrandIcons.GitHub, "https://github.com/Stade-App"),
-    SocialLink("Discord", "", "discord_drawable", ""),
+    SocialLink("Discord", "", BrandIcons.Discord, ""),
     SocialLink("Telegram", "", BrandIcons.Telegram, ""),
     SocialLink("Website", "stade.dev", Icons.Default.Public, "https://stade.dev"),
     SocialLink("Email", "contact@stade.dev", Icons.Default.Email, "mailto:contact@stade.dev")
@@ -203,7 +200,7 @@ private fun SocialRow(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SocialIconBox(iconProvider = link.icon, tint = MaterialTheme.colorScheme.primary, enabled = hasLink)
+        SocialIconBox(icon = link.icon, tint = MaterialTheme.colorScheme.primary, enabled = hasLink)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(link.label, style = MaterialTheme.typography.bodyLarge)
@@ -226,7 +223,7 @@ private fun SocialRow(
 }
 
 @Composable
-private fun SocialIconBox(iconProvider: Any, tint: Color, enabled: Boolean) {
+private fun SocialIconBox(icon: ImageVector, tint: Color, enabled: Boolean) {
     val effectiveTint = if (enabled) tint else MaterialTheme.colorScheme.onSurfaceVariant
     Box(
         modifier = Modifier
@@ -235,23 +232,11 @@ private fun SocialIconBox(iconProvider: Any, tint: Color, enabled: Boolean) {
             .background(effectiveTint.copy(alpha = 0.12f)),
         contentAlignment = Alignment.Center
     ) {
-        when (iconProvider) {
-            is ImageVector -> {
-                Icon(
-                    imageVector = iconProvider,
-                    contentDescription = null,
-                    tint = effectiveTint,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            else -> {
-                Icon(
-                    painter = painterResource(Res.drawable.discord_icon),
-                    contentDescription = null,
-                    tint = effectiveTint,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = effectiveTint,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
