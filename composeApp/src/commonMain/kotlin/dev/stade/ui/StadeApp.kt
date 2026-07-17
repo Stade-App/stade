@@ -192,10 +192,13 @@ private fun UnlockedApp(
                 is dev.stade.sync.SyncEngine.SyncEvent.MessageReceived -> {
                     if (!dev.stade.notification.getNotificationsEnabled().value) return@collect
                     if (container.isAppInForeground.value && container.activeContactId == event.contactId) return@collect
+                    val notifStrings = dev.stade.ui.i18n.I18n.current
                     val contact = container.contacts.get(event.contactId)
                     val sender = contact?.nickname ?: "Stade"
                     val preview = runCatching { container.messages.lastMessage(event.contactId)?.body }
-                        .getOrNull() ?: "Yeni mesaj"
+                        .getOrNull()
+                        ?.let { dev.stade.message.previewBody(it, notifStrings.photoMessage) }
+                        ?: notifStrings.notifNewMessageFallback
                     val total = runCatching { container.messages.totalUnread() }.getOrDefault(0L).toInt()
                     val privacy = dev.stade.notification.getNotificationPrivacyEnabled().value
                     dev.stade.notification.showIncomingMessageNotification(
@@ -208,9 +211,12 @@ private fun UnlockedApp(
                 }
                 is dev.stade.sync.SyncEngine.SyncEvent.GroupMessageReceived -> {
                     if (!dev.stade.notification.getNotificationsEnabled().value) return@collect
+                    val notifStrings = dev.stade.ui.i18n.I18n.current
                     val group = container.groups.getGroup(event.groupId)
-                    val name = group?.name ?: "Grup"
-                    val preview = container.groups.lastMessage(event.groupId)?.body ?: "Yeni mesaj"
+                    val name = group?.name ?: "Stade"
+                    val preview = container.groups.lastMessage(event.groupId)?.body
+                        ?.let { dev.stade.message.previewBody(it, notifStrings.photoMessage) }
+                        ?: notifStrings.notifNewMessageFallback
                     val privacy = dev.stade.notification.getNotificationPrivacyEnabled().value
                     dev.stade.notification.showIncomingMessageNotification(
                         contactId = event.groupId,

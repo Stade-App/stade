@@ -1041,11 +1041,21 @@ private fun ImageBubble(
     val cornerSelf = 18.dp
     val cornerTail = if (tightWithPrev) 18.dp else 4.dp
 
-    val imageBytes: ByteArray? = remember(msg.id) { msg.imageBytes() }
-    val bitmap: ImageBitmap? = remember(msg.id) {
-        imageBytes?.decodeToImageBitmap()
+    var imageBytes by remember(msg.id) { mutableStateOf<ByteArray?>(null) }
+    var bitmap by remember(msg.id) { mutableStateOf<ImageBitmap?>(null) }
+    var decodeDone by remember(msg.id) { mutableStateOf(false) }
+    LaunchedEffect(msg.id) {
+        val (bytes, decoded) = withContext(Dispatchers.Default) {
+            val b = runCatching { msg.imageBytes() }.getOrNull()
+            b to runCatching { b?.decodeToImageBitmap() }.getOrNull()
+        }
+        imageBytes = bytes
+        bitmap = decoded
+        decodeDone = true
     }
     var showFullscreen by remember { mutableStateOf(false) }
+    val currentBitmap = bitmap
+    val currentBytes = imageBytes
 
     val selectionTint = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
 
@@ -1077,9 +1087,9 @@ private fun ImageBubble(
                 .padding(4.dp)
         ) {
             Column {
-                if (bitmap != null) {
+                if (currentBitmap != null) {
                     androidx.compose.foundation.Image(
-                        bitmap = bitmap,
+                        bitmap = currentBitmap,
                         contentDescription = strings.photoMessage,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1096,19 +1106,21 @@ private fun ImageBubble(
                             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Default.BrokenImage,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(32.dp)
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                strings.photoSendFailed,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        if (decodeDone) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Default.BrokenImage,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    strings.photoSendFailed,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
@@ -1136,7 +1148,7 @@ private fun ImageBubble(
         }
     }
 
-    if (showFullscreen && bitmap != null && imageBytes != null) {
+    if (showFullscreen && currentBitmap != null && currentBytes != null) {
         Dialog(onDismissRequest = { showFullscreen = false }) {
             Box(
                 modifier = Modifier
@@ -1145,7 +1157,7 @@ private fun ImageBubble(
                 contentAlignment = Alignment.Center
             ) {
                 androidx.compose.foundation.Image(
-                    bitmap = bitmap,
+                    bitmap = currentBitmap,
                     contentDescription = strings.photoMessage,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1158,14 +1170,14 @@ private fun ImageBubble(
                         .padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    IconButton(onClick = { onSaveImage(imageBytes) }) {
+                    IconButton(onClick = { onSaveImage(currentBytes) }) {
                         Icon(
                             Icons.Default.Download,
                             contentDescription = strings.saveImageAction,
                             tint = Color.White
                         )
                     }
-                    IconButton(onClick = { onCopyImage(imageBytes) }) {
+                    IconButton(onClick = { onCopyImage(currentBytes) }) {
                         Icon(
                             Icons.Default.ContentCopy,
                             contentDescription = strings.copyImageAction,

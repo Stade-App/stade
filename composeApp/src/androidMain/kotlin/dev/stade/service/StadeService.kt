@@ -99,6 +99,7 @@ class StadeService : Service() {
                                     val contact = container.contacts.get(event.contactId)
                                     val senderName = contact?.nickname ?: dev.stade.ui.i18n.I18n.current.unknownNickname
                                     val preview = container.messages.lastMessage(event.contactId)?.body
+                                        ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage) }
                                         ?: dev.stade.ui.i18n.I18n.current.notifNewMessageFallback
                                     showMessageNotification(event.contactId, senderName, preview)
                                 }

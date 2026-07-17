@@ -143,12 +143,7 @@ fun AboutScreen(onBack: () -> Unit) {
 @Composable
 private fun AboutHeader() {
     val strings = LocalStrings.current
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
-    ) {
+    Box(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

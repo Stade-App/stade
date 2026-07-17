@@ -86,11 +86,18 @@ private fun applyDarkTitleBar(window: java.awt.Window) {
     val os = System.getProperty("os.name", "").lowercase()
     if (!os.contains("win")) return
     runCatching {
+        val appsUseLightTheme = runCatching {
+            com.sun.jna.platform.win32.Advapi32Util.registryGetIntValue(
+                com.sun.jna.platform.win32.WinReg.HKEY_CURRENT_USER,
+                "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                "AppsUseLightTheme"
+            )
+        }.getOrDefault(0)
         val hwnd = WinDef.HWND(
             com.sun.jna.Native.getWindowPointer(window)
         )
         val dwmapi = Native.load("dwmapi", Dwmapi::class.java)
-        val value = com.sun.jna.ptr.IntByReference(1)
+        val value = com.sun.jna.ptr.IntByReference(if (appsUseLightTheme == 0) 1 else 0)
         dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, value, 4)
     }
 }
