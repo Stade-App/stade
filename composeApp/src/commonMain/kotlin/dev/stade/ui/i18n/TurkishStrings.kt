@@ -8,7 +8,7 @@ object TurkishStrings : AppStrings() {
     override val delete = "Sil"
 
     override val loading = "Yükleniyor…"
-    override val welcomeTitle = "Stade'a hoş geldin"
+    override val welcomeTitle = "Stade'e hoş geldin"
     override val welcomeDescription =
         "Uçtan uca şifreli, sunucusuz, post-quantum güvenli mesajlaşma.\n" +
         "Başlamak için bir takma ad seç — kalıcı bir Stade ID atanacak."
