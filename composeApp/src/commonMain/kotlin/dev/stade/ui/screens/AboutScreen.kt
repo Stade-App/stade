@@ -58,7 +58,6 @@ private val socialLinks = listOf(
     SocialLink("Instagram", "", BrandIcons.Instagram, ""),
     SocialLink("GitHub", "Stade-App", BrandIcons.GitHub, "https://github.com/Stade-App"),
     SocialLink("Discord", "", BrandIcons.Discord, ""),
-    SocialLink("Telegram", "", BrandIcons.Telegram, ""),
     SocialLink("Website", "stade.dev", Icons.Default.Public, "https://stade.dev"),
     SocialLink("Email", "contact@stade.dev", Icons.Default.Email, "mailto:contact@stade.dev")
 )
