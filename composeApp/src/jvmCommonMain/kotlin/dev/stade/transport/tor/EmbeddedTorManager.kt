@@ -63,9 +63,7 @@ class EmbeddedTorManager(
                 appendLine("SafeLogging 0")
                 appendLine("Log notice stdout")
                 appendLine("Log [handshake,rend,circ,dir]info stdout")
-                // Hızlı circuit kurulumu + paralel
-                appendLine("LearnCircuitBuildTimeout 0")
-                appendLine("CircuitBuildTimeout 20")
+                appendLine("CircuitBuildTimeout 60")
                 appendLine("NumEntryGuards 3")
                 appendLine("NumDirectoryGuards 3")
                 val ownerPid = pidProvider()
