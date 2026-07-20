@@ -58,6 +58,7 @@ kotlin {
             dependencies {
                 implementation(libs.bouncycastle)
                 implementation(libs.zxing.core)
+                implementation(libs.concentus)
             }
         }
         val androidMain by getting {
@@ -160,17 +161,11 @@ compose.desktop {
                 "java.management",
                 "java.security.jgss",
                 "jdk.crypto.cryptoki",
-                "jdk.security.auth"
+                "jdk.security.auth",
+                "java.desktop"
             )
             packageName = "Stade"
             packageVersion = "0.1.0"
-            if (!System.getProperty("os.name").lowercase().contains("win")) {
-                fileAssociation(
-                    mimeType = "application/x-stade-invite",
-                    extension = "stadeid",
-                    description = "Stade Invite"
-                )
-            }
             windows {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.ico"))
                 menuGroup = "Stade"

@@ -30,6 +30,13 @@ fun formatChatTime(epochMillis: Long): String {
     return "$dd.$mo.$yy $timeOnly"
 }
 
+fun formatVoiceDuration(ms: Int): String {
+    val totalSeconds = ms / 1000
+    val m = totalSeconds / 60
+    val s = totalSeconds % 60
+    return "$m:${s.toString().padStart(2, '0')}"
+}
+
 private fun epochDays(d: LocalDateTime): Long {
     val y = d.year.toLong()
     val m = d.monthNumber.toLong()

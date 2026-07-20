@@ -127,14 +127,6 @@ abstract class AppStrings {
     abstract val addrNetwork: String
     abstract fun timeYesterday(time: String): String
 
-    abstract val shareSaveDialogTitle: String
-    abstract val shareCancelled: String
-    abstract fun shareSaved(path: String): String
-    abstract fun shareWriteFailed(msg: String): String
-    abstract val shareInviteSubject: String
-    abstract val shareChooserTitle: String
-    abstract fun shareOpened(name: String): String
-    abstract fun shareFailed(msg: String): String
     abstract val saveMediaDialogTitle: String
 
     abstract val vaultMetaUnreadable: String
@@ -155,7 +147,6 @@ abstract class AppStrings {
     abstract val step1Description: String
     abstract fun copyInviteCode(length: Int): String
     abstract fun inviteCodeCopied(length: Int): String
-    abstract val shareAsFile: String
     abstract val yourStadeId: String
     abstract val step2Title: String
     abstract val inviteCodeLabel: String
@@ -292,6 +283,13 @@ abstract class AppStrings {
     abstract val closePhoto: String
     abstract val removeAttachment: String
     abstract fun attachmentCount(count: Int): String
+
+    abstract val recordVoice: String
+    abstract val stopRecording: String
+    abstract val voiceMessage: String
+    abstract val voiceSendFailed: String
+    abstract val micPermissionDenied: String
+    abstract val voiceMaxDurationReached: String
 
     abstract val createGroupTitle: String
     abstract val createGroupAction: String

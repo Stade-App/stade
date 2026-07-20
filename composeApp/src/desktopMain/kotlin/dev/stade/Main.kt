@@ -159,10 +159,6 @@ fun main(args: Array<String>) {
             )
         }
 
-        remember {
-            dev.stade.share.DesktopFileAssociation.ensureRegistered()
-        }
-
         val windowState = rememberWindowState(
             position = WindowPosition.Aligned(Alignment.Center),
             size = DpSize(1100.dp, 740.dp)

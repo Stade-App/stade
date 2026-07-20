@@ -143,14 +143,6 @@ object TurkishStrings : AppStrings() {
     override val addrNetwork = "Ağ"
     override fun timeYesterday(time: String) = "dün $time"
 
-    override val shareSaveDialogTitle = "Davet dosyasını kaydet"
-    override val shareCancelled = "İptal edildi"
-    override fun shareSaved(path: String) = "Davet dosyası kaydedildi: $path"
-    override fun shareWriteFailed(msg: String) = "Dosya yazılamadı: $msg"
-    override val shareInviteSubject = "Stade davet kodu"
-    override val shareChooserTitle = "Davet dosyasını paylaş"
-    override fun shareOpened(name: String) = "Paylaşım açıldı ($name)"
-    override fun shareFailed(msg: String) = "Paylaşım açılamadı: $msg"
     override val saveMediaDialogTitle = "Medyayı kaydet"
 
     override val vaultMetaUnreadable = "Meta okunamadı"
@@ -174,7 +166,6 @@ object TurkishStrings : AppStrings() {
     override fun copyInviteCode(length: Int) = "Davet kodunu kopyala ($length karakter)"
     override fun inviteCodeCopied(length: Int) =
         "Davet kodu kopyalandı ($length karakter) — karşı tarafa gönder"
-    override val shareAsFile = "Dosya olarak paylaş"
     override val yourStadeId = "Stade kimliğin:"
     override val step2Title = "Karşı tarafın davetini gir"
     override val inviteCodeLabel = "Davet kodu"
@@ -352,6 +343,13 @@ object TurkishStrings : AppStrings() {
     override val closePhoto = "Kapat"
     override val removeAttachment = "Kaldır"
     override fun attachmentCount(count: Int) = if (count == 1) "1 fotoğraf eklendi" else "$count fotoğraf eklendi"
+
+    override val recordVoice = "Sesli mesaj kaydet"
+    override val stopRecording = "Kaydı durdur"
+    override val voiceMessage = "🎤 Sesli mesaj"
+    override val voiceSendFailed = "Sesli mesaj gönderilemedi"
+    override val micPermissionDenied = "Sesli mesaj kaydetmek için mikrofon izni gerekiyor"
+    override val voiceMaxDurationReached = "Maksimum sesli mesaj uzunluğuna ulaşıldı"
 
     override val createGroupTitle = "Grup Oluştur"
     override val createGroupAction = "Grup Oluştur"

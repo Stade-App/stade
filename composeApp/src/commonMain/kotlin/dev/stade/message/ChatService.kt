@@ -23,4 +23,9 @@ class ChatService(
         val body = encodeImageBody(imageBytes)
         return send(owner, contact, body)
     }
+
+    suspend fun sendVoice(owner: LocalIdentity, contact: Contact, opusBytes: ByteArray, durationMs: Int): Message {
+        val body = encodeVoiceBody(opusBytes, durationMs)
+        return send(owner, contact, body)
+    }
 }

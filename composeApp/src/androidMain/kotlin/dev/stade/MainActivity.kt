@@ -3,7 +3,6 @@
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -40,14 +39,7 @@ class MainActivity : ComponentActivity() {
         applySecureScreenFlag(app)
         startForegroundService(Intent(this, StadeService::class.java))
         askNotificationPermissionIfNeeded()
-        handleIncomingInvite(intent)
         setContent { StadeApp(app.boot) }
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleIncomingInvite(intent)
     }
 
     override fun onStop() {
@@ -91,47 +83,6 @@ class MainActivity : ComponentActivity() {
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
-    }
-
-    private fun handleIncomingInvite(intent: Intent?) {
-        if (intent == null) return
-        val uri: Uri? = when (intent.action) {
-            Intent.ACTION_VIEW -> intent.data
-            Intent.ACTION_SEND -> {
-                @Suppress("DEPRECATION")
-                intent.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri
-            }
-            else -> null
-        }
-        val app = (application as StadeApplication)
-        val text = when {
-            uri != null -> runCatching {
-                contentResolver.openInputStream(uri)?.use { stream ->
-                    val limit = MAX_INVITE_BYTES
-                    val buffer = ByteArray(8 * 1024)
-                    val out = java.io.ByteArrayOutputStream()
-                    var total = 0
-                    while (true) {
-                        val n = stream.read(buffer)
-                        if (n <= 0) break
-                        total += n
-                        if (total > limit) return@use null
-                        out.write(buffer, 0, n)
-                    }
-                    out.toString(Charsets.UTF_8.name())
-                }
-            }.getOrNull()
-            intent.action == Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
-            else -> null
-        }?.trim()?.takeIf { it.isNotEmpty() }
-        if (text != null && text.length <= MAX_INVITE_CHARS && text.startsWith("STADE2-")) {
-            app.container?.pendingInvite?.value = text
-        }
-    }
-
-    private companion object {
-        const val MAX_INVITE_BYTES = 256 * 1024
-        const val MAX_INVITE_CHARS = 512 * 1024
     }
 
     private fun askNotificationPermissionIfNeeded() {

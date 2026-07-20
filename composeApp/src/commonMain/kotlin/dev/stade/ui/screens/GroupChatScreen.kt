@@ -49,8 +49,12 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -98,11 +102,16 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import dev.stade.AppContainer
+import dev.stade.audio.RecordedClip
+import dev.stade.audio.rememberAudioPermissionState
+import dev.stade.audio.rememberAudioPlayer
+import dev.stade.audio.rememberAudioRecorder
 import dev.stade.group.GroupMessage
 import dev.stade.identity.LocalIdentity
 import dev.stade.message.MessageType
 import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.formatChatTime
+import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.i18n.LocalStrings
@@ -204,6 +213,41 @@ fun GroupChatScreen(
         }
         if (accepted.isNotEmpty()) {
             pendingImages = pendingImages + accepted
+        }
+    }
+
+    var pendingVoiceClip by remember { mutableStateOf<RecordedClip?>(null) }
+    var isRecording by remember { mutableStateOf(false) }
+    val micPermission = rememberAudioPermissionState()
+    val recorder = rememberAudioRecorder(onMaxDurationReached = { clip ->
+        isRecording = false
+        if (clip != null) {
+            pendingVoiceClip = clip
+            notify(strings.voiceMaxDurationReached, GroupBannerKind.Info)
+        } else {
+            notify(strings.voiceSendFailed, GroupBannerKind.Error)
+        }
+    })
+
+    fun toggleRecording() {
+        if (isRecording) {
+            isRecording = false
+            scope.launch(Dispatchers.Default) {
+                val clip = recorder.stop()
+                if (clip != null) {
+                    pendingVoiceClip = clip
+                } else {
+                    notify(strings.voiceSendFailed, GroupBannerKind.Error)
+                }
+            }
+        } else {
+            if (!micPermission.granted) {
+                micPermission.request()
+                return
+            }
+            pendingVoiceClip = null
+            isRecording = true
+            recorder.start()
         }
     }
 
@@ -598,6 +642,16 @@ fun GroupChatScreen(
                                         }
                                     }
                                 )
+                            } else if (msg.type == MessageType.VOICE) {
+                                GroupVoiceBubble(
+                                    msg = msg,
+                                    senderName = senderName,
+                                    tightWithPrev = tight,
+                                    selected = isSelected,
+                                    inSelectionMode = inSelectionMode,
+                                    onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                    onLongClick = { toggleSelection(msg.id) }
+                                )
                             } else {
                                 GroupTextBubble(
                                     msg = msg,
@@ -616,16 +670,21 @@ fun GroupChatScreen(
                 GroupComposer(
                     draft = draft,
                     pendingImages = pendingImages,
+                    pendingVoiceClip = pendingVoiceClip,
+                    isRecording = isRecording,
                     onChange = { draft = it },
                     onRemoveImage = { idx ->
                         pendingImages = pendingImages.toMutableList().also { it.removeAt(idx) }
                     },
+                    onRemoveVoiceClip = { pendingVoiceClip = null },
                     onSend = {
                         val text = draft.text.trim()
                         val images = pendingImages
-                        if (text.isEmpty() && images.isEmpty()) return@GroupComposer
+                        val voiceClip = pendingVoiceClip
+                        if (text.isEmpty() && images.isEmpty() && voiceClip == null) return@GroupComposer
                         draft = TextFieldValue("")
                         pendingImages = emptyList()
+                        pendingVoiceClip = null
                         scope.launch {
                             if (text.isNotEmpty()) {
                                 runCatching { container.groupChat.sendMessage(owner, groupId, text) }
@@ -635,9 +694,14 @@ fun GroupChatScreen(
                                 runCatching { container.groupChat.sendImage(owner, groupId, imageBytes) }
                                     .onFailure { notify(strings.photoSendFailed, GroupBannerKind.Error) }
                             }
+                            if (voiceClip != null) {
+                                runCatching { container.groupChat.sendVoice(owner, groupId, voiceClip.opusBytes, voiceClip.durationMs) }
+                                    .onFailure { notify(strings.voiceSendFailed, GroupBannerKind.Error) }
+                            }
                         }
                     },
-                    onPickImage = { imagePicker.launch() }
+                    onPickImage = { imagePicker.launch() },
+                    onToggleRecording = { toggleRecording() }
                 )
             }
 
@@ -956,18 +1020,154 @@ private fun GroupImageBubble(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun GroupVoiceBubble(
+    msg: GroupMessage,
+    senderName: String,
+    tightWithPrev: Boolean,
+    selected: Boolean,
+    inSelectionMode: Boolean,
+    onShortClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    val outgoing = msg.isOwn
+    val align = if (outgoing) Alignment.End else Alignment.Start
+    val bg = if (outgoing) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.surfaceContainerHighest
+    val fg = if (outgoing) MaterialTheme.colorScheme.onPrimary
+    else MaterialTheme.colorScheme.onSurface
+    val sub = fg.copy(alpha = if (outgoing) 0.75f else 0.55f)
+
+    val cornerTop = if (tightWithPrev) 6.dp else 18.dp
+    val cornerSelf = 18.dp
+    val cornerTail = if (tightWithPrev) 18.dp else 4.dp
+
+    var opusBytes by remember(msg.id) { mutableStateOf<ByteArray?>(null) }
+    var voiceDurationMs by remember(msg.id) { mutableStateOf(0) }
+    var decodeDone by remember(msg.id) { mutableStateOf(false) }
+    LaunchedEffect(msg.id) {
+        val (bytes, dur) = withContext(Dispatchers.Default) {
+            val b = runCatching { msg.voiceOpusBytes() }.getOrNull()
+            val d = runCatching { msg.voiceDurationMs() }.getOrNull() ?: 0
+            b to d
+        }
+        opusBytes = bytes
+        voiceDurationMs = dur
+        decodeDone = true
+    }
+
+    val player = rememberAudioPlayer()
+    val currentBytes = opusBytes
+    val selectionTint = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(selectionTint)
+            .padding(top = if (tightWithPrev) 1.dp else 6.dp),
+        horizontalAlignment = align
+    ) {
+        Box(
+            Modifier.widthIn(max = 260.dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = if (outgoing) cornerSelf else cornerTop,
+                        topEnd = if (outgoing) cornerTop else cornerSelf,
+                        bottomStart = if (outgoing) cornerSelf else cornerTail,
+                        bottomEnd = if (outgoing) cornerTail else cornerSelf
+                    )
+                )
+                .background(bg)
+                .combinedClickable(
+                    onClick = onShortClick,
+                    onLongClick = onLongClick
+                )
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Column {
+                if (!outgoing && !tightWithPrev) {
+                    Text(
+                        senderName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(2.dp))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = {
+                            val bytes = currentBytes
+                            if (bytes != null) {
+                                if (player.isPlaying) player.pause() else player.play(bytes)
+                            }
+                        },
+                        enabled = currentBytes != null,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = fg
+                        )
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Column(Modifier.weight(1f)) {
+                        val positionMs = player.positionMs
+                        val durationMs = if (player.durationMs > 0) player.durationMs else voiceDurationMs
+                        val progress = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(sub.copy(alpha = 0.3f))
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(progress)
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(fg)
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            if (currentBytes == null && decodeDone) "" else formatVoiceDuration(durationMs),
+                            color = sub,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    formatChatTime(msg.timestamp),
+                    color = sub,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.align(Alignment.End)
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GroupComposer(
     draft: TextFieldValue,
     pendingImages: List<ByteArray>,
+    pendingVoiceClip: RecordedClip?,
+    isRecording: Boolean,
     onChange: (TextFieldValue) -> Unit,
     onRemoveImage: (Int) -> Unit,
+    onRemoveVoiceClip: () -> Unit,
     onSend: () -> Unit,
-    onPickImage: () -> Unit
+    onPickImage: () -> Unit,
+    onToggleRecording: () -> Unit
 ) {
     val strings = LocalStrings.current
-    val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty()
+    val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty() || pendingVoiceClip != null
 
     Column(
         modifier = Modifier
@@ -1029,6 +1229,53 @@ private fun GroupComposer(
                                 modifier = Modifier.size(14.dp)
                             )
                         }
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = pendingVoiceClip != null,
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it }
+        ) {
+            val clip = pendingVoiceClip
+            if (clip != null) {
+                val player = rememberAudioPlayer()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, top = 8.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    IconButton(onClick = {
+                        if (player.isPlaying) player.pause() else player.play(clip.opusBytes)
+                    }) {
+                        Icon(
+                            if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Text(
+                        formatVoiceDuration(clip.durationMs),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = {
+                        player.stop()
+                        onRemoveVoiceClip()
+                    }) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = strings.removeAttachment,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -1101,6 +1348,18 @@ private fun GroupComposer(
                     }
                 }
             )
+
+            IconButton(
+                onClick = onToggleRecording,
+                modifier = Modifier.size(54.dp)
+            ) {
+                Icon(
+                    if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                    contentDescription = if (isRecording) strings.stopRecording else strings.recordVoice,
+                    tint = if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
 
             FilledIconButton(
                 enabled = canSend,

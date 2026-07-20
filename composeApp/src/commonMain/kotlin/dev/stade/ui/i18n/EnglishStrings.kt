@@ -143,14 +143,6 @@ object EnglishStrings : AppStrings() {
     override val addrNetwork = "Network"
     override fun timeYesterday(time: String) = "yesterday $time"
 
-    override val shareSaveDialogTitle = "Save invite file"
-    override val shareCancelled = "Cancelled"
-    override fun shareSaved(path: String) = "Invite file saved: $path"
-    override fun shareWriteFailed(msg: String) = "Could not write file: $msg"
-    override val shareInviteSubject = "Stade invite code"
-    override val shareChooserTitle = "Share invite file"
-    override fun shareOpened(name: String) = "Share opened ($name)"
-    override fun shareFailed(msg: String) = "Could not open share: $msg"
     override val saveMediaDialogTitle = "Save media"
 
     override val vaultMetaUnreadable = "Could not read metadata"
@@ -174,7 +166,6 @@ object EnglishStrings : AppStrings() {
     override fun copyInviteCode(length: Int) = "Copy invite code ($length characters)"
     override fun inviteCodeCopied(length: Int) =
         "Invite code copied ($length characters) — send to the other party"
-    override val shareAsFile = "Share as file"
     override val yourStadeId = "Your Stade ID:"
     override val step2Title = "Enter the other party's invite"
     override val inviteCodeLabel = "Invite code"
@@ -353,6 +344,13 @@ object EnglishStrings : AppStrings() {
     override val closePhoto = "Close"
     override val removeAttachment = "Remove"
     override fun attachmentCount(count: Int) = if (count == 1) "1 photo attached" else "$count photos attached"
+
+    override val recordVoice = "Record voice message"
+    override val stopRecording = "Stop recording"
+    override val voiceMessage = "🎤 Voice message"
+    override val voiceSendFailed = "Failed to send voice message"
+    override val micPermissionDenied = "Microphone permission is required to record voice messages"
+    override val voiceMaxDurationReached = "Maximum voice message length reached"
 
     override val createGroupTitle = "Create Group"
     override val createGroupAction = "Create Group"

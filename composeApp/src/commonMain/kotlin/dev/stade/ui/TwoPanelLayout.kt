@@ -366,7 +366,7 @@ fun TwoPanelLayout(
                                             val unread by container.messages.observeUnreadCount(contact.id)
                                                 .collectAsState(initial = 0L)
                                             val preview by remember(lastMsg?.id) {
-                                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage) } }
+                                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage) } }
                                             }
                                             val isSelected by remember(contact.id) {
                                                 derivedStateOf {
@@ -399,7 +399,7 @@ fun TwoPanelLayout(
                                             val groupUnread by container.groups.observeUnreadCount(group.id)
                                                 .collectAsState(initial = 0L)
                                             val groupPreview by remember(lastGroupMsg?.id) {
-                                                derivedStateOf { lastGroupMsg?.body?.let { previewBody(it, strings.photoMessage) } }
+                                                derivedStateOf { lastGroupMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage) } }
                                             }
                                             val isGroupSelected by remember(group.id) {
                                                 derivedStateOf {

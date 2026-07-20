@@ -28,7 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,7 +47,6 @@ import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.contact.InviteParseResult
 import dev.stade.identity.LocalIdentity
-import dev.stade.share.InviteShare
 import dev.stade.transport.TransportType
 import dev.stade.ui.components.StadeIdCard
 import dev.stade.ui.i18n.LocalStrings
@@ -147,17 +145,6 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                         modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(strings.copyInviteCode(invite.display.length))
-                }
-                Spacer(Modifier.height(8.dp))
-                TextButton(
-                    enabled = inviteHasTor,
-                    onClick = {
-                        status = InviteShare.share(invite.display, owner.nickname)
-                        statusSticky = false
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(strings.shareAsFile)
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(
