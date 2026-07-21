@@ -54,6 +54,32 @@ class GroupChatService(
         return sendMessage(owner, groupId, encodeVoiceBody(opusBytes, durationMs))
     }
 
+    suspend fun kickMember(owner: LocalIdentity, group: GroupInfo, memberId: String): Boolean {
+        if (group.creatorStadeId.isBlank() || group.creatorStadeId != owner.stadeId) return false
+        val targets = group.memberIds.filter { it != owner.stadeId }
+        val msgId = Encoding.toHex(crypto.randomBytes(16))
+        val timestamp = Clock.System.now().toEpochMilliseconds()
+        val body = "$GRP_KICK_PREFIX${group.id}:$memberId"
+        targets.forEach { contactId ->
+            val contact = contacts.get(contactId) ?: return@forEach
+            runCatching { sync.queueOutgoing(owner, contact, msgId, body, timestamp) }
+        }
+        groups.removeMember(group.id, memberId)
+        return true
+    }
+
+    suspend fun leaveGroup(owner: LocalIdentity, group: GroupInfo) {
+        val targets = group.memberIds.filter { it != owner.stadeId }
+        val msgId = Encoding.toHex(crypto.randomBytes(16))
+        val timestamp = Clock.System.now().toEpochMilliseconds()
+        val body = "$GRP_LEAVE_PREFIX${group.id}"
+        targets.forEach { contactId ->
+            val contact = contacts.get(contactId) ?: return@forEach
+            runCatching { sync.queueOutgoing(owner, contact, msgId, body, timestamp) }
+        }
+        groups.leaveGroupLocally(group.id)
+    }
+
     suspend fun sendJoinRequest(owner: LocalIdentity, creatorContactId: String, pending: PendingJoinData) {
         val creator = contacts.get(creatorContactId) ?: return
         val msgId = Encoding.toHex(crypto.randomBytes(16))

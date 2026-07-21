@@ -50,6 +50,8 @@ abstract class AppStrings {
     abstract val noSearchResults: String
     abstract val showVerificationCode: String
     abstract val deleteContact: String
+    abstract val pinChatAction: String
+    abstract val unpinChatAction: String
     abstract val noMessages: String
     abstract fun deleteContactTitle(name: String): String
     abstract val deleteContactBody: String
@@ -141,6 +143,10 @@ abstract class AppStrings {
     abstract val notifRunningText: String
     abstract fun notifNewMessages(count: Int): String
     abstract val notifNewMessageFallback: String
+    abstract val notifReminderChannelName: String
+    abstract val notifReminderChannelDesc: String
+    abstract val notifBootReminderTitle: String
+    abstract val notifBootReminderText: String
 
     abstract val addContactTitle: String
     abstract val step1Title: String
@@ -265,6 +271,13 @@ abstract class AppStrings {
     abstract val lanLabel: String
     abstract val torLabel: String
 
+    abstract val useBridgesTitle: String
+    abstract val useBridgesHint: String
+    abstract val useBuiltInBridgesTitle: String
+    abstract val customBridgesLabel: String
+    abstract val customBridgesHint: String
+    abstract val bridgesNotSupportedNote: String
+
     abstract val verifyContactTitle: String
     abstract val safetyNumber: String
     abstract val safetyNumberNote: String
@@ -312,6 +325,17 @@ abstract class AppStrings {
     abstract val leaveGroupTitle: String
     abstract val leaveGroupBody: String
     abstract val leaveAction: String
+
+    abstract val viewMembersAction: String
+    abstract val groupMembersTitle: String
+    abstract val youLabel: String
+    abstract val groupAdminBadge: String
+    abstract val kickMemberAction: String
+    abstract fun kickMemberTitle(name: String): String
+    abstract val kickMemberBody: String
+    abstract fun memberKicked(name: String): String
+    abstract val kickMemberFailed: String
+    abstract fun removedFromGroupNotification(groupName: String): String
 
     abstract val copyMessage: String
     abstract val deleteMessageForMe: String

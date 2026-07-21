@@ -3,6 +3,7 @@
 import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlCursor
 import app.cash.sqldelight.db.SqlDriver
+import dev.stade.chat.PinnedChats
 import dev.stade.contact.ContactManager
 import dev.stade.contact.HandshakeService
 import dev.stade.crypto.CryptoApi
@@ -93,6 +94,7 @@ class AppContainer(
     val outbox = Outbox(db, crypto)
     val ratchet = RatchetSessions(crypto, pq, contacts)
     val groups = GroupManager(db, crypto)
+    val pinnedChats = PinnedChats(db)
     val sync = SyncEngine(crypto, pq, contacts, messages, ratchet, outbox, handshake, groups)
     val chat = ChatService(messages, sync)
     val groupChat = GroupChatService(groups, sync, contacts, crypto)
@@ -115,11 +117,19 @@ class AppContainer(
 
     val pendingInvite = MutableStateFlow<String?>(null)
 
+    /** Set when a notification tap should navigate straight to a contact's chat (Android). */
+    val pendingOpenChat = MutableStateFlow<String?>(null)
+
+    /** Set when a notification tap should navigate to the home/contacts screen (Android). */
+    val pendingGoHome = MutableStateFlow(false)
+
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     suspend fun wipeAllData() {
         runCatching { connections.stop() }
         pendingInvite.value = null
+        pendingOpenChat.value = null
+        pendingGoHome.value = false
         activeContactId = null
         runCatching {
             db.stadeDbQueries.transaction {

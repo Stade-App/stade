@@ -10,6 +10,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import dev.stade.MainActivity
 import dev.stade.StadeApplication
+import dev.stade.notification.NotificationAvatar
 import dev.stade.notification.NotificationIds
 import dev.stade.notification.getNotificationPrivacyEnabled
 import dev.stade.notification.getNotificationsEnabled
@@ -70,14 +71,25 @@ class StadeService : Service() {
     }
 
 
-    private fun buildForegroundNotification(): Notification =
-        NotificationCompat.Builder(this, channelId)
+    private fun buildForegroundNotification(): Notification {
+        val openIntent = PendingIntent.getActivity(
+            this,
+            notificationId,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(MainActivity.EXTRA_GO_HOME, true)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        return NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.stat_notify_chat)
             .setContentTitle(dev.stade.ui.i18n.I18n.current.notifRunningTitle)
             .setContentText(dev.stade.ui.i18n.I18n.current.notifRunningText)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setOngoing(true)
+            .setContentIntent(openIntent)
             .build()
+    }
 
 
 
@@ -153,11 +165,14 @@ class StadeService : Service() {
             contactId.hashCode(),
             Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(MainActivity.EXTRA_OPEN_CHAT_ID, contactId)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val avatarBitmap = runCatching { NotificationAvatar.bitmapFor(senderName) }.getOrNull()
         val notif = NotificationCompat.Builder(this, msgChannelId)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .apply { avatarBitmap?.let { setLargeIcon(it) } }
             .setContentTitle(senderName)
             .setContentText(preview)
             .setStyle(NotificationCompat.BigTextStyle().bigText(preview))

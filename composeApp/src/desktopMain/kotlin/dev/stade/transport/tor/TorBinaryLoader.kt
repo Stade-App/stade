@@ -48,7 +48,19 @@ internal object TorBinaryLoader {
             ?: File(torRunDir, "geoip").takeIf { it.exists() }
         val geoip6 = File(torRunDir, "data/geoip6").takeIf { it.exists() }
             ?: File(torRunDir, "geoip6").takeIf { it.exists() }
-        return TorLayout(torRunDir, torExe, dataDir, geoip, geoip6)
+        val obfs4Exe = locateObfs4Executable(torRunDir)
+        runCatching { obfs4Exe?.setExecutable(true, false) }
+        return TorLayout(torRunDir, torExe, dataDir, geoip, geoip6, obfs4Exe)
+    }
+
+    private fun locateObfs4Executable(dir: File): File? {
+        val candidates = listOf(
+            File(dir, "tor/pluggable_transports/lyrebird.exe"),
+            File(dir, "tor/pluggable_transports/lyrebird"),
+            File(dir, "pluggable_transports/lyrebird.exe"),
+            File(dir, "pluggable_transports/lyrebird")
+        )
+        return candidates.firstOrNull { it.isFile }
     }
 
     fun detectPlatformKey(): String {
@@ -70,7 +82,7 @@ internal object TorBinaryLoader {
         return "$os-$arch"
     }
 
-    private fun bundleVersionMarker(): String = "v1-${detectPlatformKey()}"
+    private fun bundleVersionMarker(): String = "v2-${detectPlatformKey()}"
 
     private fun locateTorExecutable(dir: File): File? {
         val candidates = listOf(
@@ -118,6 +130,8 @@ internal object TorBinaryLoader {
         val name = rel.substringAfterLast('/')
         if (name.equals("tor", ignoreCase = true)) return true
         if (name.equals("tor.exe", ignoreCase = true)) return true
+        if (name.equals("lyrebird", ignoreCase = true)) return true
+        if (name.equals("lyrebird.exe", ignoreCase = true)) return true
         if (name.endsWith(".so") || name.contains(".so.") || name.endsWith(".dylib")) return true
         return false
     }

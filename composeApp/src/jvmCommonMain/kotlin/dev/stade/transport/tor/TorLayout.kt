@@ -7,6 +7,7 @@ data class TorLayout(
     val executable: File,
     val dataDir: File,
     val geoipFile: File?,
-    val geoip6File: File?
+    val geoip6File: File?,
+    val obfs4Executable: File? = null
 )
 

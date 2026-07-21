@@ -23,6 +23,7 @@ import dev.stade.ui.screens.ChatScreen
 import dev.stade.ui.screens.ContactsScreen
 import dev.stade.ui.screens.CreateGroupScreen
 import dev.stade.ui.screens.GroupChatScreen
+import dev.stade.ui.screens.GroupMembersScreen
 import dev.stade.ui.screens.LockScreen
 import dev.stade.ui.screens.OnboardingScreen
 import dev.stade.ui.screens.PinSetupScreen
@@ -45,6 +46,7 @@ sealed interface Screen {
     data object Contacts : Screen
     data class Chat(val contactId: String) : Screen
     data class GroupChat(val groupId: String) : Screen
+    data class GroupMembers(val groupId: String) : Screen
     data object CreateGroup : Screen
     data class Verify(val contactId: String, val fromScreen: Screen) : Screen
     data object Settings : Screen
@@ -175,6 +177,23 @@ private fun UnlockedApp(
 
     val pendingInvite by container.pendingInvite.collectAsState()
 
+    val pendingOpenChatId by container.pendingOpenChat.collectAsState()
+    LaunchedEffect(pendingOpenChatId, identity?.id) {
+        val id = pendingOpenChatId
+        if (id != null && identity != null) {
+            screen = Screen.Chat(id)
+            container.pendingOpenChat.value = null
+        }
+    }
+
+    val pendingGoHome by container.pendingGoHome.collectAsState()
+    LaunchedEffect(pendingGoHome, identity?.id) {
+        if (pendingGoHome && identity != null) {
+            screen = Screen.Contacts
+            container.pendingGoHome.value = false
+        }
+    }
+
     LaunchedEffect(identity?.id) {
         val current = identity
         if (current != null) {
@@ -207,6 +226,18 @@ private fun UnlockedApp(
                         preview = preview,
                         privacy = privacy,
                         unreadTotal = total
+                    )
+                }
+                is dev.stade.sync.SyncEngine.SyncEvent.RemovedFromGroup -> {
+                    if (!dev.stade.notification.getNotificationsEnabled().value) return@collect
+                    val privacy = dev.stade.notification.getNotificationPrivacyEnabled().value
+                    val notifStrings = dev.stade.ui.i18n.I18n.current
+                    dev.stade.notification.showIncomingMessageNotification(
+                        contactId = event.groupId,
+                        senderName = event.groupName,
+                        preview = notifStrings.removedFromGroupNotification(event.groupName),
+                        privacy = privacy,
+                        unreadTotal = 0
                     )
                 }
                 is dev.stade.sync.SyncEngine.SyncEvent.GroupMessageReceived -> {
@@ -245,6 +276,7 @@ private fun UnlockedApp(
             when (val s = screen) {
                 is Screen.Chat -> screen = Screen.Contacts
                 is Screen.GroupChat -> screen = Screen.Contacts
+                is Screen.GroupMembers -> screen = Screen.GroupChat(s.groupId)
                 Screen.CreateGroup -> screen = Screen.Contacts
 
                 is Screen.Verify -> screen = s.fromScreen
@@ -342,12 +374,25 @@ private fun UnlockedApp(
                     onContactDeleted = { screen = Screen.Contacts }
                 )
             }
-            screen is Screen.GroupChat -> GroupChatScreen(
-                container = container,
-                owner = identity!!,
-                groupId = (screen as Screen.GroupChat).groupId,
-                onBack = { screen = Screen.Contacts }
-            )
+            screen is Screen.GroupChat -> {
+                val currentGroupId = (screen as Screen.GroupChat).groupId
+                GroupChatScreen(
+                    container = container,
+                    owner = identity!!,
+                    groupId = currentGroupId,
+                    onBack = { screen = Screen.Contacts },
+                    onOpenMembers = { screen = Screen.GroupMembers(currentGroupId) }
+                )
+            }
+            screen is Screen.GroupMembers -> {
+                val currentGroupId = (screen as Screen.GroupMembers).groupId
+                GroupMembersScreen(
+                    container = container,
+                    owner = identity!!,
+                    groupId = currentGroupId,
+                    onBack = { screen = Screen.GroupChat(currentGroupId) }
+                )
+            }
             screen == Screen.CreateGroup -> CreateGroupScreen(
                 container = container,
                 owner = identity!!,

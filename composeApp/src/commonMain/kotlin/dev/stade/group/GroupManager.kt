@@ -64,6 +64,12 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
     fun getMembers(groupId: String): List<String> =
         db.stadeDbQueries.selectGroupMembers(groupId).executeAsList().map { it.contactId }
 
+    fun observeMembers(groupId: String): Flow<List<String>> =
+        db.stadeDbQueries.selectGroupMembers(groupId)
+            .asFlow()
+            .mapToList(Dispatchers.Default)
+            .map { rows -> rows.map { it.contactId } }
+
     fun deleteGroup(groupId: String) {
         db.stadeDbQueries.transaction {
             db.stadeDbQueries.deleteGroupMessages(groupId)
@@ -183,6 +189,34 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
         memberIds.forEach { memberId ->
             runCatching { addMember(groupId, memberId) }
         }
+    }
+
+    fun handleKick(kickerContactId: String, rawBody: String, selfStadeId: String): KickOutcome? {
+        val stripped = rawBody.removePrefix(GRP_KICK_PREFIX)
+        val colonIdx = stripped.indexOf(':')
+        if (colonIdx < 0) return null
+        val groupId = stripped.substring(0, colonIdx)
+        val kickedId = stripped.substring(colonIdx + 1)
+
+        val group = db.stadeDbQueries.selectGroup(groupId).executeAsOneOrNull() ?: return null
+        if (group.creatorStadeId.isBlank() || group.creatorStadeId != kickerContactId) return null
+
+        return if (kickedId == selfStadeId) {
+            val name = group.name
+            leaveGroupLocally(groupId)
+            KickOutcome(groupId, name, wasSelf = true)
+        } else {
+            removeMember(groupId, kickedId)
+            KickOutcome(groupId, group.name, wasSelf = false)
+        }
+    }
+
+    fun handleMemberLeft(leaverContactId: String, rawBody: String): String? {
+        val groupId = rawBody.removePrefix(GRP_LEAVE_PREFIX)
+        val isMember = db.stadeDbQueries.isGroupMember(groupId, leaverContactId).executeAsOne() > 0L
+        if (!isMember) return null
+        removeMember(groupId, leaverContactId)
+        return groupId
     }
 
     fun storePendingJoin(creatorStadeId: String, data: PendingJoinData) {

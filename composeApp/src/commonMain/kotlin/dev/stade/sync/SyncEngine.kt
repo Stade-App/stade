@@ -10,6 +10,8 @@ import dev.stade.crypto.PqCrypto
 import dev.stade.crypto.RatchetSessions
 import dev.stade.group.GRP_INV_PREFIX
 import dev.stade.group.GRP_JOIN_PREFIX
+import dev.stade.group.GRP_KICK_PREFIX
+import dev.stade.group.GRP_LEAVE_PREFIX
 import dev.stade.group.GRP_MSG_PREFIX
 import dev.stade.group.GRP_WELCOME_PREFIX
 import dev.stade.group.GroupManager
@@ -64,6 +66,8 @@ class SyncEngine(
         data class MessageReceived(val contactId: String, val messageId: String) : SyncEvent
         data class GroupMessageReceived(val groupId: String) : SyncEvent
         data class GroupInviteReceived(val groupId: String, val groupName: String) : SyncEvent
+        data class GroupMemberRemoved(val groupId: String) : SyncEvent
+        data class RemovedFromGroup(val groupId: String, val groupName: String) : SyncEvent
         data class HandshakeRejected(val reason: String) : SyncEvent
         data class DecryptFailed(val contactId: String) : SyncEvent
         data class SendFailed(val contactId: String, val reason: String) : SyncEvent
@@ -433,6 +437,19 @@ class SyncEngine(
                                 groupManager.clearPendingJoin(parsed.creatorStadeId)
                                 _events.tryEmit(SyncEvent.GroupInviteReceived(parsed.groupId, parsed.groupName))
                             }
+                        }
+                        groupManager != null && bodyStr.startsWith(GRP_KICK_PREFIX) -> {
+                            val outcome = groupManager.handleKick(contact.id, bodyStr, owner.stadeId)
+                            if (outcome != null) {
+                                _events.tryEmit(
+                                    if (outcome.wasSelf) SyncEvent.RemovedFromGroup(outcome.groupId, outcome.groupName)
+                                    else SyncEvent.GroupMemberRemoved(outcome.groupId)
+                                )
+                            }
+                        }
+                        groupManager != null && bodyStr.startsWith(GRP_LEAVE_PREFIX) -> {
+                            val groupId = groupManager.handleMemberLeft(contact.id, bodyStr)
+                            if (groupId != null) _events.tryEmit(SyncEvent.GroupMemberRemoved(groupId))
                         }
                         else -> {
                             val saved = messages.saveIncoming(payload.messageId, contact.id, bodyStr, payload.timestamp)

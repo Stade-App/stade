@@ -31,10 +31,10 @@ class EmbeddedTorManager(
     @Volatile private var socksPort: Int = 0
     @Volatile private var controlClient: TorControlClient? = null
 
-    override suspend fun ensureReady(localPort: Int): TorReady = mutex.withLock {
+    override suspend fun ensureReady(localPort: Int, bridges: TorBridgeConfig): TorReady = mutex.withLock {
         ready?.let { return@withLock it }
         try {
-            withContext(Dispatchers.IO) { bootInternal(localPort) }
+            withContext(Dispatchers.IO) { bootInternal(localPort, bridges) }
         } catch (t: Throwable) {
             status.value = TorStatus.Failed(t.message ?: t::class.java.simpleName)
             throw t
@@ -42,12 +42,16 @@ class EmbeddedTorManager(
         ready ?: error("Tor failed to come up")
     }
 
-    private fun bootInternal(localPort: Int): TorReady {
+    private fun bootInternal(localPort: Int, bridges: TorBridgeConfig): TorReady {
         status.value = TorStatus.Bootstrapping(0, "preparing")
         val layout = layoutProvider()
         val socks = pickFreePort()
         val ctrl = pickFreePort()
         val localTarget = if (localPort > 0) localPort else pickFreePort()
+        val bridgeLines = if (bridges.enabled) bridges.allLines() else emptyList()
+        if (bridges.enabled && bridgeLines.isNotEmpty() && layout.obfs4Executable == null) {
+            error("Bridge support requested but the obfs4 (lyrebird) binary was not found")
+        }
         val cookieFile = File(layout.dataDir, "control_auth_cookie")
         runCatching { cookieFile.delete() }
         val torrc = File(layout.dataDir, "torrc.runtime").apply {
@@ -70,6 +74,12 @@ class EmbeddedTorManager(
                 if (ownerPid > 0) appendLine("__OwningControllerProcess $ownerPid")
                 layout.geoipFile?.let { appendLine("GeoIPFile ${it.absolutePath}") }
                 layout.geoip6File?.let { appendLine("GeoIPv6File ${it.absolutePath}") }
+                if (bridgeLines.isNotEmpty()) {
+                    val obfs4Path = layout.obfs4Executable!!.absolutePath.replace('\\', '/')
+                    appendLine("ClientTransportPlugin obfs4 exec $obfs4Path")
+                    appendLine("UseBridges 1")
+                    bridgeLines.forEach { line -> appendLine("Bridge $line") }
+                }
             })
         }
         controlPort = ctrl

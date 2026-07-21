@@ -1,7 +1,7 @@
 package dev.stade.transport.tor
 
 interface EmbeddedTorRuntime {
-    suspend fun ensureReady(localPort: Int): TorReady
+    suspend fun ensureReady(localPort: Int, bridges: TorBridgeConfig = TorBridgeConfig()): TorReady
     suspend fun shutdown()
     fun isAlive(): Boolean
     fun invalidate()

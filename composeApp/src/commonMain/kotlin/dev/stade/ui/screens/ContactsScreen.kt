@@ -2,6 +2,11 @@ package dev.stade.ui.screens
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -37,6 +42,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PushPin
 import dev.stade.group.GroupInfo
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -72,6 +78,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -92,8 +99,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.combine
 
 private sealed class ChatListItem {
-    data class ContactItem(val contact: Contact, val lastMessageTs: Long? = null) : ChatListItem()
-    data class GroupItem(val group: GroupInfo, val lastMessageTs: Long? = null) : ChatListItem()
+    data class ContactItem(val contact: Contact, val lastMessageTs: Long? = null, val pinnedAtValue: Long? = null) : ChatListItem()
+    data class GroupItem(val group: GroupInfo, val lastMessageTs: Long? = null, val pinnedAtValue: Long? = null) : ChatListItem()
     val displayName: String get() = when (this) {
         is ContactItem -> contact.nickname
         is GroupItem   -> group.name
@@ -105,6 +112,10 @@ private sealed class ChatListItem {
     val sortKey: Long get() = when (this) {
         is ContactItem -> lastMessageTs ?: 0L
         is GroupItem   -> lastMessageTs ?: 0L
+    }
+    val pinnedAt: Long? get() = when (this) {
+        is ContactItem -> pinnedAtValue
+        is GroupItem   -> pinnedAtValue
     }
 }
 
@@ -123,6 +134,7 @@ fun ContactsScreen(
     val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
     val groups by container.groups.observeGroups(owner.id).collectAsState(initial = emptyList())
     val connectedSet by container.sync.connectedContacts.collectAsState()
+    val pinned by container.pinnedChats.observePinned(owner.id).collectAsState(initial = emptyMap())
     val scope = rememberCoroutineScope()
     val strings = LocalStrings.current
 
@@ -145,27 +157,41 @@ fun ContactsScreen(
     var isFabExpanded by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
-    var actionContact by remember { mutableStateOf<Contact?>(null) }
+    var actionItem by remember { mutableStateOf<ChatListItem?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
 
-    if (actionContact != null && !showDeleteConfirm) {
-        val c = actionContact!!
+    if (actionItem != null && !showDeleteConfirm) {
+        val item = actionItem!!
+        val itemPinned = item.pinnedAt != null
         AlertDialog(
-            onDismissRequest = { actionContact = null },
+            onDismissRequest = { actionItem = null },
             shape = RoundedCornerShape(28.dp),
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
 
             icon = {
-                Avatar(
-                    c.nickname,
-                    size = 56.dp
-                )
+                when (item) {
+                    is ChatListItem.ContactItem -> Avatar(item.contact.nickname, size = 56.dp)
+                    is ChatListItem.GroupItem -> Box(
+                        Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.tertiaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Group,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
             },
 
             title = {
                 Text(
-                    text = c.nickname,
+                    text = item.displayName,
                     style = MaterialTheme.typography.titleLarge,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -181,40 +207,59 @@ fun ContactsScreen(
                 ) {
                     FilledTonalButton(
                         onClick = {
-                            actionContact = null
-                            onLongPressVerify(c.id)
+                            container.pinnedChats.setPinned(owner.id, item.key, !itemPinned)
+                            actionItem = null
                         },
                         modifier = Modifier.fillMaxWidth(),
                         contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Verified,
+                            imageVector = Icons.Default.PushPin,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(strings.showVerificationCode)
+                        Text(if (itemPinned) strings.unpinChatAction else strings.pinChatAction)
                     }
 
-                    OutlinedButton(
-                        onClick = { showDeleteConfirm = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        ),
-                        border = BorderStroke(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
-                        ),
-                        contentPadding = PaddingValues(vertical = 12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(strings.deleteContact)
+                    if (item is ChatListItem.ContactItem) {
+                        FilledTonalButton(
+                            onClick = {
+                                actionItem = null
+                                onLongPressVerify(item.contact.id)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(strings.showVerificationCode)
+                        }
+
+                        OutlinedButton(
+                            onClick = { showDeleteConfirm = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                            ),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(strings.deleteContact)
+                        }
                     }
                 }
             },
@@ -223,13 +268,13 @@ fun ContactsScreen(
         )
     }
 
-    if (showDeleteConfirm && actionContact != null) {
-        val c = actionContact!!
+    if (showDeleteConfirm && actionItem is ChatListItem.ContactItem) {
+        val c = (actionItem as ChatListItem.ContactItem).contact
         AlertDialog(
             onDismissRequest = {
                 if (!deleting) {
                     showDeleteConfirm = false
-                    actionContact = null
+                    actionItem = null
                 }
             },
             icon = {
@@ -255,7 +300,7 @@ fun ContactsScreen(
                                 }
                             }
                             showDeleteConfirm = false
-                            actionContact = null
+                            actionItem = null
                             deleting = false
                         }
                     },
@@ -270,7 +315,7 @@ fun ContactsScreen(
                     enabled = !deleting,
                     onClick = {
                         showDeleteConfirm = false
-                        actionContact = null
+                        actionItem = null
                     }
                 ) { Text(strings.cancel) }
             }
@@ -300,20 +345,23 @@ fun ContactsScreen(
         }
     }
 
-    val combinedItems by remember(filtered, groups, searchActive, query, contactLastMessages, groupLastMessages) {
+    val combinedItems by remember(filtered, groups, searchActive, query, contactLastMessages, groupLastMessages, pinned) {
         derivedStateOf {
             val q = query.trim()
             val result = mutableListOf<ChatListItem>()
             groups
                 .filter { !searchActive || q.isBlank() || it.name.contains(q, ignoreCase = true) }
                 .forEachIndexed { i, g ->
-                    result.add(ChatListItem.GroupItem(g, groupLastMessages.getOrNull(i)?.timestamp))
+                    result.add(ChatListItem.GroupItem(g, groupLastMessages.getOrNull(i)?.timestamp, pinned["grp_${g.id}"]))
                 }
             filtered.forEachIndexed { i, c ->
                 val origIdx = contacts.indexOf(c)
-                result.add(ChatListItem.ContactItem(c, contactLastMessages.getOrNull(origIdx)?.timestamp))
+                result.add(ChatListItem.ContactItem(c, contactLastMessages.getOrNull(origIdx)?.timestamp, pinned[c.id]))
             }
-            result.sortByDescending { it.sortKey }
+            result.sortWith(
+                compareByDescending<ChatListItem> { it.pinnedAt != null }
+                    .thenByDescending { it.pinnedAt ?: it.sortKey }
+            )
             result
         }
     }
@@ -477,14 +525,30 @@ fun ContactsScreen(
                     }
                 }
 
+                val fabCornerRadius by animateDpAsState(
+                    targetValue = if (isFabExpanded) 28.dp else 16.dp,
+                    animationSpec = tween(280, easing = FastOutSlowInEasing)
+                )
+                val fabIconRotation by animateFloatAsState(
+                    targetValue = if (isFabExpanded) 45f else 0f,
+                    animationSpec = tween(280, easing = FastOutSlowInEasing)
+                )
+                val fabContainerColor by animateColorAsState(
+                    if (isFabExpanded) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primary
+                )
+                val fabContentColor by animateColorAsState(
+                    if (isFabExpanded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
+                )
                 FloatingActionButton(
                     onClick = { isFabExpanded = !isFabExpanded },
-                    containerColor = if (isFabExpanded) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primary,
-                    contentColor = if (isFabExpanded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
+                    shape = RoundedCornerShape(fabCornerRadius),
+                    containerColor = fabContainerColor,
+                    contentColor = fabContentColor
                 ) {
                     Icon(
-                        imageVector = if (isFabExpanded) Icons.Default.Close else Icons.Default.Add,
-                        contentDescription = null
+                        imageVector = Icons.Default.Add,
+                        contentDescription = if (isFabExpanded) strings.cancel else null,
+                        modifier = Modifier.rotate(fabIconRotation)
                     )
                 }
             }
@@ -508,8 +572,9 @@ fun ContactsScreen(
                                 connected = connectedSet.contains(contact.id),
                                 lastMessage = preview,
                                 unread = unread,
+                                pinned = item.pinnedAt != null,
                                 onClick = { onOpenChat(contact.id) },
-                                onLongPress = { actionContact = contact }
+                                onLongPress = { actionItem = item }
                             )
                         }
                         is ChatListItem.GroupItem -> {
@@ -523,7 +588,9 @@ fun ContactsScreen(
                                 group = group,
                                 lastMessage = preview,
                                 unread = unread,
-                                onClick = { onOpenGroupChat(group.id) }
+                                pinned = item.pinnedAt != null,
+                                onClick = { onOpenGroupChat(group.id) },
+                                onLongPress = { actionItem = item }
                             )
                         }
                     }
@@ -583,6 +650,7 @@ private fun ContactRow(
     connected: Boolean,
     lastMessage: String?,
     unread: Long,
+    pinned: Boolean,
     onClick: () -> Unit,
     onLongPress: () -> Unit
 ) {
@@ -645,6 +713,15 @@ private fun ContactRow(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
+                    if (pinned) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = strings.pinChatAction,
+                            modifier = Modifier.size(14.dp).rotate(45f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(2.dp))
@@ -676,13 +753,17 @@ private fun ContactRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun GroupRow(
     group: GroupInfo,
     lastMessage: String?,
     unread: Long,
-    onClick: () -> Unit
+    pinned: Boolean,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     val strings = LocalStrings.current
     val subtleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
     Surface(
@@ -692,7 +773,13 @@ private fun GroupRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .combinedClickable(
+                    onClick = { onClick() },
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onLongPress()
+                    }
+                )
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -714,11 +801,22 @@ private fun GroupRow(
             Spacer(Modifier.width(16.dp))
 
             Column(Modifier.weight(1f)) {
-                Text(
-                    group.name,
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.titleMedium
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        group.name,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    if (pinned) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = strings.pinChatAction,
+                            modifier = Modifier.size(14.dp).rotate(45f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     lastMessage ?: strings.noMessages,

@@ -26,6 +26,21 @@ class StadeApplication : Application() {
 
     val containerFlow = kotlinx.coroutines.flow.MutableStateFlow<AppContainer?>(null)
 
+    private var pendingChatAtBoot: String? = null
+    private var pendingGoHomeAtBoot: Boolean = false
+
+    /** Called by MainActivity when a notification tap should open a specific chat. */
+    fun handleOpenChatIntent(contactId: String) {
+        val c = activeContainer
+        if (c != null) c.pendingOpenChat.value = contactId else pendingChatAtBoot = contactId
+    }
+
+    /** Called by MainActivity when a notification tap should just bring the app home. */
+    fun handleGoHomeIntent() {
+        val c = activeContainer
+        if (c != null) c.pendingGoHome.value = true else pendingGoHomeAtBoot = true
+    }
+
     lateinit var vault: Vault
         private set
 
@@ -55,6 +70,12 @@ class StadeApplication : Application() {
             onContainerCreated = { c ->
                 activeContainer = c
                 containerFlow.value = c
+                pendingChatAtBoot?.let { c.pendingOpenChat.value = it }
+                pendingChatAtBoot = null
+                if (pendingGoHomeAtBoot) {
+                    c.pendingGoHome.value = true
+                    pendingGoHomeAtBoot = false
+                }
             }
         )
         var startedCount = 0

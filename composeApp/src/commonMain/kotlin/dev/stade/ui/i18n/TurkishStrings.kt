@@ -57,6 +57,8 @@ object TurkishStrings : AppStrings() {
     override val noSearchResults = "Eşleşen kişi yok"
     override val showVerificationCode = "Doğrulama kodunu göster"
     override val deleteContact = "Kişiyi sil"
+    override val pinChatAction = "Sohbeti sabitle"
+    override val unpinChatAction = "Sabitlemeyi kaldır"
     override val noMessages = "Henüz mesaj yok"
     override fun deleteContactTitle(name: String) = "\"$name\" silinsin mi?"
     override val deleteContactBody =
@@ -157,6 +159,10 @@ object TurkishStrings : AppStrings() {
     override val notifRunningText = "Eşler arası bağlantılar etkin"
     override fun notifNewMessages(count: Int) = "$count yeni mesajınız var"
     override val notifNewMessageFallback = "Yeni mesaj"
+    override val notifReminderChannelName = "Hatırlatmalar"
+    override val notifReminderChannelDesc = "Mesaj alabilmen için Stade'yi açmanı hatırlatır"
+    override val notifBootReminderTitle = "Stade"
+    override val notifBootReminderText = "Stade'de aktif kalmak için giriş yap"
 
     override val addContactTitle = "Kişi ekle"
     override val step1Title = "Kendi davetini paylaş"
@@ -323,6 +329,13 @@ object TurkishStrings : AppStrings() {
     override val lanLabel = "Yerel ağ"
     override val torLabel = "Uzak ağ kanalı"
 
+    override val useBridgesTitle = "Köprü kullan"
+    override val useBridgesHint = "Tor'un engellendiği veya sansürlendiği yerlerde bağlanmaya yardımcı olur"
+    override val useBuiltInBridgesTitle = "Yerleşik obfs4 köprülerini kullan"
+    override val customBridgesLabel = "Özel köprü satırları"
+    override val customBridgesHint = "bridges.torproject.org adresinden veya güvendiğin bir kişiden aldığın köprü satırlarını her satıra bir tane olacak şekilde yapıştır (isteğe bağlı, yerleşik köprülere ek veya onların yerine)"
+    override val bridgesNotSupportedNote = "Köprü desteği bu platformda henüz mevcut değil."
+
     override val verifyContactTitle = "Kişiyi doğrula"
     override val safetyNumber = "Güvenlik numarası"
     override val safetyNumberNote =
@@ -372,6 +385,17 @@ object TurkishStrings : AppStrings() {
     override val leaveGroupTitle = "Gruptan ayrılınsın mı?"
     override val leaveGroupBody = "Bu grup yerel cihazından kaldırılacak. Diğer üyeler grupta kalmaya devam eder. Bu işlem geri alınamaz."
     override val leaveAction = "Ayrıl"
+
+    override val viewMembersAction = "Üyeleri görüntüle"
+    override val groupMembersTitle = "Grup üyeleri"
+    override val youLabel = "Sen"
+    override val groupAdminBadge = "Yönetici"
+    override val kickMemberAction = "Gruptan çıkar"
+    override fun kickMemberTitle(name: String) = "$name çıkarılsın mı?"
+    override val kickMemberBody = "Bu kişi artık bu grupta mesaj gönderemez veya alamaz. Bu işlem geri alınamaz."
+    override fun memberKicked(name: String) = "$name gruptan çıkarıldı"
+    override val kickMemberFailed = "Üye çıkarılamadı"
+    override fun removedFromGroupNotification(groupName: String) = "$groupName grubundan çıkarıldın"
 
     override val copyMessage = "Mesajı kopyala"
     override val deleteMessageForMe = "Kendinden sil"

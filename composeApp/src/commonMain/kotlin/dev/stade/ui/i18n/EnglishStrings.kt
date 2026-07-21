@@ -57,6 +57,8 @@ object EnglishStrings : AppStrings() {
     override val noSearchResults = "No matching contacts"
     override val showVerificationCode = "Show verification code"
     override val deleteContact = "Delete contact"
+    override val pinChatAction = "Pin chat"
+    override val unpinChatAction = "Unpin chat"
     override val noMessages = "No messages yet"
     override fun deleteContactTitle(name: String) = "Delete \"$name\"?"
     override val deleteContactBody =
@@ -157,6 +159,10 @@ object EnglishStrings : AppStrings() {
     override val notifRunningText = "Peer-to-peer connections active"
     override fun notifNewMessages(count: Int) = "You have $count new messages"
     override val notifNewMessageFallback = "New message"
+    override val notifReminderChannelName = "Reminders"
+    override val notifReminderChannelDesc = "Reminds you to open Stade so you can receive messages"
+    override val notifBootReminderTitle = "Stade"
+    override val notifBootReminderText = "Log in to stay active on Stade"
 
     override val addContactTitle = "Add contact"
     override val step1Title = "Share your own invite"
@@ -324,6 +330,13 @@ object EnglishStrings : AppStrings() {
     override val lanLabel = "Local network"
     override val torLabel = "Remote network channel"
 
+    override val useBridgesTitle = "Use bridges"
+    override val useBridgesHint = "Helps connect where Tor is blocked or censored"
+    override val useBuiltInBridgesTitle = "Use built-in obfs4 bridges"
+    override val customBridgesLabel = "Custom bridge lines"
+    override val customBridgesHint = "Paste bridge lines from bridges.torproject.org or a trusted contact, one per line (optional, in addition to or instead of built-in bridges)"
+    override val bridgesNotSupportedNote = "Bridge support isn't available on this platform yet."
+
     override val verifyContactTitle = "Verify contact"
     override val safetyNumber = "Safety number"
     override val safetyNumberNote =
@@ -373,6 +386,17 @@ object EnglishStrings : AppStrings() {
     override val leaveGroupTitle = "Leave group?"
     override val leaveGroupBody = "This group will be removed from your local device. Other members will remain. This action cannot be undone."
     override val leaveAction = "Leave"
+
+    override val viewMembersAction = "View members"
+    override val groupMembersTitle = "Group members"
+    override val youLabel = "You"
+    override val groupAdminBadge = "Admin"
+    override val kickMemberAction = "Remove from group"
+    override fun kickMemberTitle(name: String) = "Remove $name?"
+    override val kickMemberBody = "They will no longer be able to send or receive messages in this group. This action cannot be undone."
+    override fun memberKicked(name: String) = "$name was removed from the group"
+    override val kickMemberFailed = "Couldn't remove member"
+    override fun removedFromGroupNotification(groupName: String) = "You were removed from $groupName"
 
     override val copyMessage = "Copy message"
     override val deleteMessageForMe = "Delete for me"

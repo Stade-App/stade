@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import dev.stade.transport.tor.EmbeddedTorRuntime
 import dev.stade.transport.tor.TorStatus
+import dev.stade.transport.tor.parseBridgeConfig
 import kotlinx.coroutines.flow.collectLatest
 
 class TorTransport(
@@ -77,7 +78,8 @@ class TorTransport(
             bindError = err.message ?: err::class.simpleName
         }
 
-        val ready = runCatching { embedded!!.ensureReady(boundPort) }.getOrElse { err ->
+        val bridgeConfig = parseBridgeConfig(configProvider())
+        val ready = runCatching { embedded!!.ensureReady(boundPort, bridgeConfig) }.getOrElse { err ->
             runCatching { preBoundServer?.close() }
             state.value = TransportInfo(type, "Tor", available = false, running = false, message = "failed to start: ${err.message ?: err::class.simpleName}")
             return
@@ -205,6 +207,15 @@ class TorTransport(
         runCatching { inboundServer?.close() }
         inboundServer = null
         state.value = state.value.copy(running = false)
+    }
+
+    /**
+     * Gömülü Tor'un `ready` önbelleğini geçersiz kılar, böylece bir sonraki `start()`
+     * çağrısı Tor sürecini (yeni köprü ayarlarıyla) sıfırdan yeniden başlatır.
+     * Sadece ayarlar ekranından açıkça çağrılır — normal stop() akışını etkilemez.
+     */
+    override suspend fun reload() {
+        embedded?.invalidate()
     }
 
     override suspend fun connect(address: String): Connection? {

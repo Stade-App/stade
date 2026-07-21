@@ -110,6 +110,7 @@ import dev.stade.group.GroupMessage
 import dev.stade.identity.LocalIdentity
 import dev.stade.message.MessageType
 import dev.stade.ui.PlatformBackHandler
+import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.copyImageToClipboard
@@ -131,13 +132,16 @@ fun GroupChatScreen(
     container: AppContainer,
     owner: LocalIdentity,
     groupId: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenMembers: (() -> Unit)? = null
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
 
     val group = remember(groupId) { container.groups.getGroup(groupId) }
+    val memberIds by container.groups.observeMembers(groupId)
+        .collectAsState(initial = group?.memberIds ?: emptyList())
     val messages by container.groups.observeMessages(groupId).collectAsState(initial = emptyList())
     val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
     val listState = rememberLazyListState()
@@ -146,6 +150,14 @@ fun GroupChatScreen(
 
     val isOwner = remember(group?.creatorStadeId) {
         group != null && (group.creatorStadeId == owner.stadeId || group.creatorStadeId.isEmpty())
+    }
+
+    LaunchedEffect(groupId) {
+        container.sync.events.collect { event ->
+            if (event is dev.stade.sync.SyncEngine.SyncEvent.RemovedFromGroup && event.groupId == groupId) {
+                onBack()
+            }
+        }
     }
 
     var showAddMembersDialog by remember { mutableStateOf(false) }
@@ -287,29 +299,32 @@ fun GroupChatScreen(
                                         .padding(horizontal = 8.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(
-                                        Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (checked) MaterialTheme.colorScheme.primary
-                                                else MaterialTheme.colorScheme.secondaryContainer
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
+                                    Box {
+                                        Avatar(name = contact.nickname, size = 36.dp)
                                         if (checked) {
-                                            Icon(
-                                                Icons.Default.Check,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onPrimary,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        } else {
-                                            Text(
-                                                contact.nickname.firstOrNull()?.uppercase() ?: "?",
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                style = MaterialTheme.typography.titleSmall
-                                            )
+                                            Box(
+                                                Modifier
+                                                    .align(Alignment.BottomEnd)
+                                                    .size(16.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.surface)
+                                                    .padding(2.dp)
+                                            ) {
+                                                Box(
+                                                    Modifier
+                                                        .fillMaxSize()
+                                                        .clip(CircleShape)
+                                                        .background(MaterialTheme.colorScheme.primary),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Check,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                                        modifier = Modifier.size(10.dp)
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                     Spacer(Modifier.width(12.dp))
@@ -385,7 +400,7 @@ fun GroupChatScreen(
                     showLeaveGroupDialog = false
                     scope.launch {
                         withContext(Dispatchers.Default) {
-                            runCatching { container.groups.leaveGroupLocally(groupId) }
+                            runCatching { container.groupChat.leaveGroup(owner, group) }
                         }
                         onBack()
                     }
@@ -471,7 +486,12 @@ fun GroupChatScreen(
                         containerColor = MaterialTheme.colorScheme.surface
                     ),
                     title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = if (onOpenMembers != null && group != null) {
+                                Modifier.clickable { onOpenMembers() }
+                            } else Modifier
+                        ) {
                             Box(
                                 Modifier
                                     .size(36.dp)
@@ -495,7 +515,7 @@ fun GroupChatScreen(
                                 )
                                 if (group != null) {
                                     Text(
-                                        strings.groupMemberCount(group.memberIds.size),
+                                        strings.groupMemberCount(memberIds.size),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -514,6 +534,16 @@ fun GroupChatScreen(
                                 Icon(Icons.Default.MoreVert, contentDescription = null)
                             }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                if (onOpenMembers != null) {
+                                    DropdownMenuItem(
+                                        text = { Text(strings.viewMembersAction) },
+                                        leadingIcon = { Icon(Icons.Default.Group, null) },
+                                        onClick = {
+                                            menuOpen = false
+                                            onOpenMembers()
+                                        }
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text(strings.addMembersTitle) },
                                     leadingIcon = { Icon(Icons.Default.PersonAdd, null) },

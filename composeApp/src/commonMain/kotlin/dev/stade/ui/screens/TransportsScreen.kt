@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.transport.TransportType
 import dev.stade.transport.isTorBuiltIn
+import dev.stade.transport.torBridgesSupported
 import dev.stade.ui.components.PlatformVerticalScrollbar
 import dev.stade.ui.components.maskAddress
 import dev.stade.ui.i18n.LocalStrings
@@ -137,6 +138,26 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                                         }
                                     )
                                 }
+                                if (torBridgesSupported) {
+                                    TorBridgesEditor(
+                                        initial = cfg.config,
+                                        onSave = { newCfg ->
+                                            container.transportSettings.setConfig(TransportType.TOR, newCfg)
+                                            configs = container.transportSettings.all()
+                                            scope.launch {
+                                                runCatching { container.transports.get(TransportType.TOR)?.reload() }
+                                                runCatching { container.connections.restart(TransportType.TOR) }
+                                            }
+                                        }
+                                    )
+                                } else {
+                                    Spacer(Modifier.height(12.dp))
+                                    Text(
+                                        strings.bridgesNotSupportedNote,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
@@ -230,6 +251,97 @@ private fun TorConfigEditor(initial: String, onSave: (String) -> Unit) {
                 }
                 onSave(cfg)
             },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(strings.saveAndRestart) }
+    }
+}
+
+@Composable
+private fun TorBridgesEditor(initial: String, onSave: (String) -> Unit) {
+    val strings = LocalStrings.current
+    val parsedLines = remember(initial) {
+        initial.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && '=' in it }
+            .map { it.substringBefore('=').trim() to it.substringAfter('=').trim() }
+            .toList()
+    }
+    val otherLines = remember(initial) {
+        parsedLines
+            .filter { (key, _) -> key != "bridgesEnabled" && key != "bridgesUseBuiltIn" && key != "bridge" }
+            .map { (key, value) -> "$key=$value" }
+    }
+    var bridgesEnabled by remember(initial) {
+        mutableStateOf(parsedLines.any { it.first == "bridgesEnabled" && it.second.equals("true", ignoreCase = true) })
+    }
+    var useBuiltIn by remember(initial) {
+        mutableStateOf(
+            parsedLines.firstOrNull { it.first == "bridgesUseBuiltIn" }?.second?.equals("true", ignoreCase = true) ?: true
+        )
+    }
+    var customText by remember(initial) {
+        mutableStateOf(parsedLines.filter { it.first == "bridge" }.joinToString("\n") { it.second })
+    }
+
+    fun save() {
+        val customLines = customText.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }
+        val cfg = buildString {
+            otherLines.forEach { appendLine(it) }
+            appendLine("bridgesEnabled=$bridgesEnabled")
+            appendLine("bridgesUseBuiltIn=$useBuiltIn")
+            customLines.forEach { appendLine("bridge=$it") }
+        }
+        onSave(cfg)
+    }
+
+    Column {
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(strings.useBridgesTitle, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    strings.useBridgesHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(checked = bridgesEnabled, onCheckedChange = { bridgesEnabled = it })
+        }
+        if (bridgesEnabled) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    strings.useBuiltInBridgesTitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(checked = useBuiltIn, onCheckedChange = { useBuiltIn = it })
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                strings.customBridgesHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            OutlinedTextField(
+                value = customText,
+                onValueChange = { customText = it },
+                label = { Text(strings.customBridgesLabel) },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                maxLines = 8
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = { save() },
             modifier = Modifier.fillMaxWidth()
         ) { Text(strings.saveAndRestart) }
     }

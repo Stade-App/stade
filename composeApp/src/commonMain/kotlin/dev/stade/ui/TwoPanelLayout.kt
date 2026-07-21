@@ -1,6 +1,11 @@
 package dev.stade.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
@@ -26,10 +31,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Verified
@@ -67,6 +72,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
@@ -91,6 +97,7 @@ import dev.stade.ui.screens.AddContactScreen
 import dev.stade.ui.screens.ChatScreen
 import dev.stade.ui.screens.CreateGroupScreen
 import dev.stade.ui.screens.GroupChatScreen
+import dev.stade.ui.screens.GroupMembersScreen
 import dev.stade.ui.screens.PinSetupScreen
 import dev.stade.ui.screens.SettingsScreen
 import dev.stade.ui.screens.TransportsScreen
@@ -107,6 +114,7 @@ private sealed class PanelRight {
     data object Empty : PanelRight()
     data class Chat(val contactId: String) : PanelRight()
     data class GroupChat(val groupId: String) : PanelRight()
+    data class GroupMembers(val groupId: String) : PanelRight()
     data object CreateGroup : PanelRight()
     data object Settings : PanelRight()
     data object Security : PanelRight()
@@ -118,8 +126,8 @@ private sealed class PanelRight {
 }
 
 private sealed class PanelChatItem {
-    data class ContactItem(val contact: Contact, val lastMessageTs: Long? = null) : PanelChatItem()
-    data class GroupItem(val group: GroupInfo, val lastMessageTs: Long? = null) : PanelChatItem()
+    data class ContactItem(val contact: Contact, val lastMessageTs: Long? = null, val pinnedAtValue: Long? = null) : PanelChatItem()
+    data class GroupItem(val group: GroupInfo, val lastMessageTs: Long? = null, val pinnedAtValue: Long? = null) : PanelChatItem()
     val displayName: String get() = when (this) {
         is ContactItem -> contact.nickname
         is GroupItem   -> group.name
@@ -131,6 +139,10 @@ private sealed class PanelChatItem {
     val sortKey: Long get() = when (this) {
         is ContactItem -> lastMessageTs ?: 0L
         is GroupItem   -> lastMessageTs ?: 0L
+    }
+    val pinnedAt: Long? get() = when (this) {
+        is ContactItem -> pinnedAtValue
+        is GroupItem   -> pinnedAtValue
     }
 }
 @OptIn(ExperimentalMaterial3Api::class)
@@ -145,6 +157,7 @@ fun TwoPanelLayout(
     val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
     val groups by container.groups.observeGroups(owner.id).collectAsState(initial = emptyList())
     val connectedSet by container.sync.connectedContacts.collectAsState()
+    val pinned by container.pinnedChats.observePinned(owner.id).collectAsState(initial = emptyMap())
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
     var query by remember { mutableStateOf("") }
     var isFabExpanded by remember { mutableStateOf(false) }
@@ -171,6 +184,23 @@ fun TwoPanelLayout(
         }
     }
 
+    val pendingOpenChatId by container.pendingOpenChat.collectAsState()
+    LaunchedEffect(pendingOpenChatId) {
+        val id = pendingOpenChatId
+        if (id != null) {
+            right = PanelRight.Chat(id)
+            container.pendingOpenChat.value = null
+        }
+    }
+
+    val pendingGoHome by container.pendingGoHome.collectAsState()
+    LaunchedEffect(pendingGoHome) {
+        if (pendingGoHome) {
+            right = PanelRight.Empty
+            container.pendingGoHome.value = false
+        }
+    }
+
     var deleteTargetContact by remember { mutableStateOf<Contact?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
@@ -180,19 +210,22 @@ fun TwoPanelLayout(
         else contacts.filter { it.nickname.contains(query.trim(), ignoreCase = true) }
     }
 
-    val combinedPanelItems = remember(filtered, groups, query, contactLastMessages, groupLastMessages) {
+    val combinedPanelItems = remember(filtered, groups, query, contactLastMessages, groupLastMessages, pinned) {
         val q = query.trim()
         val result = mutableListOf<PanelChatItem>()
         groups
             .filter { q.isBlank() || it.name.contains(q, ignoreCase = true) }
             .forEachIndexed { i, g ->
-                result.add(PanelChatItem.GroupItem(g, groupLastMessages.getOrNull(i)?.timestamp))
+                result.add(PanelChatItem.GroupItem(g, groupLastMessages.getOrNull(i)?.timestamp, pinned["grp_${g.id}"]))
             }
         filtered.forEachIndexed { i, c ->
             val origIdx = contacts.indexOf(c)
-            result.add(PanelChatItem.ContactItem(c, contactLastMessages.getOrNull(origIdx)?.timestamp))
+            result.add(PanelChatItem.ContactItem(c, contactLastMessages.getOrNull(origIdx)?.timestamp, pinned[c.id]))
         }
-        result.sortByDescending { it.sortKey }
+        result.sortWith(
+            compareByDescending<PanelChatItem> { it.pinnedAt != null }
+                .thenByDescending { it.pinnedAt ?: it.sortKey }
+        )
         result
     }
 
@@ -381,6 +414,7 @@ fun TwoPanelLayout(
                                                 contact = contact,
                                                 selected = isSelected,
                                                 connected = connectedSet.contains(contact.id),
+                                                pinned = item.pinnedAt != null,
                                                 lastMessage = preview,
                                                 lastMessageTs = lastMsg?.timestamp,
                                                 unread = unread,
@@ -389,6 +423,9 @@ fun TwoPanelLayout(
                                                 onDeleteRequest = {
                                                     deleteTargetContact = contact
                                                     showDeleteConfirm = true
+                                                },
+                                                onTogglePin = {
+                                                    container.pinnedChats.setPinned(owner.id, item.key, item.pinnedAt == null)
                                                 }
                                             )
                                         }
@@ -403,97 +440,25 @@ fun TwoPanelLayout(
                                             }
                                             val isGroupSelected by remember(group.id) {
                                                 derivedStateOf {
-                                                    right is PanelRight.GroupChat &&
-                                                            (right as? PanelRight.GroupChat)?.groupId == group.id
-                                                }
-                                            }
-                                            val bg = if (isGroupSelected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                                                    .clip(RoundedCornerShape(14.dp))
-                                                    .background(bg)
-                                                    .clickable { right = PanelRight.GroupChat(group.id) }
-                                                    .padding(horizontal = 10.dp, vertical = 10.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Box(
-                                                    Modifier
-                                                        .size(width = 3.dp, height = 36.dp)
-                                                        .clip(RoundedCornerShape(2.dp))
-                                                        .background(
-                                                            if (isGroupSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-                                                        )
-                                                )
-                                                Spacer(Modifier.width(8.dp))
-
-                                                Box(
-                                                    Modifier
-                                                        .size(44.dp)
-                                                        .clip(CircleShape)
-                                                        .background(MaterialTheme.colorScheme.tertiaryContainer),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        Icons.Default.Group,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                                        modifier = Modifier.size(22.dp)
-                                                    )
-                                                }
-
-                                                Spacer(Modifier.width(12.dp))
-
-                                                Column(Modifier.weight(1f)) {
-                                                    Text(
-                                                        group.name,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        style = MaterialTheme.typography.bodyLarge,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                    Spacer(Modifier.height(2.dp))
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Text(
-                                                            groupPreview ?: "",
-                                                            style = MaterialTheme.typography.bodySmall,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis,
-                                                            modifier = Modifier.weight(1f)
-                                                        )
-                                                        if (lastGroupMsg?.timestamp != null) {
-                                                            Spacer(Modifier.width(6.dp))
-                                                            Text(
-                                                                formatChatTime(lastGroupMsg!!.timestamp),
-                                                                style = MaterialTheme.typography.labelSmall,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                            )
-                                                        }
-                                                    }
-                                                }
-
-                                                if (groupUnread > 0) {
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Box(
-                                                        Modifier
-                                                            .size(22.dp)
-                                                            .clip(CircleShape)
-                                                            .background(MaterialTheme.colorScheme.primary),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(
-                                                            if (groupUnread > 99) "99+" else groupUnread.toString(),
-                                                            color = MaterialTheme.colorScheme.onPrimary,
-                                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
-                                                        )
+                                                    when (val r = right) {
+                                                        is PanelRight.GroupChat -> r.groupId == group.id
+                                                        is PanelRight.GroupMembers -> r.groupId == group.id
+                                                        else -> false
                                                     }
                                                 }
                                             }
+                                            PanelGroupRow(
+                                                group = group,
+                                                selected = isGroupSelected,
+                                                pinned = item.pinnedAt != null,
+                                                lastMessage = groupPreview,
+                                                lastMessageTs = lastGroupMsg?.timestamp,
+                                                unread = groupUnread,
+                                                onClick = { right = PanelRight.GroupChat(group.id) },
+                                                onTogglePin = {
+                                                    container.pinnedChats.setPinned(owner.id, item.key, item.pinnedAt == null)
+                                                }
+                                            )
                                         }
                                     }
                                 }
@@ -577,14 +542,30 @@ fun TwoPanelLayout(
                                     }
                                 }
 
+                                val fabCornerRadius by animateDpAsState(
+                                    targetValue = if (isFabExpanded) 28.dp else 16.dp,
+                                    animationSpec = tween(280, easing = FastOutSlowInEasing)
+                                )
+                                val fabIconRotation by animateFloatAsState(
+                                    targetValue = if (isFabExpanded) 45f else 0f,
+                                    animationSpec = tween(280, easing = FastOutSlowInEasing)
+                                )
+                                val fabContainerColor by animateColorAsState(
+                                    if (isFabExpanded) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primary
+                                )
+                                val fabContentColor by animateColorAsState(
+                                    if (isFabExpanded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
+                                )
                                 FloatingActionButton(
                                     onClick = { isFabExpanded = !isFabExpanded },
-                                    containerColor = if (isFabExpanded) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primary,
-                                    contentColor = if (isFabExpanded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
+                                    shape = RoundedCornerShape(fabCornerRadius),
+                                    containerColor = fabContainerColor,
+                                    contentColor = fabContentColor
                                 ) {
                                     Icon(
-                                        imageVector = if (isFabExpanded) Icons.Default.Close else Icons.Default.Add,
-                                        contentDescription = null
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = if (isFabExpanded) strings.cancel else null,
+                                        modifier = Modifier.rotate(fabIconRotation)
                                     )
                                 }
                             }
@@ -701,7 +682,15 @@ fun TwoPanelLayout(
                     container = container,
                     owner = owner,
                     groupId = rp.groupId,
-                    onBack = { right = PanelRight.Empty }
+                    onBack = { right = PanelRight.Empty },
+                    onOpenMembers = { right = PanelRight.GroupMembers(rp.groupId) }
+                )
+
+                is PanelRight.GroupMembers -> GroupMembersScreen(
+                    container = container,
+                    owner = owner,
+                    groupId = rp.groupId,
+                    onBack = { right = PanelRight.GroupChat(rp.groupId) }
                 )
             }
         }
@@ -715,12 +704,14 @@ private fun PanelContactRow(
     contact: Contact,
     selected: Boolean,
     connected: Boolean,
+    pinned: Boolean,
     lastMessage: String?,
     lastMessageTs: Long?,
     unread: Long,
     onClick: () -> Unit,
     onVerifyRequest: () -> Unit,
-    onDeleteRequest: () -> Unit
+    onDeleteRequest: () -> Unit,
+    onTogglePin: () -> Unit
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
     val strings = LocalStrings.current
@@ -810,6 +801,15 @@ private fun PanelContactRow(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
+                    if (pinned) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = strings.pinChatAction,
+                            modifier = Modifier.size(14.dp).rotate(45f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 Spacer(Modifier.height(2.dp))
                 Row(
@@ -859,6 +859,21 @@ private fun PanelContactRow(
             offset = menuOffset
         ) {
             DropdownMenuItem(
+                text = { Text(if (pinned) strings.unpinChatAction else strings.pinChatAction) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.PushPin,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onTogglePin()
+                }
+            )
+            HorizontalDivider()
+            DropdownMenuItem(
                 text = { Text(strings.showVerificationCode) },
                 leadingIcon = {
                     Icon(
@@ -887,6 +902,169 @@ private fun PanelContactRow(
                 onClick = {
                     showContextMenu = false
                     onDeleteRequest()
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun PanelGroupRow(
+    group: GroupInfo,
+    selected: Boolean,
+    pinned: Boolean,
+    lastMessage: String?,
+    lastMessageTs: Long?,
+    unread: Long,
+    onClick: () -> Unit,
+    onTogglePin: () -> Unit
+) {
+    val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
+    val strings = LocalStrings.current
+
+    var showContextMenu by remember { mutableStateOf(false) }
+    var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
+    var rowHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+
+    Box(modifier = Modifier.onSizeChanged { rowHeightPx = it.height }) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(bg)
+                .clickable(onClick = onClick)
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                                val pos = event.changes.firstOrNull()?.position
+                                if (pos != null) {
+                                    menuOffset = with(density) {
+                                        DpOffset(
+                                            x = pos.x.toDp(),
+                                            y = pos.y.toDp() - rowHeightPx.toDp()
+                                        )
+                                    }
+                                }
+                                event.changes.forEach { it.consume() }
+                                showContextMenu = true
+                            }
+                        }
+                    }
+                }
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier
+                    .size(width = 3.dp, height = 36.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+                    )
+            )
+            Spacer(Modifier.width(8.dp))
+
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Group,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        group.name,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (pinned) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = strings.pinChatAction,
+                            modifier = Modifier.size(14.dp).rotate(45f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        lastMessage ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (lastMessageTs != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            formatChatTime(lastMessageTs),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            if (unread > 0) {
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    Modifier
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        if (unread > 99) "99+" else unread.toString(),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+            }
+        }
+
+        DropdownMenu(
+            expanded = showContextMenu,
+            onDismissRequest = { showContextMenu = false },
+            offset = menuOffset
+        ) {
+            DropdownMenuItem(
+                text = { Text(if (pinned) strings.unpinChatAction else strings.pinChatAction) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.PushPin,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onTogglePin()
                 }
             )
         }

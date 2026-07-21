@@ -200,6 +200,9 @@ SELECT value FROM KeyValue WHERE key = ?;
 deleteKv:
 DELETE FROM KeyValue WHERE key = ?;
 
+selectKvPrefixed:
+SELECT key, value FROM KeyValue WHERE key LIKE ? ORDER BY key;
+
 wipeMessages:
 DELETE FROM Message;
 

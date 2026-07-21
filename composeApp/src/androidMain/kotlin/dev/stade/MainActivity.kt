@@ -40,6 +40,19 @@ class MainActivity : ComponentActivity() {
         startForegroundService(Intent(this, StadeService::class.java))
         askNotificationPermissionIfNeeded()
         setContent { StadeApp(app.boot) }
+        handleNotificationIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        val app = application as StadeApplication
+        intent?.getStringExtra(EXTRA_OPEN_CHAT_ID)?.let { app.handleOpenChatIntent(it) }
+        if (intent?.getBooleanExtra(EXTRA_GO_HOME, false) == true) app.handleGoHomeIntent()
     }
 
     override fun onStop() {
@@ -94,5 +107,10 @@ class MainActivity : ComponentActivity() {
                 requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+    }
+
+    companion object {
+        const val EXTRA_OPEN_CHAT_ID = "open_chat_contact_id"
+        const val EXTRA_GO_HOME = "go_home"
     }
 }

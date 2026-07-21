@@ -71,9 +71,17 @@ data class PendingJoinData(
     val inviteToken: String
 )
 
+data class KickOutcome(
+    val groupId: String,
+    val groupName: String,
+    val wasSelf: Boolean
+)
+
 const val GRP_MSG_PREFIX = "\u0002GRP1:"
 const val GRP_JOIN_PREFIX = "\u0002GRPJ:"
 const val GRP_WELCOME_PREFIX = "\u0002GRPW:"
 const val GRP_INV_PREFIX = "\u0002GRPI:"
+const val GRP_KICK_PREFIX = "GRPK:"
+const val GRP_LEAVE_PREFIX = "GRPL:"
 const val GROUP_INVITE_PREFIX = "STADE-GRP:"
 

@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.identity.LocalIdentity
+import dev.stade.ui.components.Avatar
 import dev.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -126,29 +127,32 @@ fun CreateGroupScreen(
                                 .padding(horizontal = 8.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                Modifier
-                                    .size(44.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (selected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.secondaryContainer
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            Box {
+                                Avatar(name = contact.nickname, size = 44.dp)
                                 if (selected) {
-                                    Icon(
-                                        Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                } else {
-                                    Text(
-                                        contact.nickname.firstOrNull()?.uppercase() ?: "?",
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
+                                    Box(
+                                        Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .size(18.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.surface)
+                                            .padding(2.dp)
+                                    ) {
+                                        Box(
+                                            Modifier
+                                                .fillMaxSize()
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(11.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                             Spacer(Modifier.width(14.dp))
