@@ -1,14 +1,22 @@
 package dev.stade.ui.screens
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,12 +24,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
@@ -54,15 +64,14 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -86,19 +95,25 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import dev.stade.AppContainer
@@ -108,7 +123,9 @@ import dev.stade.audio.rememberAudioPlayer
 import dev.stade.audio.rememberAudioRecorder
 import dev.stade.group.GroupMessage
 import dev.stade.identity.LocalIdentity
+import dev.stade.media.MediaEditorDialog
 import dev.stade.message.MessageType
+import dev.stade.message.previewBody
 import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.formatChatTime
@@ -138,6 +155,7 @@ fun GroupChatScreen(
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
+    val haptic = LocalHapticFeedback.current
 
     val group = remember(groupId) { container.groups.getGroup(groupId) }
     val memberIds by container.groups.observeMembers(groupId)
@@ -217,6 +235,7 @@ fun GroupChatScreen(
     val MAX_IMAGE_BYTES = 3 * 1024 * 1024
 
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
+    var editingImageIndex by remember { mutableStateOf<Int?>(null) }
 
     val imagePicker = rememberMultiImagePickerLauncher { imagesList ->
         val accepted = imagesList.filter { it.size <= MAX_IMAGE_BYTES }
@@ -262,6 +281,8 @@ fun GroupChatScreen(
             recorder.start()
         }
     }
+
+    var replyTarget by remember { mutableStateOf<GroupMessage?>(null) }
 
     var prevColumnHeight by remember { mutableStateOf(Int.MAX_VALUE) }
 
@@ -464,7 +485,7 @@ fun GroupChatScreen(
                         }
                         if (singleSelectedTextMsg != null) {
                             IconButton(onClick = {
-                                clipboard.setText(AnnotatedString(singleSelectedTextMsg.body))
+                                clipboard.setText(AnnotatedString(singleSelectedTextMsg.displayBody))
                                 clearSelection()
                                 notify(strings.messageCopied, GroupBannerKind.Success)
                             }) {
@@ -644,54 +665,95 @@ fun GroupChatScreen(
                                 else container.contacts.get(msg.senderId)?.nickname ?: msg.senderId.takeLast(6)
                             }
                             val isSelected = selectedMessageIds.contains(msg.id)
-                            if (msg.type == MessageType.IMAGE) {
-                                GroupImageBubble(
-                                    msg = msg,
-                                    senderName = senderName,
-                                    tightWithPrev = tight,
-                                    selected = isSelected,
-                                    inSelectionMode = inSelectionMode,
-                                    onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
-                                    onLongClick = { toggleSelection(msg.id) },
-                                    onSaveImage = { bytes ->
-                                        scope.launch {
-                                            val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
-                                            notify(
-                                                if (ok) strings.imageSaved else strings.imageSaveFailed,
-                                                if (ok) GroupBannerKind.Success else GroupBannerKind.Error
-                                            )
-                                        }
-                                    },
-                                    onCopyImage = { bytes ->
-                                        scope.launch {
-                                            val ok = copyImageToClipboard(bytes)
-                                            notify(
-                                                if (ok) strings.imageCopied else strings.imageCopyFailed,
-                                                if (ok) GroupBannerKind.Success else GroupBannerKind.Error
-                                            )
+                            val quotedMsg = remember(msg.id, msg.replyToId, messages) {
+                                msg.replyToId?.let { rid -> messages.firstOrNull { it.id == rid } }
+                            }
+                            val quoted = remember(msg.id, quotedMsg) {
+                                when {
+                                    msg.replyToId == null -> null
+                                    quotedMsg != null -> {
+                                        val quotedSenderName = if (quotedMsg.isOwn) owner.nickname
+                                            else container.contacts.get(quotedMsg.senderId)?.nickname ?: quotedMsg.senderId.takeLast(6)
+                                        GroupReplyQuoteInfo(
+                                            senderLabel = quotedSenderName,
+                                            snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage)
+                                        ) {
+                                            val target = messages.indexOfFirst { it.id == quotedMsg.id }
+                                            if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
                                         }
                                     }
-                                )
-                            } else if (msg.type == MessageType.VOICE) {
-                                GroupVoiceBubble(
-                                    msg = msg,
-                                    senderName = senderName,
-                                    tightWithPrev = tight,
-                                    selected = isSelected,
-                                    inSelectionMode = inSelectionMode,
-                                    onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
-                                    onLongClick = { toggleSelection(msg.id) }
-                                )
-                            } else {
-                                GroupTextBubble(
-                                    msg = msg,
-                                    senderName = senderName,
-                                    tightWithPrev = tight,
-                                    selected = isSelected,
-                                    inSelectionMode = inSelectionMode,
-                                    onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
-                                    onLongClick = { toggleSelection(msg.id) }
-                                )
+                                    else -> GroupReplyQuoteInfo(
+                                        senderLabel = "",
+                                        snippet = strings.originalMessageUnavailable,
+                                        onClick = {}
+                                    )
+                                }
+                            }
+                            GroupSwipeToReplyRow(
+                                enabled = !inSelectionMode,
+                                onReply = { replyTarget = msg }
+                            ) {
+                                if (msg.type == MessageType.IMAGE) {
+                                    GroupImageBubble(
+                                        msg = msg,
+                                        senderName = senderName,
+                                        tightWithPrev = tight,
+                                        selected = isSelected,
+                                        inSelectionMode = inSelectionMode,
+                                        quoted = quoted,
+                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            toggleSelection(msg.id)
+                                        },
+                                        onSaveImage = { bytes ->
+                                            scope.launch {
+                                                val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
+                                                notify(
+                                                    if (ok) strings.imageSaved else strings.imageSaveFailed,
+                                                    if (ok) GroupBannerKind.Success else GroupBannerKind.Error
+                                                )
+                                            }
+                                        },
+                                        onCopyImage = { bytes ->
+                                            scope.launch {
+                                                val ok = copyImageToClipboard(bytes)
+                                                notify(
+                                                    if (ok) strings.imageCopied else strings.imageCopyFailed,
+                                                    if (ok) GroupBannerKind.Success else GroupBannerKind.Error
+                                                )
+                                            }
+                                        }
+                                    )
+                                } else if (msg.type == MessageType.VOICE) {
+                                    GroupVoiceBubble(
+                                        msg = msg,
+                                        senderName = senderName,
+                                        tightWithPrev = tight,
+                                        selected = isSelected,
+                                        inSelectionMode = inSelectionMode,
+                                        quoted = quoted,
+                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            toggleSelection(msg.id)
+                                        }
+                                    )
+                                } else {
+                                    GroupTextBubble(
+                                        msg = msg,
+                                        senderName = senderName,
+                                        tightWithPrev = tight,
+                                        selected = isSelected,
+                                        inSelectionMode = inSelectionMode,
+                                        quoted = quoted,
+                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            toggleSelection(msg.id)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -702,36 +764,61 @@ fun GroupChatScreen(
                     pendingImages = pendingImages,
                     pendingVoiceClip = pendingVoiceClip,
                     isRecording = isRecording,
+                    replyPreview = replyTarget?.let { target ->
+                        val targetSenderName = if (target.isOwn) owner.nickname
+                            else container.contacts.get(target.senderId)?.nickname ?: target.senderId.takeLast(6)
+                        GroupReplyQuoteInfo(
+                            senderLabel = targetSenderName,
+                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage),
+                            onClick = {}
+                        )
+                    },
                     onChange = { draft = it },
                     onRemoveImage = { idx ->
                         pendingImages = pendingImages.toMutableList().also { it.removeAt(idx) }
                     },
+                    onEditImage = { idx -> editingImageIndex = idx },
                     onRemoveVoiceClip = { pendingVoiceClip = null },
+                    onCancelReply = { replyTarget = null },
                     onSend = {
                         val text = draft.text.trim()
                         val images = pendingImages
                         val voiceClip = pendingVoiceClip
+                        val replyId = replyTarget?.id
                         if (text.isEmpty() && images.isEmpty() && voiceClip == null) return@GroupComposer
                         draft = TextFieldValue("")
                         pendingImages = emptyList()
                         pendingVoiceClip = null
+                        replyTarget = null
                         scope.launch {
                             if (text.isNotEmpty()) {
-                                runCatching { container.groupChat.sendMessage(owner, groupId, text) }
+                                runCatching { container.groupChat.sendMessage(owner, groupId, text, replyId) }
                                     .onFailure { notify(strings.sendFailed(it.message ?: ""), GroupBannerKind.Error) }
                             }
                             images.forEach { imageBytes ->
-                                runCatching { container.groupChat.sendImage(owner, groupId, imageBytes) }
+                                runCatching { container.groupChat.sendImage(owner, groupId, imageBytes, replyId) }
                                     .onFailure { notify(strings.photoSendFailed, GroupBannerKind.Error) }
                             }
                             if (voiceClip != null) {
-                                runCatching { container.groupChat.sendVoice(owner, groupId, voiceClip.opusBytes, voiceClip.durationMs) }
+                                runCatching { container.groupChat.sendVoice(owner, groupId, voiceClip.opusBytes, voiceClip.durationMs, replyId) }
                                     .onFailure { notify(strings.voiceSendFailed, GroupBannerKind.Error) }
                             }
                         }
                     },
                     onPickImage = { imagePicker.launch() },
                     onToggleRecording = { toggleRecording() }
+                )
+            }
+
+            val editIdx = editingImageIndex
+            if (editIdx != null && editIdx < pendingImages.size) {
+                MediaEditorDialog(
+                    imageBytes = pendingImages[editIdx],
+                    onSave = { edited ->
+                        pendingImages = pendingImages.toMutableList().also { it[editIdx] = edited }
+                        editingImageIndex = null
+                    },
+                    onCancel = { editingImageIndex = null }
                 )
             }
 
@@ -797,6 +884,118 @@ private fun GroupTopBanner(
     }
 }
 
+private data class GroupReplyQuoteInfo(
+    val senderLabel: String,
+    val snippet: String,
+    val onClick: () -> Unit
+)
+
+@Composable
+private fun GroupSwipeToReplyRow(
+    enabled: Boolean,
+    onReply: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val offsetX = remember { Animatable(0f) }
+    val maxSwipePx = with(LocalDensity.current) { 64.dp.toPx() }
+    val thresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
+    val iconProgress = (offsetX.value / thresholdPx).coerceIn(0f, 1f)
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        if (iconProgress > 0f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 16.dp)
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f * iconProgress)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Reply,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = iconProgress),
+                    modifier = Modifier.size(16.dp + 4.dp * iconProgress)
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(offsetX.value.toInt(), 0) }
+                .then(
+                    if (enabled) {
+                        Modifier.pointerInput(Unit) {
+                            detectHorizontalDragGestures(
+                                onDragEnd = {
+                                    val triggered = offsetX.value > thresholdPx
+                                    scope.launch { offsetX.animateTo(0f, animationSpec = tween(180)) }
+                                    if (triggered) onReply()
+                                },
+                                onDragCancel = {
+                                    scope.launch { offsetX.animateTo(0f, animationSpec = tween(180)) }
+                                },
+                                onHorizontalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    scope.launch {
+                                        offsetX.snapTo((offsetX.value + dragAmount).coerceIn(0f, maxSwipePx))
+                                    }
+                                }
+                            )
+                        }
+                    } else Modifier
+                )
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun GroupReplyQuoteChip(
+    info: GroupReplyQuoteInfo,
+    outgoing: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    val bg = if (outgoing) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceContainerHigh
+    val textColor = if (outgoing) Color.White else MaterialTheme.colorScheme.onSurface
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg)
+            .clickable { info.onClick() }
+            .padding(vertical = 4.dp, horizontal = 6.dp)
+    ) {
+        Box(
+            Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(2.dp))
+                .background(if (outgoing) Color.White else accent)
+        )
+        Column(modifier = Modifier.padding(start = 6.dp)) {
+            Text(
+                info.senderLabel,
+                color = if (outgoing) Color.White else accent,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                info.snippet,
+                color = textColor.copy(alpha = 0.8f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun GroupTextBubble(
@@ -805,6 +1004,7 @@ private fun GroupTextBubble(
     tightWithPrev: Boolean,
     selected: Boolean,
     inSelectionMode: Boolean,
+    quoted: GroupReplyQuoteInfo?,
     onShortClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -825,6 +1025,10 @@ private fun GroupTextBubble(
         modifier = Modifier
             .fillMaxWidth()
             .background(selectionTint)
+            .combinedClickable(
+                onClick = onShortClick,
+                onLongClick = onLongClick
+            )
             .padding(top = if (tightWithPrev) 1.dp else 6.dp),
         horizontalAlignment = align
     ) {
@@ -839,23 +1043,22 @@ private fun GroupTextBubble(
                     )
                 )
                 .background(bg)
-                .combinedClickable(
-                    onClick = onShortClick,
-                    onLongClick = onLongClick
-                )
                 .padding(horizontal = 14.dp, vertical = 9.dp)
         ) {
             Column {
                 if (!outgoing && !tightWithPrev) {
                     Text(
                         senderName,
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.height(2.dp))
                 }
-                Text(msg.body, color = fg, style = MaterialTheme.typography.bodyMedium)
+                if (quoted != null) {
+                    GroupReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 5.dp))
+                }
+                Text(msg.displayBody, color = fg, style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(2.dp))
                 Text(
                     formatChatTime(msg.timestamp),
@@ -876,6 +1079,7 @@ private fun GroupImageBubble(
     tightWithPrev: Boolean,
     selected: Boolean,
     inSelectionMode: Boolean,
+    quoted: GroupReplyQuoteInfo?,
     onShortClick: () -> Unit,
     onLongClick: () -> Unit,
     onSaveImage: (ByteArray) -> Unit,
@@ -915,6 +1119,13 @@ private fun GroupImageBubble(
         modifier = Modifier
             .fillMaxWidth()
             .background(selectionTint)
+            .combinedClickable(
+                onClick = {
+                    if (inSelectionMode) onShortClick()
+                    else if (bitmap != null) showFullscreen = true
+                },
+                onLongClick = onLongClick
+            )
             .padding(top = if (tightWithPrev) 1.dp else 6.dp),
         horizontalAlignment = align
     ) {
@@ -929,24 +1140,20 @@ private fun GroupImageBubble(
                     )
                 )
                 .background(bg)
-                .combinedClickable(
-                    onClick = {
-                        if (inSelectionMode) onShortClick()
-                        else if (bitmap != null) showFullscreen = true
-                    },
-                    onLongClick = onLongClick
-                )
                 .padding(4.dp)
         ) {
             Column {
                 if (!outgoing && !tightWithPrev) {
                     Text(
                         senderName,
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(start = 6.dp, top = 2.dp, bottom = 4.dp)
                     )
+                }
+                if (quoted != null) {
+                    GroupReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 4.dp))
                 }
                 if (currentBitmap != null) {
                     androidx.compose.foundation.Image(
@@ -1058,6 +1265,7 @@ private fun GroupVoiceBubble(
     tightWithPrev: Boolean,
     selected: Boolean,
     inSelectionMode: Boolean,
+    quoted: GroupReplyQuoteInfo?,
     onShortClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -1095,6 +1303,10 @@ private fun GroupVoiceBubble(
         modifier = Modifier
             .fillMaxWidth()
             .background(selectionTint)
+            .combinedClickable(
+                onClick = onShortClick,
+                onLongClick = onLongClick
+            )
             .padding(top = if (tightWithPrev) 1.dp else 6.dp),
         horizontalAlignment = align
     ) {
@@ -1109,21 +1321,20 @@ private fun GroupVoiceBubble(
                     )
                 )
                 .background(bg)
-                .combinedClickable(
-                    onClick = onShortClick,
-                    onLongClick = onLongClick
-                )
                 .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
             Column {
                 if (!outgoing && !tightWithPrev) {
                     Text(
                         senderName,
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.height(2.dp))
+                }
+                if (quoted != null) {
+                    GroupReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 4.dp))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
@@ -1189,9 +1400,12 @@ private fun GroupComposer(
     pendingImages: List<ByteArray>,
     pendingVoiceClip: RecordedClip?,
     isRecording: Boolean,
+    replyPreview: GroupReplyQuoteInfo?,
     onChange: (TextFieldValue) -> Unit,
     onRemoveImage: (Int) -> Unit,
+    onEditImage: (Int) -> Unit,
     onRemoveVoiceClip: () -> Unit,
+    onCancelReply: () -> Unit,
     onSend: () -> Unit,
     onPickImage: () -> Unit,
     onToggleRecording: () -> Unit
@@ -1204,6 +1418,43 @@ private fun GroupComposer(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
     ) {
+        AnimatedVisibility(
+            visible = replyPreview != null,
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it }
+        ) {
+            if (replyPreview != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            strings.replyingToLabel(replyPreview.senderLabel),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            replyPreview.snippet,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    IconButton(onClick = onCancelReply) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = strings.cancelReply,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
         AnimatedVisibility(
             visible = pendingImages.isNotEmpty(),
             enter = fadeIn() + slideInVertically { it },
@@ -1224,7 +1475,8 @@ private fun GroupComposer(
                             modifier = Modifier
                                 .size(72.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                .clickable { onEditImage(idx) },
                             contentAlignment = Alignment.Center
                         ) {
                             if (bitmap != null) {
@@ -1379,35 +1631,62 @@ private fun GroupComposer(
                 }
             )
 
-            IconButton(
-                onClick = onToggleRecording,
-                modifier = Modifier.size(54.dp)
-            ) {
-                Icon(
-                    if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = if (isRecording) strings.stopRecording else strings.recordVoice,
-                    tint = if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(26.dp)
-                )
+            val voiceButtonMode = when {
+                isRecording -> GroupVoiceButtonMode.STOP
+                canSend -> GroupVoiceButtonMode.SEND
+                else -> GroupVoiceButtonMode.MIC
             }
-
-            FilledIconButton(
-                enabled = canSend,
-                onClick = onSend,
-                modifier = Modifier.size(54.dp),
-                shape = CircleShape,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
+            val buttonContainerColor by animateColorAsState(
+                targetValue = if (voiceButtonMode == GroupVoiceButtonMode.SEND) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                animationSpec = tween(220),
+                label = "voiceSendContainer"
+            )
+            val buttonContentColor by animateColorAsState(
+                targetValue = when (voiceButtonMode) {
+                    GroupVoiceButtonMode.SEND -> MaterialTheme.colorScheme.onPrimary
+                    GroupVoiceButtonMode.STOP -> MaterialTheme.colorScheme.error
+                    GroupVoiceButtonMode.MIC -> MaterialTheme.colorScheme.primary
+                },
+                animationSpec = tween(220),
+                label = "voiceSendContent"
+            )
+            Box(
+                modifier = Modifier
+                    .size(54.dp)
+                    .clip(CircleShape)
+                    .background(buttonContainerColor)
+                    .clickable {
+                        if (voiceButtonMode == GroupVoiceButtonMode.SEND) onSend() else onToggleRecording()
+                    },
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Send,
-                    contentDescription = strings.sendButton,
-                    modifier = Modifier.size(24.dp)
-                )
+                AnimatedContent(
+                    targetState = voiceButtonMode,
+                    transitionSpec = {
+                        (scaleIn(initialScale = 0.5f) + fadeIn(tween(150))) togetherWith
+                            (scaleOut(targetScale = 0.5f) + fadeOut(tween(150)))
+                    },
+                    label = "voiceSendIcon"
+                ) { mode ->
+                    Icon(
+                        imageVector = when (mode) {
+                            GroupVoiceButtonMode.SEND -> Icons.AutoMirrored.Filled.Send
+                            GroupVoiceButtonMode.STOP -> Icons.Default.Stop
+                            GroupVoiceButtonMode.MIC -> Icons.Default.Mic
+                        },
+                        contentDescription = when (mode) {
+                            GroupVoiceButtonMode.SEND -> strings.sendButton
+                            GroupVoiceButtonMode.STOP -> strings.stopRecording
+                            GroupVoiceButtonMode.MIC -> strings.recordVoice
+                        },
+                        tint = buttonContentColor,
+                        modifier = Modifier.size(if (mode == GroupVoiceButtonMode.SEND) 24.dp else 26.dp)
+                    )
+                }
             }
         }
     }
 }
+
+private enum class GroupVoiceButtonMode { MIC, STOP, SEND }
 

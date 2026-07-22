@@ -1,21 +1,30 @@
 ﻿package dev.stade.ui.screens
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +32,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -52,6 +62,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.filled.Verified
@@ -59,11 +70,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -88,18 +97,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import dev.stade.AppContainer
@@ -108,10 +124,12 @@ import dev.stade.audio.rememberAudioPermissionState
 import dev.stade.audio.rememberAudioPlayer
 import dev.stade.audio.rememberAudioRecorder
 import dev.stade.identity.LocalIdentity
+import dev.stade.media.MediaEditorDialog
 import dev.stade.message.IMAGE_BODY_PREFIX
 import dev.stade.message.Message
 import dev.stade.message.MessageDirection
 import dev.stade.message.MessageType
+import dev.stade.message.previewBody
 import dev.stade.notification.cancelMessagesNotification
 import dev.stade.notification.clearAllMessageNotifications
 import dev.stade.sync.SyncEngine
@@ -142,12 +160,13 @@ fun ChatScreen(
     owner: LocalIdentity,
     contactId: String,
     onBack: (() -> Unit)?,
-    onVerify: () -> Unit,
+    onOpenProfile: () -> Unit,
     onContactDeleted: (() -> Unit)? = null
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
+    val haptic = LocalHapticFeedback.current
     val contact = remember(contactId) { container.contacts.get(contactId) }
     val messages by container.messages.observeMessages(contactId).collectAsState(initial = emptyList())
     val connected by container.sync.connectedContacts.collectAsState()
@@ -233,6 +252,7 @@ fun ChatScreen(
     val MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3 MB
 
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
+    var editingImageIndex by remember { mutableStateOf<Int?>(null) }
 
     val imagePicker = rememberMultiImagePickerLauncher { imagesList ->
         val accepted = imagesList.filter { it.size <= MAX_IMAGE_BYTES }
@@ -278,6 +298,8 @@ fun ChatScreen(
             recorder.start()
         }
     }
+
+    var replyTarget by remember { mutableStateOf<Message?>(null) }
 
     var prevColumnHeight by remember { mutableStateOf(Int.MAX_VALUE) }
 
@@ -368,7 +390,7 @@ fun ChatScreen(
                         }
                         if (singleSelectedTextMsg != null) {
                             IconButton(onClick = {
-                                clipboard.setText(AnnotatedString(singleSelectedTextMsg.body))
+                                clipboard.setText(AnnotatedString(singleSelectedTextMsg.displayBody))
                                 clearSelection()
                                 showNotification(strings.messageCopied, NotificationKind.Success)
                             }) {
@@ -390,7 +412,10 @@ fun ChatScreen(
                         containerColor = MaterialTheme.colorScheme.surface
                     ),
                     title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { onOpenProfile() }
+                        ) {
                             Avatar(name = contact?.nickname ?: "?", size = 36.dp)
                             Spacer(Modifier.size(10.dp))
                             Column {
@@ -433,9 +458,6 @@ fun ChatScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = onVerify) {
-                            Icon(Icons.Default.Verified, contentDescription = strings.verifyAction)
-                        }
                         IconButton(
                             onClick = { showDeleteDialog = true },
                             enabled = !deleting
@@ -539,51 +561,88 @@ fun ChatScreen(
                                     prev.direction == msg.direction &&
                                     (msg.timestamp - prev.timestamp) < 60_000L
                             val isSelected = selectedMessageIds.contains(msg.id)
-                            if (msg.type == MessageType.IMAGE) {
-                                ImageBubble(
-                                    msg = msg,
-                                    tightWithPrev = tight,
-                                    selected = isSelected,
-                                    inSelectionMode = inSelectionMode,
-                                    onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
-                                    onLongClick = { toggleSelection(msg.id) },
-                                    onSaveImage = { bytes ->
-                                        scope.launch {
-                                            val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
-                                            showNotification(
-                                                if (ok) strings.imageSaved else strings.imageSaveFailed,
-                                                if (ok) NotificationKind.Success else NotificationKind.Error
-                                            )
-                                        }
-                                    },
-                                    onCopyImage = { bytes ->
-                                        scope.launch {
-                                            val ok = copyImageToClipboard(bytes)
-                                            showNotification(
-                                                if (ok) strings.imageCopied else strings.imageCopyFailed,
-                                                if (ok) NotificationKind.Success else NotificationKind.Error
-                                            )
-                                        }
+                            val quotedMsg = remember(msg.id, msg.replyToId, messages) {
+                                msg.replyToId?.let { rid -> messages.firstOrNull { it.id == rid } }
+                            }
+                            val quoted = remember(msg.id, quotedMsg) {
+                                when {
+                                    msg.replyToId == null -> null
+                                    quotedMsg != null -> ReplyQuoteInfo(
+                                        senderLabel = if (quotedMsg.direction == MessageDirection.OUT) strings.youLabel else (contact?.nickname ?: ""),
+                                        snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage)
+                                    ) {
+                                        val target = messages.indexOfFirst { it.id == quotedMsg.id }
+                                        if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
                                     }
-                                )
-                            } else if (msg.type == MessageType.VOICE) {
-                                VoiceBubble(
-                                    msg = msg,
-                                    tightWithPrev = tight,
-                                    selected = isSelected,
-                                    inSelectionMode = inSelectionMode,
-                                    onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
-                                    onLongClick = { toggleSelection(msg.id) }
-                                )
-                            } else {
-                                Bubble(
-                                    msg = msg,
-                                    tightWithPrev = tight,
-                                    selected = isSelected,
-                                    inSelectionMode = inSelectionMode,
-                                    onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
-                                    onLongClick = { toggleSelection(msg.id) }
-                                )
+                                    else -> ReplyQuoteInfo(
+                                        senderLabel = "",
+                                        snippet = strings.originalMessageUnavailable,
+                                        onClick = {}
+                                    )
+                                }
+                            }
+                            SwipeToReplyRow(
+                                enabled = !inSelectionMode,
+                                onReply = { replyTarget = msg }
+                            ) {
+                                if (msg.type == MessageType.IMAGE) {
+                                    ImageBubble(
+                                        msg = msg,
+                                        tightWithPrev = tight,
+                                        selected = isSelected,
+                                        inSelectionMode = inSelectionMode,
+                                        quoted = quoted,
+                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            toggleSelection(msg.id)
+                                        },
+                                        onSaveImage = { bytes ->
+                                            scope.launch {
+                                                val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
+                                                showNotification(
+                                                    if (ok) strings.imageSaved else strings.imageSaveFailed,
+                                                    if (ok) NotificationKind.Success else NotificationKind.Error
+                                                )
+                                            }
+                                        },
+                                        onCopyImage = { bytes ->
+                                            scope.launch {
+                                                val ok = copyImageToClipboard(bytes)
+                                                showNotification(
+                                                    if (ok) strings.imageCopied else strings.imageCopyFailed,
+                                                    if (ok) NotificationKind.Success else NotificationKind.Error
+                                                )
+                                            }
+                                        }
+                                    )
+                                } else if (msg.type == MessageType.VOICE) {
+                                    VoiceBubble(
+                                        msg = msg,
+                                        tightWithPrev = tight,
+                                        selected = isSelected,
+                                        inSelectionMode = inSelectionMode,
+                                        quoted = quoted,
+                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            toggleSelection(msg.id)
+                                        }
+                                    )
+                                } else {
+                                    Bubble(
+                                        msg = msg,
+                                        tightWithPrev = tight,
+                                        selected = isSelected,
+                                        inSelectionMode = inSelectionMode,
+                                        quoted = quoted,
+                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            toggleSelection(msg.id)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -594,37 +653,60 @@ fun ChatScreen(
                     pendingImages = pendingImages,
                     pendingVoiceClip = pendingVoiceClip,
                     isRecording = isRecording,
+                    replyPreview = replyTarget?.let { target ->
+                        ReplyQuoteInfo(
+                            senderLabel = if (target.direction == MessageDirection.OUT) strings.youLabel else (contact?.nickname ?: ""),
+                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage),
+                            onClick = {}
+                        )
+                    },
                     onChange = { draft = it },
                     onRemoveImage = { idx ->
                         pendingImages = pendingImages.toMutableList().also { it.removeAt(idx) }
                     },
+                    onEditImage = { idx -> editingImageIndex = idx },
                     onRemoveVoiceClip = { pendingVoiceClip = null },
+                    onCancelReply = { replyTarget = null },
                     onSend = {
                         val c = contact ?: return@Composer
                         val text = draft.text.trim()
                         val images = pendingImages
                         val voiceClip = pendingVoiceClip
+                        val replyId = replyTarget?.id
                         if (text.isEmpty() && images.isEmpty() && voiceClip == null) return@Composer
                         draft = TextFieldValue("")
                         pendingImages = emptyList()
                         pendingVoiceClip = null
+                        replyTarget = null
                         scope.launch {
                             if (text.isNotEmpty()) {
-                                runCatching { container.chat.send(owner, c, text) }
+                                runCatching { container.chat.send(owner, c, text, replyId) }
                                     .onFailure { showNotification(strings.sendFailed(it.message ?: ""), NotificationKind.Error) }
                             }
                             images.forEach { imageBytes ->
-                                runCatching { container.chat.sendImage(owner, c, imageBytes) }
+                                runCatching { container.chat.sendImage(owner, c, imageBytes, replyId) }
                                     .onFailure { showNotification(strings.photoSendFailed, NotificationKind.Error) }
                             }
                             if (voiceClip != null) {
-                                runCatching { container.chat.sendVoice(owner, c, voiceClip.opusBytes, voiceClip.durationMs) }
+                                runCatching { container.chat.sendVoice(owner, c, voiceClip.opusBytes, voiceClip.durationMs, replyId) }
                                     .onFailure { showNotification(strings.voiceSendFailed, NotificationKind.Error) }
                             }
                         }
                     },
                     onPickImage = { imagePicker.launch() },
                     onToggleRecording = { toggleRecording() }
+                )
+            }
+
+            val editIdx = editingImageIndex
+            if (editIdx != null && editIdx < pendingImages.size) {
+                MediaEditorDialog(
+                    imageBytes = pendingImages[editIdx],
+                    onSave = { edited ->
+                        pendingImages = pendingImages.toMutableList().also { it[editIdx] = edited }
+                        editingImageIndex = null
+                    },
+                    onCancel = { editingImageIndex = null }
                 )
             }
 
@@ -846,9 +928,12 @@ private fun Composer(
     pendingImages: List<ByteArray>,
     pendingVoiceClip: RecordedClip?,
     isRecording: Boolean,
+    replyPreview: ReplyQuoteInfo?,
     onChange: (TextFieldValue) -> Unit,
     onRemoveImage: (Int) -> Unit,
+    onEditImage: (Int) -> Unit,
     onRemoveVoiceClip: () -> Unit,
+    onCancelReply: () -> Unit,
     onSend: () -> Unit,
     onPickImage: () -> Unit,
     onToggleRecording: () -> Unit
@@ -861,6 +946,43 @@ private fun Composer(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
     ) {
+        AnimatedVisibility(
+            visible = replyPreview != null,
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it }
+        ) {
+            if (replyPreview != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            strings.replyingToLabel(replyPreview.senderLabel),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            replyPreview.snippet,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    IconButton(onClick = onCancelReply) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = strings.cancelReply,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
         AnimatedVisibility(
             visible = pendingImages.isNotEmpty(),
             enter = fadeIn() + slideInVertically { it },
@@ -881,7 +1003,8 @@ private fun Composer(
                             modifier = Modifier
                                 .size(72.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                .clickable { onEditImage(idx) },
                             contentAlignment = Alignment.Center
                         ) {
                             if (bitmap != null) {
@@ -1036,40 +1159,176 @@ private fun Composer(
                 }
             )
 
-            IconButton(
-                onClick = onToggleRecording,
-                modifier = Modifier.size(54.dp)
-            ) {
-                Icon(
-                    if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = if (isRecording) strings.stopRecording else strings.recordVoice,
-                    tint = if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(26.dp)
-                )
+            val voiceButtonMode = when {
+                isRecording -> VoiceButtonMode.STOP
+                canSend -> VoiceButtonMode.SEND
+                else -> VoiceButtonMode.MIC
             }
-
-            FilledIconButton(
-                enabled = canSend,
-                onClick = onSend,
-                modifier = Modifier.size(54.dp),
-                shape = CircleShape,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
+            val buttonContainerColor by animateColorAsState(
+                targetValue = if (voiceButtonMode == VoiceButtonMode.SEND) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                animationSpec = tween(220),
+                label = "voiceSendContainer"
+            )
+            val buttonContentColor by animateColorAsState(
+                targetValue = when (voiceButtonMode) {
+                    VoiceButtonMode.SEND -> MaterialTheme.colorScheme.onPrimary
+                    VoiceButtonMode.STOP -> MaterialTheme.colorScheme.error
+                    VoiceButtonMode.MIC -> MaterialTheme.colorScheme.primary
+                },
+                animationSpec = tween(220),
+                label = "voiceSendContent"
+            )
+            Box(
+                modifier = Modifier
+                    .size(54.dp)
+                    .clip(CircleShape)
+                    .background(buttonContainerColor)
+                    .clickable {
+                        if (voiceButtonMode == VoiceButtonMode.SEND) onSend() else onToggleRecording()
+                    },
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Send,
-                    contentDescription = strings.sendButton,
-                    modifier = Modifier.size(24.dp)
-                )
+                AnimatedContent(
+                    targetState = voiceButtonMode,
+                    transitionSpec = {
+                        (scaleIn(initialScale = 0.5f) + fadeIn(tween(150))) togetherWith
+                            (scaleOut(targetScale = 0.5f) + fadeOut(tween(150)))
+                    },
+                    label = "voiceSendIcon"
+                ) { mode ->
+                    Icon(
+                        imageVector = when (mode) {
+                            VoiceButtonMode.SEND -> Icons.AutoMirrored.Filled.Send
+                            VoiceButtonMode.STOP -> Icons.Default.Stop
+                            VoiceButtonMode.MIC -> Icons.Default.Mic
+                        },
+                        contentDescription = when (mode) {
+                            VoiceButtonMode.SEND -> strings.sendButton
+                            VoiceButtonMode.STOP -> strings.stopRecording
+                            VoiceButtonMode.MIC -> strings.recordVoice
+                        },
+                        tint = buttonContentColor,
+                        modifier = Modifier.size(if (mode == VoiceButtonMode.SEND) 24.dp else 26.dp)
+                    )
+                }
             }
         }
     }
 }
 
+private enum class VoiceButtonMode { MIC, STOP, SEND }
 
+private data class ReplyQuoteInfo(
+    val senderLabel: String,
+    val snippet: String,
+    val onClick: () -> Unit
+)
 
+@Composable
+private fun SwipeToReplyRow(
+    enabled: Boolean,
+    onReply: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val offsetX = remember { Animatable(0f) }
+    val maxSwipePx = with(LocalDensity.current) { 64.dp.toPx() }
+    val thresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
+    val iconProgress = (offsetX.value / thresholdPx).coerceIn(0f, 1f)
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        if (iconProgress > 0f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 16.dp)
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f * iconProgress)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Reply,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = iconProgress),
+                    modifier = Modifier.size(16.dp + 4.dp * iconProgress)
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(offsetX.value.toInt(), 0) }
+                .then(
+                    if (enabled) {
+                        Modifier.pointerInput(Unit) {
+                            detectHorizontalDragGestures(
+                                onDragEnd = {
+                                    val triggered = offsetX.value > thresholdPx
+                                    scope.launch { offsetX.animateTo(0f, animationSpec = tween(180)) }
+                                    if (triggered) onReply()
+                                },
+                                onDragCancel = {
+                                    scope.launch { offsetX.animateTo(0f, animationSpec = tween(180)) }
+                                },
+                                onHorizontalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    scope.launch {
+                                        offsetX.snapTo((offsetX.value + dragAmount).coerceIn(0f, maxSwipePx))
+                                    }
+                                }
+                            )
+                        }
+                    } else Modifier
+                )
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun ReplyQuoteChip(
+    info: ReplyQuoteInfo,
+    outgoing: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    val bg = if (outgoing) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceContainerHigh
+    val textColor = if (outgoing) Color.White else MaterialTheme.colorScheme.onSurface
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg)
+            .clickable { info.onClick() }
+            .padding(vertical = 4.dp, horizontal = 6.dp)
+    ) {
+        Box(
+            Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(2.dp))
+                .background(if (outgoing) Color.White else accent)
+        )
+        Column(modifier = Modifier.padding(start = 6.dp)) {
+            Text(
+                info.senderLabel,
+                color = if (outgoing) Color.White else accent,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                info.snippet,
+                color = textColor.copy(alpha = 0.8f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1078,6 +1337,7 @@ private fun Bubble(
     tightWithPrev: Boolean,
     selected: Boolean,
     inSelectionMode: Boolean,
+    quoted: ReplyQuoteInfo?,
     onShortClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -1099,6 +1359,10 @@ private fun Bubble(
         modifier = Modifier
             .fillMaxWidth()
             .background(selectionTint)
+            .combinedClickable(
+                onClick = onShortClick,
+                onLongClick = onLongClick
+            )
             .padding(top = if (tightWithPrev) 1.dp else 6.dp),
         horizontalAlignment = align
     ) {
@@ -1113,14 +1377,13 @@ private fun Bubble(
                     )
                 )
                 .background(bg)
-                .combinedClickable(
-                    onClick = onShortClick,
-                    onLongClick = onLongClick
-                )
                 .padding(horizontal = 14.dp, vertical = 9.dp)
         ) {
             Column {
-                Text(msg.body, color = fg, style = MaterialTheme.typography.bodyMedium)
+                if (quoted != null) {
+                    ReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 5.dp))
+                }
+                Text(msg.displayBody, color = fg, style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -1149,6 +1412,7 @@ private fun ImageBubble(
     tightWithPrev: Boolean,
     selected: Boolean,
     inSelectionMode: Boolean,
+    quoted: ReplyQuoteInfo?,
     onShortClick: () -> Unit,
     onLongClick: () -> Unit,
     onSaveImage: (ByteArray) -> Unit,
@@ -1189,6 +1453,13 @@ private fun ImageBubble(
         modifier = Modifier
             .fillMaxWidth()
             .background(selectionTint)
+            .combinedClickable(
+                onClick = {
+                    if (inSelectionMode) onShortClick()
+                    else if (bitmap != null) showFullscreen = true
+                },
+                onLongClick = onLongClick
+            )
             .padding(top = if (tightWithPrev) 1.dp else 6.dp),
         horizontalAlignment = align
     ) {
@@ -1203,16 +1474,12 @@ private fun ImageBubble(
                     )
                 )
                 .background(bg)
-                .combinedClickable(
-                    onClick = {
-                        if (inSelectionMode) onShortClick()
-                        else if (bitmap != null) showFullscreen = true
-                    },
-                    onLongClick = onLongClick
-                )
                 .padding(4.dp)
         ) {
             Column {
+                if (quoted != null) {
+                    ReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 4.dp))
+                }
                 if (currentBitmap != null) {
                     androidx.compose.foundation.Image(
                         bitmap = currentBitmap,
@@ -1330,6 +1597,7 @@ private fun VoiceBubble(
     tightWithPrev: Boolean,
     selected: Boolean,
     inSelectionMode: Boolean,
+    quoted: ReplyQuoteInfo?,
     onShortClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -1368,6 +1636,10 @@ private fun VoiceBubble(
         modifier = Modifier
             .fillMaxWidth()
             .background(selectionTint)
+            .combinedClickable(
+                onClick = onShortClick,
+                onLongClick = onLongClick
+            )
             .padding(top = if (tightWithPrev) 1.dp else 6.dp),
         horizontalAlignment = align
     ) {
@@ -1382,13 +1654,12 @@ private fun VoiceBubble(
                     )
                 )
                 .background(bg)
-                .combinedClickable(
-                    onClick = onShortClick,
-                    onLongClick = onLongClick
-                )
                 .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
             Column {
+                if (quoted != null) {
+                    ReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 4.dp))
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = {

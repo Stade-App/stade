@@ -44,7 +44,7 @@ import dev.stade.ui.components.BrandMark
 import dev.stade.ui.components.PlatformVerticalScrollbar
 import dev.stade.ui.i18n.LocalStrings
 
-private const val APP_VERSION = "0.1.0"
+private const val APP_VERSION = "0.1.1"
 
 private data class SocialLink(
     val label: String,

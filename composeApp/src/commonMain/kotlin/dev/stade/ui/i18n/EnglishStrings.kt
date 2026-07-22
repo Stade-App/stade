@@ -56,6 +56,7 @@ object EnglishStrings : AppStrings() {
     override val noContactsHint = "Tap the button in the bottom right to add a new contact."
     override val noSearchResults = "No matching contacts"
     override val showVerificationCode = "Show verification code"
+    override val viewProfileAction = "View profile"
     override val deleteContact = "Delete contact"
     override val pinChatAction = "Pin chat"
     override val unpinChatAction = "Unpin chat"
@@ -338,6 +339,7 @@ object EnglishStrings : AppStrings() {
     override val bridgesNotSupportedNote = "Bridge support isn't available on this platform yet."
 
     override val verifyContactTitle = "Verify contact"
+    override val profileTitle = "Profile"
     override val safetyNumber = "Safety number"
     override val safetyNumberNote =
         "Compare this number in person or through another secure channel."
@@ -357,6 +359,14 @@ object EnglishStrings : AppStrings() {
     override val closePhoto = "Close"
     override val removeAttachment = "Remove"
     override fun attachmentCount(count: Int) = if (count == 1) "1 photo attached" else "$count photos attached"
+    override val pasteButton = "Paste"
+
+    override val editImageAction = "Edit"
+    override val cropToolAction = "Crop"
+    override val drawToolAction = "Draw"
+    override val undoAction = "Undo"
+    override val resetCropAction = "Reset"
+    override val saveEditsAction = "Save"
 
     override val recordVoice = "Record voice message"
     override val stopRecording = "Stop recording"
@@ -364,6 +374,11 @@ object EnglishStrings : AppStrings() {
     override val voiceSendFailed = "Failed to send voice message"
     override val micPermissionDenied = "Microphone permission is required to record voice messages"
     override val voiceMaxDurationReached = "Maximum voice message length reached"
+
+    override val replyAction = "Reply"
+    override fun replyingToLabel(name: String) = "Replying to $name"
+    override val cancelReply = "Cancel reply"
+    override val originalMessageUnavailable = "Original message unavailable"
 
     override val createGroupTitle = "Create Group"
     override val createGroupAction = "Create Group"

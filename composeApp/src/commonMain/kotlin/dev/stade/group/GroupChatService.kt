@@ -5,6 +5,7 @@ import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
 import dev.stade.identity.LocalIdentity
 import dev.stade.message.encodeImageBody
+import dev.stade.message.encodeReplyBody
 import dev.stade.message.encodeVoiceBody
 import dev.stade.sync.SyncEngine
 import kotlinx.coroutines.CoroutineScope
@@ -29,14 +30,15 @@ class GroupChatService(
         }.launchIn(scope)
     }
 
-    suspend fun sendMessage(owner: LocalIdentity, groupId: String, body: String): Boolean {
+    suspend fun sendMessage(owner: LocalIdentity, groupId: String, body: String, replyToId: String? = null): Boolean {
         val group = groups.getGroup(groupId) ?: return false
         val members = group.memberIds
         if (members.isEmpty()) return false
+        val wireBody = if (replyToId != null) encodeReplyBody(replyToId, body) else body
         val messageId = Encoding.toHex(crypto.randomBytes(16))
         val timestamp = Clock.System.now().toEpochMilliseconds()
-        val encodedBody = "$GRP_MSG_PREFIX$groupId:${owner.stadeId}\n$body"
-        groups.saveOutgoing(messageId, groupId, owner.stadeId, body, timestamp)
+        val encodedBody = "$GRP_MSG_PREFIX$groupId:${owner.stadeId}\n$wireBody"
+        groups.saveOutgoing(messageId, groupId, owner.stadeId, wireBody, timestamp)
         members.forEach { contactId ->
             val contact = contacts.get(contactId) ?: return@forEach
             runCatching {
@@ -46,12 +48,12 @@ class GroupChatService(
         return true
     }
 
-    suspend fun sendImage(owner: LocalIdentity, groupId: String, imageBytes: ByteArray): Boolean {
-        return sendMessage(owner, groupId, encodeImageBody(imageBytes))
+    suspend fun sendImage(owner: LocalIdentity, groupId: String, imageBytes: ByteArray, replyToId: String? = null): Boolean {
+        return sendMessage(owner, groupId, encodeImageBody(imageBytes), replyToId)
     }
 
-    suspend fun sendVoice(owner: LocalIdentity, groupId: String, opusBytes: ByteArray, durationMs: Int): Boolean {
-        return sendMessage(owner, groupId, encodeVoiceBody(opusBytes, durationMs))
+    suspend fun sendVoice(owner: LocalIdentity, groupId: String, opusBytes: ByteArray, durationMs: Int, replyToId: String? = null): Boolean {
+        return sendMessage(owner, groupId, encodeVoiceBody(opusBytes, durationMs), replyToId)
     }
 
     suspend fun kickMember(owner: LocalIdentity, group: GroupInfo, memberId: String): Boolean {

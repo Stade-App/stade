@@ -68,8 +68,6 @@ class EmbeddedTorManager(
                 appendLine("Log notice stdout")
                 appendLine("Log [handshake,rend,circ,dir]info stdout")
                 appendLine("CircuitBuildTimeout 60")
-                appendLine("NumEntryGuards 3")
-                appendLine("NumDirectoryGuards 3")
                 val ownerPid = pidProvider()
                 if (ownerPid > 0) appendLine("__OwningControllerProcess $ownerPid")
                 layout.geoipFile?.let { appendLine("GeoIPFile ${it.absolutePath}") }

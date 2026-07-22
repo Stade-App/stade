@@ -6,18 +6,24 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,7 +54,6 @@ import dev.stade.AppContainer
 import dev.stade.contact.InviteParseResult
 import dev.stade.identity.LocalIdentity
 import dev.stade.transport.TransportType
-import dev.stade.ui.components.StadeIdCard
 import dev.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -101,6 +106,7 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text(strings.addContactTitle) },
@@ -113,7 +119,12 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
         }
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(scroll),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                .padding(16.dp)
+                .verticalScroll(scroll),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             StepCard(stepNumber = 1, title = strings.step1Title) {
@@ -146,14 +157,6 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                     Spacer(Modifier.width(8.dp))
                     Text(strings.copyInviteCode(invite.display.length))
                 }
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    strings.yourStadeId,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                StadeIdCard(stadeId = owner.stadeId)
             }
 
             StepCard(stepNumber = 2, title = strings.step2Title) {
@@ -167,6 +170,14 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                         .height(120.dp),
                     maxLines = 4,
                     shape = MaterialTheme.shapes.medium,
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            val clipped = clipboard.getText()?.text
+                            if (!clipped.isNullOrEmpty()) pastedCode = clipped
+                        }) {
+                            Icon(Icons.Default.ContentPaste, contentDescription = strings.pasteButton)
+                        }
+                    },
                     supportingText = {
                         val n = pastedCode.replace(Regex("[^A-Za-z0-9]"), "").length
                         Text(strings.charCount(n))

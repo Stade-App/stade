@@ -49,6 +49,7 @@ abstract class AppStrings {
     abstract val noContactsHint: String
     abstract val noSearchResults: String
     abstract val showVerificationCode: String
+    abstract val viewProfileAction: String
     abstract val deleteContact: String
     abstract val pinChatAction: String
     abstract val unpinChatAction: String
@@ -279,6 +280,7 @@ abstract class AppStrings {
     abstract val bridgesNotSupportedNote: String
 
     abstract val verifyContactTitle: String
+    abstract val profileTitle: String
     abstract val safetyNumber: String
     abstract val safetyNumberNote: String
     abstract val markAsVerified: String
@@ -296,6 +298,14 @@ abstract class AppStrings {
     abstract val closePhoto: String
     abstract val removeAttachment: String
     abstract fun attachmentCount(count: Int): String
+    abstract val pasteButton: String
+
+    abstract val editImageAction: String
+    abstract val cropToolAction: String
+    abstract val drawToolAction: String
+    abstract val undoAction: String
+    abstract val resetCropAction: String
+    abstract val saveEditsAction: String
 
     abstract val recordVoice: String
     abstract val stopRecording: String
@@ -303,6 +313,11 @@ abstract class AppStrings {
     abstract val voiceSendFailed: String
     abstract val micPermissionDenied: String
     abstract val voiceMaxDurationReached: String
+
+    abstract val replyAction: String
+    abstract fun replyingToLabel(name: String): String
+    abstract val cancelReply: String
+    abstract val originalMessageUnavailable: String
 
     abstract val createGroupTitle: String
     abstract val createGroupAction: String

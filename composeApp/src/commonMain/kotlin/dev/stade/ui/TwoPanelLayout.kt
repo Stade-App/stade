@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
@@ -121,7 +122,7 @@ private sealed class PanelRight {
     data object Transports : PanelRight()
     data object About : PanelRight()
     data object AddContact : PanelRight()
-    data class Verify(val contactId: String) : PanelRight()
+    data class Verify(val contactId: String, val from: PanelRight = Chat(contactId)) : PanelRight()
     data class PinSetup(val requireCurrent: Boolean, val ret: PanelRight) : PanelRight()
 }
 
@@ -616,7 +617,7 @@ fun TwoPanelLayout(
                     owner = owner,
                     contactId = rp.contactId,
                     onBack = null,
-                    onVerify = { right = PanelRight.Verify(rp.contactId) },
+                    onOpenProfile = { right = PanelRight.Verify(rp.contactId, from = PanelRight.Chat(rp.contactId)) },
                     onContactDeleted = { right = PanelRight.Empty }
                 )
 
@@ -668,7 +669,7 @@ fun TwoPanelLayout(
                     container = container,
                     owner = owner,
                     contactId = rp.contactId,
-                    onBack = { right = PanelRight.Chat(rp.contactId) }
+                    onBack = { right = rp.from }
                 )
 
                 is PanelRight.CreateGroup -> CreateGroupScreen(
@@ -690,7 +691,10 @@ fun TwoPanelLayout(
                     container = container,
                     owner = owner,
                     groupId = rp.groupId,
-                    onBack = { right = PanelRight.GroupChat(rp.groupId) }
+                    onBack = { right = PanelRight.GroupChat(rp.groupId) },
+                    onOpenProfile = { memberId ->
+                        right = PanelRight.Verify(memberId, from = PanelRight.GroupMembers(rp.groupId))
+                    }
                 )
             }
         }
@@ -874,10 +878,10 @@ private fun PanelContactRow(
             )
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text(strings.showVerificationCode) },
+                text = { Text(strings.viewProfileAction) },
                 leadingIcon = {
                     Icon(
-                        Icons.Default.Verified,
+                        Icons.Default.Person,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary
                     )

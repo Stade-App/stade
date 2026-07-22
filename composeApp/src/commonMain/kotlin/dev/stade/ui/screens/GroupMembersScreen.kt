@@ -1,6 +1,7 @@
 package dev.stade.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,7 +55,8 @@ fun GroupMembersScreen(
     container: AppContainer,
     owner: LocalIdentity,
     groupId: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenProfile: (String) -> Unit
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
@@ -146,6 +148,9 @@ fun GroupMembersScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .then(
+                                if (!isSelf) Modifier.clickable { onOpenProfile(memberId) } else Modifier
+                            )
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {

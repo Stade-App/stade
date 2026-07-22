@@ -1,6 +1,8 @@
 package dev.stade.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -25,12 +28,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -39,8 +44,8 @@ import androidx.compose.ui.unit.sp
 import dev.stade.AppContainer
 import dev.stade.identity.LocalIdentity
 import dev.stade.ui.components.Avatar
-import dev.stade.ui.components.StadeIdCard
 import dev.stade.ui.i18n.LocalStrings
+import dev.stade.ui.theme.StadeColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,11 +61,13 @@ fun VerifyContactScreen(
         contact?.let { container.fingerprint.safetyNumber(owner.publicSigningKey, it.publicSigningKey) }
     }
     var verified by remember(contact?.id) { mutableStateOf(contact?.verified == true) }
+    val connected by container.sync.connectedContacts.collectAsState()
+    val isOnline = contact != null && connected.contains(contact.id)
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(strings.verifyContactTitle) },
+                title = { Text(contact?.nickname ?: strings.profileTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
@@ -93,9 +100,21 @@ fun VerifyContactScreen(
                     Avatar(name = contact?.nickname ?: "?", size = 64.dp)
                     Spacer(Modifier.height(10.dp))
                     Text(contact?.nickname ?: "", style = MaterialTheme.typography.titleMedium)
-                    contact?.let {
-                        Spacer(Modifier.height(10.dp))
-                        StadeIdCard(stadeId = it.stadeId, title = strings.contactStadeId)
+                    if (contact != null) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(8.dp).clip(CircleShape).background(
+                                    if (isOnline) StadeColors.online else StadeColors.offline
+                                )
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                if (isOnline) strings.online else strings.offline,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                     if (verified) {
                         Spacer(Modifier.height(4.dp))

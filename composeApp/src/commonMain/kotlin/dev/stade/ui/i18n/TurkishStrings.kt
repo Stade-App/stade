@@ -56,6 +56,7 @@ object TurkishStrings : AppStrings() {
     override val noContactsHint = "Yeni bir kişi eklemek için sağ alttaki butona dokun."
     override val noSearchResults = "Eşleşen kişi yok"
     override val showVerificationCode = "Doğrulama kodunu göster"
+    override val viewProfileAction = "Profili görüntüle"
     override val deleteContact = "Kişiyi sil"
     override val pinChatAction = "Sohbeti sabitle"
     override val unpinChatAction = "Sabitlemeyi kaldır"
@@ -337,6 +338,7 @@ object TurkishStrings : AppStrings() {
     override val bridgesNotSupportedNote = "Köprü desteği bu platformda henüz mevcut değil."
 
     override val verifyContactTitle = "Kişiyi doğrula"
+    override val profileTitle = "Profil"
     override val safetyNumber = "Güvenlik numarası"
     override val safetyNumberNote =
         "Bu numarayı yüz yüze veya başka bir güvenli kanaldan karşılaştır."
@@ -356,6 +358,14 @@ object TurkishStrings : AppStrings() {
     override val closePhoto = "Kapat"
     override val removeAttachment = "Kaldır"
     override fun attachmentCount(count: Int) = if (count == 1) "1 fotoğraf eklendi" else "$count fotoğraf eklendi"
+    override val pasteButton = "Yapıştır"
+
+    override val editImageAction = "Düzenle"
+    override val cropToolAction = "Kırp"
+    override val drawToolAction = "Çiz"
+    override val undoAction = "Geri al"
+    override val resetCropAction = "Sıfırla"
+    override val saveEditsAction = "Kaydet"
 
     override val recordVoice = "Sesli mesaj kaydet"
     override val stopRecording = "Kaydı durdur"
@@ -363,6 +373,11 @@ object TurkishStrings : AppStrings() {
     override val voiceSendFailed = "Sesli mesaj gönderilemedi"
     override val micPermissionDenied = "Sesli mesaj kaydetmek için mikrofon izni gerekiyor"
     override val voiceMaxDurationReached = "Maksimum sesli mesaj uzunluğuna ulaşıldı"
+
+    override val replyAction = "Yanıtla"
+    override fun replyingToLabel(name: String) = "$name yanıtlanıyor"
+    override val cancelReply = "Yanıtlamayı iptal et"
+    override val originalMessageUnavailable = "Orijinal mesaj kullanılamıyor"
 
     override val createGroupTitle = "Grup Oluştur"
     override val createGroupAction = "Grup Oluştur"

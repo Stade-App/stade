@@ -8,6 +8,8 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.Person
+import androidx.core.graphics.drawable.IconCompat
 import dev.stade.MainActivity
 import dev.stade.StadeApplication
 import dev.stade.notification.NotificationAvatar
@@ -170,12 +172,19 @@ class StadeService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val avatarBitmap = runCatching { NotificationAvatar.bitmapFor(senderName) }.getOrNull()
+        val senderPerson = Person.Builder()
+            .setName(senderName)
+            .apply { avatarBitmap?.let { setIcon(IconCompat.createWithBitmap(it)) } }
+            .build()
+        val userPerson = Person.Builder().setName("Me").build()
         val notif = NotificationCompat.Builder(this, msgChannelId)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
-            .apply { avatarBitmap?.let { setLargeIcon(it) } }
+            .setStyle(
+                NotificationCompat.MessagingStyle(userPerson)
+                    .addMessage(preview, System.currentTimeMillis(), senderPerson)
+            )
             .setContentTitle(senderName)
             .setContentText(preview)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(preview))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(openIntent)

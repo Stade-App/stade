@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PushPin
 import dev.stade.group.GroupInfo
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Verified
@@ -232,12 +233,12 @@ fun ContactsScreen(
                             contentPadding = PaddingValues(vertical = 12.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Verified,
+                                imageVector = Icons.Default.Person,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(strings.showVerificationCode)
+                            Text(strings.viewProfileAction)
                         }
 
                         OutlinedButton(

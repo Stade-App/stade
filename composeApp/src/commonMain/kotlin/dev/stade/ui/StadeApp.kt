@@ -368,7 +368,7 @@ private fun UnlockedApp(
                     owner = identity!!,
                     contactId = currentChat.contactId,
                     onBack = { screen = Screen.Contacts },
-                    onVerify = {
+                    onOpenProfile = {
                         screen = Screen.Verify(contactId = currentChat.contactId, fromScreen = currentChat)
                     },
                     onContactDeleted = { screen = Screen.Contacts }
@@ -385,12 +385,16 @@ private fun UnlockedApp(
                 )
             }
             screen is Screen.GroupMembers -> {
-                val currentGroupId = (screen as Screen.GroupMembers).groupId
+                val currentGroupMembersScreen = screen as Screen.GroupMembers
+                val currentGroupId = currentGroupMembersScreen.groupId
                 GroupMembersScreen(
                     container = container,
                     owner = identity!!,
                     groupId = currentGroupId,
-                    onBack = { screen = Screen.GroupChat(currentGroupId) }
+                    onBack = { screen = Screen.GroupChat(currentGroupId) },
+                    onOpenProfile = { memberId ->
+                        screen = Screen.Verify(contactId = memberId, fromScreen = currentGroupMembersScreen)
+                    }
                 )
             }
             screen == Screen.CreateGroup -> CreateGroupScreen(
