@@ -290,6 +290,7 @@ val downloadAndroidTorBinaries by tasks.registering {
         val assetsOk = rootDir.resolve("assets/tor/geoip").exists() && rootDir.resolve("assets/tor/geoip6").exists()
         assetsOk && androidTorAbis.all { abi ->
             rootDir.resolve("jniLibs/${abi.abi}/libtor.so").exists() &&
+            rootDir.resolve("jniLibs/${abi.abi}/liblyrebird.so").exists() &&
             rootDir.resolve("jniLibs/${abi.abi}/.ok-$torBundleVersion").exists()
         }
     }
@@ -302,7 +303,7 @@ val downloadAndroidTorBinaries by tasks.registering {
         androidTorAbis.forEach { abi ->
             val jniDir = jniLibsDir.resolve(abi.abi)
             val marker = jniDir.resolve(".ok-$torBundleVersion")
-            if (marker.exists() && jniDir.resolve("libtor.so").exists()) return@forEach
+            if (marker.exists() && jniDir.resolve("libtor.so").exists() && jniDir.resolve("liblyrebird.so").exists()) return@forEach
             jniDir.deleteRecursively()
             jniDir.mkdirs()
             val fname = "tor-expert-bundle-${abi.bundleTriple}-$torBundleVersion.tar.gz"
@@ -334,10 +335,22 @@ val downloadAndroidTorBinaries by tasks.registering {
                     val torBin = sequenceOf(
                         extractDir.resolve("tor/tor"),
                         extractDir.resolve("tor/libtor.so"),
+                        extractDir.resolve("tor/libTor.so"),
                         extractDir.resolve("tor")
                     ).firstOrNull { it.isFile }
                         ?: throw GradleException("tor binary not found in bundle for ${abi.abi}")
                     torBin.copyTo(jniDir.resolve("libtor.so"), overwrite = true)
+                    // obfs4 pluggable transport (lyrebird) — packaged under jniLibs (lib*.so naming
+                    // required for Android to extract it into the executable nativeLibraryDir).
+                    val lyrebirdBin = sequenceOf(
+                        extractDir.resolve("tor/pluggable_transports/lyrebird"),
+                        extractDir.resolve("pluggable_transports/lyrebird")
+                    ).firstOrNull { it.isFile }
+                    if (lyrebirdBin != null) {
+                        lyrebirdBin.copyTo(jniDir.resolve("liblyrebird.so"), overwrite = true)
+                    } else {
+                        logger.warn("[tor-android] lyrebird (obfs4) binary not found in bundle for ${abi.abi} — bridge support will be unavailable")
+                    }
                     // geoip files: extract once into shared assets dir.
                     listOf("geoip", "geoip6").forEach { gn ->
                         val candidate = sequenceOf(

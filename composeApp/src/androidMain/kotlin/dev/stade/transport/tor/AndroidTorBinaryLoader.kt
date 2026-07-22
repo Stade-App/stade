@@ -21,6 +21,9 @@ internal object AndroidTorBinaryLoader {
             ?: error("Embedded Tor binary missing: ${nativeDir.absolutePath}/libtor.so")
         runCatching { torExe.setExecutable(true, false) }
 
+        val obfs4Exe = File(nativeDir, "liblyrebird.so").takeIf { it.isFile }
+        runCatching { obfs4Exe?.setExecutable(true, false) }
+
         val geoip = copyAsset(context, "tor/geoip", File(torRoot, "geoip"))
         val geoip6 = copyAsset(context, "tor/geoip6", File(torRoot, "geoip6"))
 
@@ -29,7 +32,8 @@ internal object AndroidTorBinaryLoader {
             executable = torExe,
             dataDir = dataDir,
             geoipFile = geoip,
-            geoip6File = geoip6
+            geoip6File = geoip6,
+            obfs4Executable = obfs4Exe
         )
     }
 

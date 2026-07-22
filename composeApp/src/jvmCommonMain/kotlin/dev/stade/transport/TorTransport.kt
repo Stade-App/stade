@@ -219,6 +219,24 @@ class TorTransport(
     }
 
     override suspend fun connect(address: String): Connection? {
+        // Circuit build failures against a congested/failing guard are transient — a fresh
+        // SOCKS stream usually makes Tor attempt a different circuit, so a couple of retries
+        // meaningfully cuts user-visible "general SOCKS server failure" errors.
+        var lastError: Throwable? = null
+        repeat(3) { attempt ->
+            try {
+                val result = connectOnce(address)
+                if (result != null) return result
+                lastError = IllegalStateException("Tor connect timed out")
+            } catch (t: Throwable) {
+                lastError = t
+            }
+            if (attempt < 2) kotlinx.coroutines.delay(1_500L * (attempt + 1))
+        }
+        throw lastError ?: IllegalStateException("Tor connect failed")
+    }
+
+    private suspend fun connectOnce(address: String): Connection? {
         val onion = address.removePrefix("tor://")
         val parts = onion.split(":", limit = 2)
         val host = parts[0]
@@ -226,7 +244,7 @@ class TorTransport(
         val sHost = socksHost
         val sPort = socksPort
         if (sPort <= 0) throw IllegalStateException("Tor SOCKS not ready yet (port=$sPort)")
-        return withTimeoutOrNull(120_000) {
+        return withTimeoutOrNull(60_000) {
             var socket: io.ktor.network.sockets.Socket? = null
             try {
                 socket = try {
