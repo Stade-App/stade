@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      target_tag:
+        description: 'Açıklaması güncellenecek Tag (Örn: v1.0.0). Otomatik akış için boş bırakın.'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -23,9 +29,21 @@ jobs:
         run: |
           set -euo pipefail
 
-          CURRENT_TAG="${GITHUB_REF#refs/tags/}"
+          # Eğer manuel tetikleme ile bir tag girildiyse onu kullan, yoksa push edilen tag'i al
+          INPUT_TAG="${{ inputs.target_tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            CURRENT_TAG="$INPUT_TAG"
+          else
+            CURRENT_TAG="${GITHUB_REF#refs/tags/}"
+          fi
 
-          # Find the tag immediately before CURRENT_TAG in the tag-creation timeline.
+          # Tag'in depoda var olup olmadığını kontrol et
+          if ! git rev-parse "$CURRENT_TAG" >/dev/null 2>&1; then
+            echo "::error::'${CURRENT_TAG}' adında bir tag bulunamadı!"
+            exit 1
+          fi
+
+          # CURRENT_TAG öncesindeki tag'i bul
           PREV_TAG="$(git tag --sort=-creatordate | grep -A1 -x "$CURRENT_TAG" | tail -n1 || true)"
           if [ "$PREV_TAG" = "$CURRENT_TAG" ]; then
             PREV_TAG=""
@@ -119,8 +137,14 @@ jobs:
           TAG="${{ steps.notes.outputs.current_tag }}"
           NOTES_FILE="${{ steps.notes.outputs.notes_file }}"
 
+          # Pre-release kontrolü (alpha, beta, rc içeriyorsa bayrak ekler)
+          EXTRA_FLAGS=""
+          if [[ "$TAG" =~ -(alpha|beta|rc) ]]; then
+            EXTRA_FLAGS="--prerelease"
+          fi
+
           if gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            gh release edit "$TAG" --repo "${GITHUB_REPOSITORY}" --notes-file "$NOTES_FILE"
+            gh release edit "$TAG" --repo "${GITHUB_REPOSITORY}" --notes-file "$NOTES_FILE" $EXTRA_FLAGS
           else
-            gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "$TAG" --notes-file "$NOTES_FILE"
+            gh release create "$TAG" --repo "${GITHUB_REPOSITORY}" --title "$TAG" --notes-file "$NOTES_FILE" $EXTRA_FLAGS
           fi
