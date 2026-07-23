@@ -166,7 +166,7 @@ private fun SecuritySettingsContent(
                             val scrambleShape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
                             SecuritySwitchRow(
                                 icon = Icons.Default.Grid3x3,
-                                tint = MaterialTheme.colorScheme.tertiary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 title = strings.scrambleKeypadTitle,
                                 subtitle = if (scrambleEnabled) strings.scrambleKeypadOnSubtitle else strings.scrambleKeypadOffSubtitle,
                                 checked = scrambleEnabled,
@@ -188,7 +188,7 @@ private fun SecuritySettingsContent(
                         SecurityGroup {
                             SecuritySwitchRow(
                                 icon = Icons.Default.VisibilityOff,
-                                tint = MaterialTheme.colorScheme.secondary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 title = strings.screenshotBlockingTitle,
                                 subtitle = if (screenshotBlockingEnabled) strings.screenshotBlockingOnSubtitle else strings.screenshotBlockingOffSubtitle,
                                 checked = screenshotBlockingEnabled,
@@ -213,7 +213,7 @@ private fun SecuritySettingsContent(
                         Box {
                             SecurityNavRow(
                                 icon = Icons.Default.Timer,
-                                tint = MaterialTheme.colorScheme.secondary,
+                                tint = MaterialTheme.colorScheme.primary,
                                 title = strings.autoLockTitle,
                                 subtitle = strings.autoLockSubtitle(strings.sessionTimeoutLabel(sessionTimeout)),
                                 onClick = { timeoutMenuOpen = true },

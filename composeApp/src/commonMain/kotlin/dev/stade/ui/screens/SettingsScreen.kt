@@ -215,7 +215,7 @@ fun SettingsScreen(
                     Box {
                         NavigationSettingsRow(
                             icon = Icons.Default.Grid3x3,
-                            iconTint = MaterialTheme.colorScheme.tertiary,
+                            iconTint = MaterialTheme.colorScheme.primary,
                             title = strings.languageTitle,
                             subtitle = strings.languageSubtitle,
                             onClick = { showLanguageMenu = true }
@@ -303,7 +303,7 @@ fun SettingsScreen(
                         if (showPrivacyRow) {
                             SwitchSettingsRow(
                                 icon = Icons.Default.VisibilityOff,
-                                iconTint = MaterialTheme.colorScheme.tertiary,
+                                iconTint = MaterialTheme.colorScheme.primary,
                                 title = strings.hideNotificationTitle,
                                 subtitle = if (notificationPrivacyEnabled)
                                     strings.hiddenNotificationSubtitle
@@ -320,7 +320,7 @@ fun SettingsScreen(
                         if (showSystemRow) {
                             NavigationSettingsRow(
                                 icon = Icons.Default.OpenInNew,
-                                iconTint = MaterialTheme.colorScheme.secondary,
+                                iconTint = MaterialTheme.colorScheme.primary,
                                 title = strings.systemNotificationsTitle,
                                 subtitle = strings.systemNotificationsSubtitle,
                                 onClick = { openNotificationSettings() },
@@ -355,7 +355,7 @@ fun SettingsScreen(
                 SettingsGroup {
                     NavigationSettingsRow(
                         icon = Icons.Default.SettingsEthernet,
-                        iconTint = MaterialTheme.colorScheme.secondary,
+                        iconTint = MaterialTheme.colorScheme.primary,
                         title = strings.transportLayersTitle,
                         subtitle = strings.transportLayersSubtitle,
                         onClick = onOpenTransports
@@ -381,7 +381,7 @@ fun SettingsScreen(
                 SettingsGroup {
                     NavigationSettingsRow(
                         icon = Icons.Default.Info,
-                        iconTint = MaterialTheme.colorScheme.tertiary,
+                        iconTint = MaterialTheme.colorScheme.primary,
                         title = strings.aboutTitle,
                         subtitle = strings.aboutSubtitle,
                         onClick = onOpenAbout

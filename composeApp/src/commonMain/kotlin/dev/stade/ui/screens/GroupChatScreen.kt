@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -604,14 +605,18 @@ fun GroupChatScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .padding(padding)
-                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
         ) {
-            Column(modifier = Modifier.fillMaxSize().onSizeChanged { size ->
-                if (size.height < prevColumnHeight && messages.isNotEmpty()) {
-                    scope.launch { listState.scrollToItem(messages.lastIndex) }
-                }
-                prevColumnHeight = size.height
-            }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                    .onSizeChanged { size ->
+                        if (size.height < prevColumnHeight && messages.isNotEmpty()) {
+                            scope.launch { listState.scrollToItem(messages.lastIndex) }
+                        }
+                        prevColumnHeight = size.height
+                    }
+            ) {
                 if (messages.isEmpty()) {
                     Box(
                         Modifier.weight(1f).fillMaxWidth(),
@@ -810,6 +815,14 @@ fun GroupChatScreen(
                 )
             }
 
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                    .background(MaterialTheme.colorScheme.surface)
+            )
+
             val editIdx = editingImageIndex
             if (editIdx != null && editIdx < pendingImages.size) {
                 MediaEditorDialog(
@@ -959,8 +972,9 @@ private fun GroupReplyQuoteChip(
     modifier: Modifier = Modifier
 ) {
     val accent = MaterialTheme.colorScheme.primary
-    val bg = if (outgoing) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceContainerHigh
-    val textColor = if (outgoing) Color.White else MaterialTheme.colorScheme.onSurface
+    val onOutgoing = MaterialTheme.colorScheme.onPrimary
+    val bg = if (outgoing) onOutgoing.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceContainerHigh
+    val textColor = if (outgoing) onOutgoing else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -974,12 +988,12 @@ private fun GroupReplyQuoteChip(
                 .width(3.dp)
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(2.dp))
-                .background(if (outgoing) Color.White else accent)
+                .background(if (outgoing) onOutgoing else accent)
         )
         Column(modifier = Modifier.padding(start = 6.dp)) {
             Text(
                 info.senderLabel,
-                color = if (outgoing) Color.White else accent,
+                color = if (outgoing) onOutgoing else accent,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
