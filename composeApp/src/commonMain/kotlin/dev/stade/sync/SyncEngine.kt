@@ -97,6 +97,7 @@ class SyncEngine(
             val (contact, isNew) = handshakeOutcome
             contacts.markSeen(contact.id, Clock.System.now().toEpochMilliseconds())
             val session = sessionsLock.withLock {
+                sessions[contact.id]?.let { runCatching { it.cancel() } }
                 ContactSession(this@coroutineScope, owner, contact, connection).also { sessions[contact.id] = it }
             }
             updateConnectedSet()
@@ -470,6 +471,7 @@ class SyncEngine(
                         json.decodeFromString(AckPayload.serializer(), record.payload.decodeToString())
                     }.getOrNull() ?: return
                     messages.markDelivered(ack.messageId)
+                    outbox.removeForMessage(ack.messageId)
                 }
                 RecordType.PING -> { }
                 RecordType.BYE -> { runCatching { connection.close() } }
