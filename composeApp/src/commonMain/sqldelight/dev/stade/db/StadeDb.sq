@@ -320,3 +320,43 @@ DELETE FROM GroupMember;
 wipeGroupMessages:
 DELETE FROM GroupMessage;
 
+CREATE TABLE MessageReaction (
+    messageId TEXT NOT NULL,
+    fromId TEXT NOT NULL,
+    emoji TEXT NOT NULL,
+    PRIMARY KEY(messageId, fromId)
+);
+
+CREATE INDEX idxMessageReaction ON MessageReaction(messageId);
+
+upsertReaction:
+INSERT OR REPLACE INTO MessageReaction(messageId, fromId, emoji) VALUES (?, ?, ?);
+
+deleteReaction:
+DELETE FROM MessageReaction WHERE messageId = ? AND fromId = ?;
+
+selectReactionsForMessage:
+SELECT * FROM MessageReaction WHERE messageId = ?;
+
+deleteReactionsForMessage:
+DELETE FROM MessageReaction WHERE messageId = ?;
+
+wipeReactions:
+DELETE FROM MessageReaction;
+
+searchMessages:
+SELECT Message.*, Contact.nickname AS contactNickname FROM Message
+JOIN Contact ON Contact.id = Message.contactId
+WHERE Message.contactId IN (SELECT id FROM Contact WHERE ownerId = :ownerId)
+AND Message.body LIKE '%' || :query || '%'
+AND Message.body NOT LIKE 'STADE_IMG_V1:%' AND Message.body NOT LIKE 'STADE_VOI_V1:%'
+ORDER BY Message.timestamp DESC LIMIT :resultLimit;
+
+searchGroupMessages:
+SELECT GroupMessage.*, StadeGroup.name AS groupName FROM GroupMessage
+JOIN StadeGroup ON StadeGroup.id = GroupMessage.groupId
+WHERE StadeGroup.ownerId = :ownerId
+AND GroupMessage.body LIKE '%' || :query || '%'
+AND GroupMessage.body NOT LIKE 'STADE_IMG_V1:%' AND GroupMessage.body NOT LIKE 'STADE_VOI_V1:%'
+ORDER BY GroupMessage.timestamp DESC LIMIT :resultLimit;
+

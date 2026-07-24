@@ -61,7 +61,6 @@ class TorTransport(
                 }
             }
         }
-        // Süreç ölümünü / SOCKS port düşmesini izle ve otomatik kurtar
         scope.launch { runHealthMonitor(handler) }
         bringUpEmbedded(handler)
     }
@@ -209,19 +208,11 @@ class TorTransport(
         state.value = state.value.copy(running = false)
     }
 
-    /**
-     * Gömülü Tor'un `ready` önbelleğini geçersiz kılar, böylece bir sonraki `start()`
-     * çağrısı Tor sürecini (yeni köprü ayarlarıyla) sıfırdan yeniden başlatır.
-     * Sadece ayarlar ekranından açıkça çağrılır — normal stop() akışını etkilemez.
-     */
     override suspend fun reload() {
         embedded?.invalidate()
     }
 
     override suspend fun connect(address: String): Connection? {
-        // Circuit build failures against a congested/failing guard are transient — a fresh
-        // SOCKS stream usually makes Tor attempt a different circuit, so a couple of retries
-        // meaningfully cuts user-visible "general SOCKS server failure" errors.
         var lastError: Throwable? = null
         repeat(3) { attempt ->
             try {
@@ -313,6 +304,12 @@ class TorTransport(
     override fun selfAddress(): String? {
         val o = inboundOnion ?: return null
         return if (inboundPort > 0) "tor://$o:$inboundPort" else null
+    }
+
+    fun socksProxyAddress(): Pair<String, Int>? {
+        val h = socksHost
+        val p = socksPort
+        return if (p > 0 && state.value.running) h to p else null
     }
 
     private suspend fun runAccept(server: ServerSocket, handler: suspend (Connection) -> Unit) {

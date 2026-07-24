@@ -83,6 +83,13 @@ class AppContainer(
         }.onFailure {
             runCatching { createdDriver.execute(null, "ALTER TABLE StadeGroup ADD COLUMN creatorStadeId TEXT NOT NULL DEFAULT ''", 0) }
         }
+        runCatching {
+            createdDriver.executeQuery(null, "SELECT messageId FROM MessageReaction LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "CREATE TABLE IF NOT EXISTS MessageReaction (messageId TEXT NOT NULL, fromId TEXT NOT NULL, emoji TEXT NOT NULL, PRIMARY KEY(messageId, fromId))", 0) }
+            runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxMessageReaction ON MessageReaction(messageId)", 0) }
+        }
         db = database
     }
 

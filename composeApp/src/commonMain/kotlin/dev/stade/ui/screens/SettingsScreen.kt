@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Grid3x3
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
@@ -117,6 +118,7 @@ fun SettingsScreen(
     var fingerprintCopied by remember { mutableStateOf(false) }
     val currentLocale by getLocalePreference()
     var showLanguageMenu by remember { mutableStateOf(false) }
+    var linkPreviewsEnabled by remember { mutableStateOf(dev.stade.link.getLinkPreviewsEnabled(container.db)) }
 
     LaunchedEffect(fingerprintCopied) {
         if (fingerprintCopied) {
@@ -206,6 +208,23 @@ fun SettingsScreen(
                             onCheckedChange = { setDynamicColorEnabled(it) }
                         )
                     }
+                }
+            }
+
+            item {
+                SettingsSectionLabel(strings.privacySection)
+                SettingsGroup {
+                    SwitchSettingsRow(
+                        icon = Icons.Default.Link,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        title = strings.linkPreviewsSettingTitle,
+                        subtitle = strings.linkPreviewsSettingSubtitle,
+                        checked = linkPreviewsEnabled,
+                        onCheckedChange = {
+                            linkPreviewsEnabled = it
+                            dev.stade.link.setLinkPreviewsEnabled(container.db, it)
+                        }
+                    )
                 }
             }
 

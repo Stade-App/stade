@@ -5,6 +5,7 @@ import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
 import dev.stade.identity.LocalIdentity
 import dev.stade.message.encodeImageBody
+import dev.stade.message.encodeReactionBody
 import dev.stade.message.encodeReplyBody
 import dev.stade.message.encodeVoiceBody
 import dev.stade.sync.SyncEngine
@@ -92,11 +93,18 @@ class GroupChatService(
         }
     }
 
-    /**
-     * Grup oluşturulduktan hemen sonra çağrılır. Davet edilen her kişiye
-     * şifrelenmiş bir davet mesajı yollar. Karşı tarafta otomatik olarak
-     * importGroupInvite tetiklenir ve bağlantı açıldığında join request gönderilir.
-     */
+    suspend fun sendReaction(owner: LocalIdentity, group: GroupInfo, targetMessageId: String, add: Boolean, emoji: String) {
+        val targets = group.memberIds.filter { it != owner.stadeId }
+        val msgId = Encoding.toHex(crypto.randomBytes(16))
+        val timestamp = Clock.System.now().toEpochMilliseconds()
+        val inner = encodeReactionBody(targetMessageId, add, emoji)
+        val body = "$GRP_RXN_PREFIX${group.id}:$inner"
+        targets.forEach { contactId ->
+            val contact = contacts.get(contactId) ?: return@forEach
+            runCatching { sync.queueOutgoing(owner, contact, msgId, body, timestamp) }
+        }
+    }
+
     suspend fun sendGroupInviteToContact(
         owner: LocalIdentity,
         contactId: String,

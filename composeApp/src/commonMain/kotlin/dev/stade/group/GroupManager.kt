@@ -7,6 +7,8 @@ import app.cash.sqldelight.coroutines.mapToOneOrNull
 import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
 import dev.stade.db.StadeDb
+import dev.stade.message.SearchResult
+import dev.stade.message.previewBody
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -259,6 +261,11 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
 
     fun groupsForContact(contactId: String): List<String> =
         db.stadeDbQueries.memberGroupIds(contactId).executeAsList()
+
+    fun searchMessages(ownerId: String, query: String, limit: Long = 50): List<SearchResult> =
+        db.stadeDbQueries.searchGroupMessages(ownerId, query, limit).executeAsList().map {
+            SearchResult(it.id, it.groupId, true, it.groupName, previewBody(it.body, ""), it.timestamp)
+        }
 
     private fun dev.stade.db.GroupMessage.toGroupMessage() = GroupMessage(
         id = id,

@@ -29,4 +29,12 @@ class ChatService(
         val body = encodeVoiceBody(opusBytes, durationMs)
         return send(owner, contact, body, replyToId)
     }
+
+    suspend fun sendReaction(owner: LocalIdentity, contact: Contact, targetMessageId: String, add: Boolean, emoji: String) {
+        val body = encodeReactionBody(targetMessageId, add, emoji)
+        val now = Clock.System.now().toEpochMilliseconds()
+        runCatching {
+            sync.queueOutgoing(owner, contact, messages.newId(), body, now)
+        }
+    }
 }

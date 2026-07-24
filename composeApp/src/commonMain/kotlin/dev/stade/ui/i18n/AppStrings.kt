@@ -48,6 +48,7 @@ abstract class AppStrings {
     abstract val noContactsTitle: String
     abstract val noContactsHint: String
     abstract val noSearchResults: String
+    abstract val searchResultsSectionMessages: String
     abstract val showVerificationCode: String
     abstract val viewProfileAction: String
     abstract val deleteContact: String
@@ -252,6 +253,8 @@ abstract class AppStrings {
     abstract val screenshotBlockingTitle: String
     abstract val screenshotBlockingOnSubtitle: String
     abstract val screenshotBlockingOffSubtitle: String
+    abstract val linkPreviewsSettingTitle: String
+    abstract val linkPreviewsSettingSubtitle: String
 
     abstract val transportsTitle: String
     abstract val notRegistered: String

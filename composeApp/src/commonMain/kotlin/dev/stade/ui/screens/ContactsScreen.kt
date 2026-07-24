@@ -91,10 +91,13 @@ import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.contact.Contact
 import dev.stade.identity.LocalIdentity
+import dev.stade.message.SearchResult
 import dev.stade.message.previewBody
 import dev.stade.ui.PlatformBackHandler
+import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.combine
@@ -130,7 +133,9 @@ fun ContactsScreen(
     onOpenSettings: () -> Unit,
     onAddContact: () -> Unit,
     onCreateGroup: () -> Unit,
-    onLongPressVerify: (String) -> Unit
+    onLongPressVerify: (String) -> Unit,
+    onOpenChatMessage: (String, String) -> Unit = { _, _ -> },
+    onOpenGroupMessage: (String, String) -> Unit = { _, _ -> }
 ) {
     val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
     val groups by container.groups.observeGroups(owner.id).collectAsState(initial = emptyList())
@@ -324,7 +329,7 @@ fun ContactsScreen(
     }
 
     LaunchedEffect(contacts.size) {
-        if (contacts.size <= 1 && searchActive) {
+        if (contacts.isEmpty() && searchActive) {
             searchActive = false
             query = ""
         }
@@ -344,6 +349,22 @@ fun ContactsScreen(
             if (!searchActive || query.isBlank()) contacts
             else contacts.filter { it.nickname.contains(query.trim(), ignoreCase = true) }
         }
+    }
+
+    var messageResults by remember { mutableStateOf(emptyList<SearchResult>()) }
+    LaunchedEffect(query, searchActive) {
+        val q = query.trim()
+        if (!searchActive || q.isBlank()) {
+            messageResults = emptyList()
+            return@LaunchedEffect
+        }
+        delay(200)
+        val results = withContext(Dispatchers.Default) {
+            (container.messages.searchMessages(owner.id, q) + container.groups.searchMessages(owner.id, q))
+                .sortedByDescending { it.timestamp }
+                .take(30)
+        }
+        messageResults = results
     }
 
     val combinedItems by remember(filtered, groups, searchActive, query, contactLastMessages, groupLastMessages, pinned) {
@@ -452,7 +473,7 @@ fun ContactsScreen(
                         exit = fadeOut()
                     ) {
                         Row {
-                            if (contacts.size > 1) {
+                            if (contacts.isNotEmpty()) {
                                 IconButton(onClick = { searchActive = true }) {
                                     Icon(Icons.Default.Search, contentDescription = strings.searchAction)
                                 }
@@ -596,7 +617,26 @@ fun ContactsScreen(
                         }
                     }
                 }
-                if (searchActive && combinedItems.isEmpty()) {
+                if (searchActive && query.isNotBlank() && messageResults.isNotEmpty()) {
+                    item {
+                        Text(
+                            strings.searchResultsSectionMessages,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                    }
+                    items(messageResults, key = { "msg_" + it.messageId }) { result ->
+                        MessageSearchRow(
+                            result = result,
+                            onClick = {
+                                if (result.isGroup) onOpenGroupMessage(result.chatId, result.messageId)
+                                else onOpenChatMessage(result.chatId, result.messageId)
+                            }
+                        )
+                    }
+                }
+                if (searchActive && query.isNotBlank() && combinedItems.isEmpty() && messageResults.isEmpty()) {
                     item {
                         Box(
                             modifier = Modifier.fillMaxWidth().padding(32.dp),
@@ -611,6 +651,62 @@ fun ContactsScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun MessageSearchRow(result: SearchResult, onClick: () -> Unit) {
+    val subtleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.Transparent,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (result.isGroup) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.tertiaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Group,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            } else {
+                Avatar(result.title, size = 40.dp)
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    result.title,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    result.snippet,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = subtleColor,
+                    maxLines = 1
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                formatChatTime(result.timestamp),
+                style = MaterialTheme.typography.labelSmall,
+                color = subtleColor
+            )
         }
     }
 }

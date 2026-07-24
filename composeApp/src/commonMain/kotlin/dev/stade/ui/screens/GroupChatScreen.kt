@@ -15,8 +15,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,6 +89,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -124,6 +125,10 @@ import dev.stade.audio.rememberAudioPlayer
 import dev.stade.audio.rememberAudioRecorder
 import dev.stade.group.GroupMessage
 import dev.stade.identity.LocalIdentity
+import dev.stade.link.LinkPreview
+import dev.stade.link.extractFirstUrl
+import dev.stade.link.fetchLinkPreview
+import dev.stade.link.getLinkPreviewsEnabled
 import dev.stade.media.MediaEditorDialog
 import dev.stade.message.MessageType
 import dev.stade.message.previewBody
@@ -143,6 +148,7 @@ import kotlinx.coroutines.withContext
 
 private enum class GroupBannerKind { Success, Error, Info }
 private data class GroupBannerData(val message: String, val kind: GroupBannerKind)
+private const val DEFAULT_REACTION_EMOJI = "❤️"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -150,6 +156,7 @@ fun GroupChatScreen(
     container: AppContainer,
     owner: LocalIdentity,
     groupId: String,
+    highlightMessageId: String? = null,
     onBack: () -> Unit,
     onOpenMembers: (() -> Unit)? = null
 ) {
@@ -164,6 +171,7 @@ fun GroupChatScreen(
     val messages by container.groups.observeMessages(groupId).collectAsState(initial = emptyList())
     val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
     val listState = rememberLazyListState()
+    val linkPreviewsEnabled = remember { getLinkPreviewsEnabled(container.db) }
     var draft by remember { mutableStateOf(TextFieldValue("")) }
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -199,6 +207,22 @@ fun GroupChatScreen(
         }
     }
 
+    fun toggleReaction(targetId: String, currentReactions: List<dev.stade.db.MessageReaction>) {
+        val mine = currentReactions.any { it.fromId == owner.id }
+        val g = group ?: return
+        scope.launch {
+            withContext(Dispatchers.Default) {
+                if (mine) {
+                    container.messages.deleteReaction(targetId, owner.id)
+                    runCatching { container.groupChat.sendReaction(owner, g, targetId, false, DEFAULT_REACTION_EMOJI) }
+                } else {
+                    container.messages.upsertReaction(targetId, owner.id, DEFAULT_REACTION_EMOJI)
+                    runCatching { container.groupChat.sendReaction(owner, g, targetId, true, DEFAULT_REACTION_EMOJI) }
+                }
+            }
+        }
+    }
+
     var banner by remember { mutableStateOf<GroupBannerData?>(null) }
     var bannerKey by remember { mutableStateOf(0) }
     LaunchedEffect(bannerKey) {
@@ -231,6 +255,18 @@ fun GroupChatScreen(
             }
         }
         prevMessageCount = messages.size
+    }
+
+    var flashedMessageId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(highlightMessageId, messages.size) {
+        val target = highlightMessageId ?: return@LaunchedEffect
+        val index = messages.indexOfFirst { it.id == target }
+        if (index >= 0) {
+            listState.animateScrollToItem(index)
+            flashedMessageId = target
+            delay(1500L)
+            flashedMessageId = null
+        }
     }
 
     val MAX_IMAGE_BYTES = 3 * 1024 * 1024
@@ -670,6 +706,8 @@ fun GroupChatScreen(
                                 else container.contacts.get(msg.senderId)?.nickname ?: msg.senderId.takeLast(6)
                             }
                             val isSelected = selectedMessageIds.contains(msg.id)
+                            val isHighlighted = flashedMessageId == msg.id
+                            val reactions by container.messages.observeReactionsForMessage(msg.id).collectAsState(initial = emptyList())
                             val quotedMsg = remember(msg.id, msg.replyToId, messages) {
                                 msg.replyToId?.let { rid -> messages.firstOrNull { it.id == rid } }
                             }
@@ -704,13 +742,16 @@ fun GroupChatScreen(
                                         senderName = senderName,
                                         tightWithPrev = tight,
                                         selected = isSelected,
+                                        highlighted = isHighlighted,
                                         inSelectionMode = inSelectionMode,
                                         quoted = quoted,
+                                        reactions = reactions,
                                         onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
                                         onLongClick = {
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             toggleSelection(msg.id)
                                         },
+                                        onDoubleTap = { toggleReaction(msg.id, reactions) },
                                         onSaveImage = { bytes ->
                                             scope.launch {
                                                 val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
@@ -736,13 +777,16 @@ fun GroupChatScreen(
                                         senderName = senderName,
                                         tightWithPrev = tight,
                                         selected = isSelected,
+                                        highlighted = isHighlighted,
                                         inSelectionMode = inSelectionMode,
                                         quoted = quoted,
+                                        reactions = reactions,
                                         onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
                                         onLongClick = {
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             toggleSelection(msg.id)
-                                        }
+                                        },
+                                        onDoubleTap = { toggleReaction(msg.id, reactions) }
                                     )
                                 } else {
                                     GroupTextBubble(
@@ -750,13 +794,18 @@ fun GroupChatScreen(
                                         senderName = senderName,
                                         tightWithPrev = tight,
                                         selected = isSelected,
+                                        highlighted = isHighlighted,
                                         inSelectionMode = inSelectionMode,
                                         quoted = quoted,
+                                        reactions = reactions,
                                         onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
                                         onLongClick = {
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             toggleSelection(msg.id)
-                                        }
+                                        },
+                                        onDoubleTap = { toggleReaction(msg.id, reactions) },
+                                        container = container,
+                                        linkPreviewsEnabled = linkPreviewsEnabled
                                     )
                                 }
                             }
@@ -1010,6 +1059,24 @@ private fun GroupReplyQuoteChip(
     }
 }
 
+@Composable
+private fun GroupReactionPill(reactions: List<dev.stade.db.MessageReaction>) {
+    if (reactions.isEmpty()) return
+    val emoji = reactions.first().emoji
+    Box(
+        Modifier
+            .padding(top = 2.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(
+            if (reactions.size > 1) "$emoji ${reactions.size}" else emoji,
+            style = MaterialTheme.typography.labelSmall
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun GroupTextBubble(
@@ -1017,10 +1084,15 @@ private fun GroupTextBubble(
     senderName: String,
     tightWithPrev: Boolean,
     selected: Boolean,
+    highlighted: Boolean,
     inSelectionMode: Boolean,
     quoted: GroupReplyQuoteInfo?,
+    reactions: List<dev.stade.db.MessageReaction>,
     onShortClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    onDoubleTap: () -> Unit,
+    container: AppContainer,
+    linkPreviewsEnabled: Boolean
 ) {
     val outgoing = msg.isOwn
     val align = if (outgoing) Alignment.End else Alignment.Start
@@ -1033,16 +1105,55 @@ private fun GroupTextBubble(
     val cornerTop = if (tightWithPrev) 6.dp else 18.dp
     val cornerSelf = 18.dp
     val cornerTail = if (tightWithPrev) 18.dp else 4.dp
-    val selectionTint = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
+    val tintTarget = when {
+        highlighted -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.28f)
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        else -> Color.Transparent
+    }
+    val tint by animateColorAsState(tintTarget)
+    val currentOnShortClick by rememberUpdatedState(onShortClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
+
+    var preview by remember(msg.id) { mutableStateOf<LinkPreview?>(null) }
+    LaunchedEffect(msg.id, linkPreviewsEnabled) {
+        preview = null
+        if (!linkPreviewsEnabled) return@LaunchedEffect
+        val url = extractFirstUrl(msg.displayBody) ?: return@LaunchedEffect
+        val cacheKey = "linkpreview:$url"
+        val cached = withContext(Dispatchers.Default) {
+            runCatching { container.db.stadeDbQueries.getKv(cacheKey).executeAsOneOrNull() }.getOrNull()
+        }
+        if (cached != null) {
+            val parts = cached.decodeToString().split(Char(0x1f).toString(), limit = 2)
+            preview = LinkPreview(url, parts.getOrElse(0) { "" }, parts.getOrElse(1) { "" })
+            return@LaunchedEffect
+        }
+        val fetched = withContext(Dispatchers.Default) {
+            runCatching { fetchLinkPreview(url, container) }.getOrNull()
+        }
+        if (fetched != null) {
+            preview = fetched
+            withContext(Dispatchers.Default) {
+                runCatching {
+                    val delim = Char(0x1f).toString()
+                    container.db.stadeDbQueries.putKv(cacheKey, (fetched.title + delim + fetched.description).encodeToByteArray())
+                }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(selectionTint)
-            .combinedClickable(
-                onClick = onShortClick,
-                onLongClick = onLongClick
-            )
+            .background(tint)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { currentOnShortClick() },
+                    onLongPress = { currentOnLongClick() },
+                    onDoubleTap = { currentOnDoubleTap() }
+                )
+            }
             .padding(top = if (tightWithPrev) 1.dp else 6.dp),
         horizontalAlignment = align
     ) {
@@ -1073,6 +1184,10 @@ private fun GroupTextBubble(
                     GroupReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 5.dp))
                 }
                 Text(msg.displayBody, color = fg, style = MaterialTheme.typography.bodyMedium)
+                val currentPreview = preview
+                if (currentPreview != null) {
+                    GroupLinkPreviewCard(currentPreview, outgoing, Modifier.padding(top = 6.dp))
+                }
                 Spacer(Modifier.height(2.dp))
                 Text(
                     formatChatTime(msg.timestamp),
@@ -1082,6 +1197,46 @@ private fun GroupTextBubble(
                 )
             }
         }
+        GroupReactionPill(reactions)
+    }
+}
+
+@Composable
+private fun GroupLinkPreviewCard(preview: LinkPreview, outgoing: Boolean, modifier: Modifier = Modifier) {
+    val bg = if (outgoing) Color.White.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceContainerHigh
+    val fg = if (outgoing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val domain = preview.url.removePrefix("https://").removePrefix("http://").substringBefore("/").substringBefore("?")
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Text(
+            preview.title,
+            color = fg,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (preview.description.isNotEmpty()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                preview.description,
+                color = fg.copy(alpha = 0.8f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.height(2.dp))
+        Text(
+            domain,
+            color = fg.copy(alpha = 0.6f),
+            style = MaterialTheme.typography.labelSmall
+        )
     }
 }
 
@@ -1092,10 +1247,13 @@ private fun GroupImageBubble(
     senderName: String,
     tightWithPrev: Boolean,
     selected: Boolean,
+    highlighted: Boolean,
     inSelectionMode: Boolean,
     quoted: GroupReplyQuoteInfo?,
+    reactions: List<dev.stade.db.MessageReaction>,
     onShortClick: () -> Unit,
     onLongClick: () -> Unit,
+    onDoubleTap: () -> Unit,
     onSaveImage: (ByteArray) -> Unit,
     onCopyImage: (ByteArray) -> Unit
 ) {
@@ -1127,19 +1285,30 @@ private fun GroupImageBubble(
     var showFullscreen by remember { mutableStateOf(false) }
     val currentBitmap = bitmap
     val currentBytes = imageBytes
-    val selectionTint = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
+    val tintTarget = when {
+        highlighted -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.28f)
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        else -> Color.Transparent
+    }
+    val tint by animateColorAsState(tintTarget)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
+    val currentOnTap by rememberUpdatedState {
+        if (inSelectionMode) onShortClick()
+        else if (bitmap != null) showFullscreen = true
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(selectionTint)
-            .combinedClickable(
-                onClick = {
-                    if (inSelectionMode) onShortClick()
-                    else if (bitmap != null) showFullscreen = true
-                },
-                onLongClick = onLongClick
-            )
+            .background(tint)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { currentOnTap() },
+                    onLongPress = { currentOnLongClick() },
+                    onDoubleTap = { currentOnDoubleTap() }
+                )
+            }
             .padding(top = if (tightWithPrev) 1.dp else 6.dp),
         horizontalAlignment = align
     ) {
@@ -1220,6 +1389,7 @@ private fun GroupImageBubble(
                 }
             }
         }
+        GroupReactionPill(reactions)
     }
 
     if (showFullscreen && currentBitmap != null && currentBytes != null) {
@@ -1278,10 +1448,13 @@ private fun GroupVoiceBubble(
     senderName: String,
     tightWithPrev: Boolean,
     selected: Boolean,
+    highlighted: Boolean,
     inSelectionMode: Boolean,
     quoted: GroupReplyQuoteInfo?,
+    reactions: List<dev.stade.db.MessageReaction>,
     onShortClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    onDoubleTap: () -> Unit
 ) {
     val outgoing = msg.isOwn
     val align = if (outgoing) Alignment.End else Alignment.Start
@@ -1311,16 +1484,27 @@ private fun GroupVoiceBubble(
 
     val player = rememberAudioPlayer()
     val currentBytes = opusBytes
-    val selectionTint = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
+    val tintTarget = when {
+        highlighted -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.28f)
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        else -> Color.Transparent
+    }
+    val tint by animateColorAsState(tintTarget)
+    val currentOnShortClick by rememberUpdatedState(onShortClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(selectionTint)
-            .combinedClickable(
-                onClick = onShortClick,
-                onLongClick = onLongClick
-            )
+            .background(tint)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { currentOnShortClick() },
+                    onLongPress = { currentOnLongClick() },
+                    onDoubleTap = { currentOnDoubleTap() }
+                )
+            }
             .padding(top = if (tightWithPrev) 1.dp else 6.dp),
         horizontalAlignment = align
     ) {
@@ -1404,6 +1588,7 @@ private fun GroupVoiceBubble(
                 )
             }
         }
+        GroupReactionPill(reactions)
     }
 }
 

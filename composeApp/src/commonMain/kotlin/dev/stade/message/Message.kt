@@ -9,6 +9,7 @@ enum class MessageType { TEXT, IMAGE, VOICE }
 const val IMAGE_BODY_PREFIX = "STADE_IMG_V1:"
 const val VOICE_BODY_PREFIX = "STADE_VOI_V1:"
 const val REPLY_BODY_PREFIX = "STADE_RPL_V1:"
+const val REACTION_BODY_PREFIX = "STADE_RXN_V1:"
 
 @Serializable
 data class Message(
@@ -77,15 +78,9 @@ fun encodeVoiceBody(opusBytes: ByteArray, durationMs: Int): String {
     return VOICE_BODY_PREFIX + Base64.Default.encode(header + opusBytes)
 }
 
-/**
- * Wraps an already-encoded body (plain text, or an IMAGE/VOICE-prefixed body) with a
- * reply-to reference. The id is length-prefixed so the inner body can contain any bytes
- * (including another prefix) without delimiter collisions.
- */
 fun encodeReplyBody(replyToId: String, innerBody: String): String =
     REPLY_BODY_PREFIX + replyToId.length.toString() + ":" + replyToId + innerBody
 
-/** Returns (replyToId, innerBody) if [body] carries a reply wrapper, else null. */
 fun parseReplyWrapper(body: String): Pair<String, String>? {
     if (!body.startsWith(REPLY_BODY_PREFIX)) return null
     val rest = body.substring(REPLY_BODY_PREFIX.length)
@@ -97,4 +92,26 @@ fun parseReplyWrapper(body: String): Pair<String, String>? {
     val id = afterSep.substring(0, len)
     val inner = afterSep.substring(len)
     return id to inner
+}
+
+fun encodeReactionBody(targetMessageId: String, add: Boolean, emoji: String): String =
+    REACTION_BODY_PREFIX + targetMessageId.length.toString() + ":" + targetMessageId +
+        (if (add) "A" else "R") + emoji
+
+data class ReactionWrapper(val targetMessageId: String, val add: Boolean, val emoji: String)
+
+fun parseReactionWrapper(body: String): ReactionWrapper? {
+    if (!body.startsWith(REACTION_BODY_PREFIX)) return null
+    val rest = body.substring(REACTION_BODY_PREFIX.length)
+    val sep = rest.indexOf(':')
+    if (sep < 0) return null
+    val len = rest.substring(0, sep).toIntOrNull() ?: return null
+    val afterSep = rest.substring(sep + 1)
+    if (len < 0 || len + 1 > afterSep.length) return null
+    val id = afterSep.substring(0, len)
+    val action = afterSep[len]
+    if (action != 'A' && action != 'R') return null
+    val emoji = afterSep.substring(len + 1)
+    if (emoji.isEmpty()) return null
+    return ReactionWrapper(id, action == 'A', emoji)
 }

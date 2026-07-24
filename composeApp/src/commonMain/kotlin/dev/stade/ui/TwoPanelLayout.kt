@@ -89,6 +89,7 @@ import dev.stade.AppContainer
 import dev.stade.contact.Contact
 import dev.stade.group.GroupInfo
 import dev.stade.identity.LocalIdentity
+import dev.stade.message.SearchResult
 import dev.stade.message.previewBody
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.BrandMark
@@ -107,14 +108,15 @@ import dev.stade.ui.screens.SecuritySettingsScreen
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.theme.StadeColors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.combine
 
 private sealed class PanelRight {
     data object Empty : PanelRight()
-    data class Chat(val contactId: String) : PanelRight()
-    data class GroupChat(val groupId: String) : PanelRight()
+    data class Chat(val contactId: String, val highlightMessageId: String? = null) : PanelRight()
+    data class GroupChat(val groupId: String, val highlightMessageId: String? = null) : PanelRight()
     data class GroupMembers(val groupId: String) : PanelRight()
     data object CreateGroup : PanelRight()
     data object Settings : PanelRight()
@@ -228,6 +230,22 @@ fun TwoPanelLayout(
                 .thenByDescending { it.pinnedAt ?: it.sortKey }
         )
         result
+    }
+
+    var panelMessageResults by remember { mutableStateOf(emptyList<SearchResult>()) }
+    LaunchedEffect(query) {
+        val q = query.trim()
+        if (q.isBlank()) {
+            panelMessageResults = emptyList()
+            return@LaunchedEffect
+        }
+        delay(200)
+        val results = withContext(Dispatchers.Default) {
+            (container.messages.searchMessages(owner.id, q) + container.groups.searchMessages(owner.id, q))
+                .sortedByDescending { it.timestamp }
+                .take(30)
+        }
+        panelMessageResults = results
     }
 
     if (showDeleteConfirm && deleteTargetContact != null) {
@@ -463,7 +481,26 @@ fun TwoPanelLayout(
                                         }
                                     }
                                 }
-                                if (combinedPanelItems.isEmpty()) {
+                                if (query.isNotBlank() && panelMessageResults.isNotEmpty()) {
+                                    item {
+                                        Text(
+                                            strings.searchResultsSectionMessages,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                        )
+                                    }
+                                    items(panelMessageResults, key = { "msg_" + it.messageId }) { result ->
+                                        PanelMessageSearchRow(
+                                            result = result,
+                                            onClick = {
+                                                right = if (result.isGroup) PanelRight.GroupChat(result.chatId, highlightMessageId = result.messageId)
+                                                else PanelRight.Chat(result.chatId, highlightMessageId = result.messageId)
+                                            }
+                                        )
+                                    }
+                                }
+                                if (query.isNotBlank() && combinedPanelItems.isEmpty() && panelMessageResults.isEmpty()) {
                                     item {
                                         Box(
                                             modifier = Modifier.fillMaxWidth().padding(24.dp),
@@ -616,6 +653,7 @@ fun TwoPanelLayout(
                     container = container,
                     owner = owner,
                     contactId = rp.contactId,
+                    highlightMessageId = rp.highlightMessageId,
                     onBack = null,
                     onOpenProfile = { right = PanelRight.Verify(rp.contactId, from = PanelRight.Chat(rp.contactId)) },
                     onContactDeleted = { right = PanelRight.Empty }
@@ -683,6 +721,7 @@ fun TwoPanelLayout(
                     container = container,
                     owner = owner,
                     groupId = rp.groupId,
+                    highlightMessageId = rp.highlightMessageId,
                     onBack = { right = PanelRight.Empty },
                     onOpenMembers = { right = PanelRight.GroupMembers(rp.groupId) }
                 )
@@ -701,6 +740,58 @@ fun TwoPanelLayout(
     }
 }
 
+
+@Composable
+private fun PanelMessageSearchRow(result: SearchResult, onClick: () -> Unit) {
+    val subtleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (result.isGroup) {
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Group,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        } else {
+            Avatar(result.title, size = 36.dp)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                result.title,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                result.snippet,
+                style = MaterialTheme.typography.bodySmall,
+                color = subtleColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            formatChatTime(result.timestamp),
+            style = MaterialTheme.typography.labelSmall,
+            color = subtleColor
+        )
+    }
+}
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable

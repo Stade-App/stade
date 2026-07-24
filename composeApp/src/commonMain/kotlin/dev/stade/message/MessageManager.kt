@@ -11,7 +11,34 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+data class SearchResult(
+    val messageId: String,
+    val chatId: String,
+    val isGroup: Boolean,
+    val title: String,
+    val snippet: String,
+    val timestamp: Long
+)
+
 class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
+
+    fun searchMessages(ownerId: String, query: String, limit: Long = 50): List<SearchResult> =
+        db.stadeDbQueries.searchMessages(ownerId, query, limit).executeAsList().map {
+            SearchResult(it.id, it.contactId, false, it.contactNickname, previewBody(it.body, ""), it.timestamp)
+        }
+
+    fun upsertReaction(messageId: String, fromId: String, emoji: String) {
+        db.stadeDbQueries.upsertReaction(messageId, fromId, emoji)
+    }
+
+    fun deleteReaction(messageId: String, fromId: String) {
+        db.stadeDbQueries.deleteReaction(messageId, fromId)
+    }
+
+    fun observeReactionsForMessage(messageId: String): Flow<List<dev.stade.db.MessageReaction>> =
+        db.stadeDbQueries.selectReactionsForMessage(messageId)
+            .asFlow()
+            .mapToList(Dispatchers.Default)
 
     fun observeMessages(contactId: String): Flow<List<Message>> =
         db.stadeDbQueries.selectMessages(contactId)
@@ -47,6 +74,8 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
     fun exists(messageId: String): Boolean =
         db.stadeDbQueries.messageExists(messageId).executeAsOne() > 0L
 
+    fun newId(): String = Encoding.toHex(crypto.randomBytes(16))
+
     fun markRead(contactId: String) {
         db.stadeDbQueries.markRead(contactId)
     }
@@ -75,6 +104,7 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
             messageIds.forEach { id ->
                 db.stadeDbQueries.deleteOutboxForMessage(id)
                 db.stadeDbQueries.deleteMessageById(id)
+                db.stadeDbQueries.deleteReactionsForMessage(id)
             }
         }
     }

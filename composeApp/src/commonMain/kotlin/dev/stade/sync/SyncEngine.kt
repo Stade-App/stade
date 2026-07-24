@@ -13,11 +13,14 @@ import dev.stade.group.GRP_JOIN_PREFIX
 import dev.stade.group.GRP_KICK_PREFIX
 import dev.stade.group.GRP_LEAVE_PREFIX
 import dev.stade.group.GRP_MSG_PREFIX
+import dev.stade.group.GRP_RXN_PREFIX
 import dev.stade.group.GRP_WELCOME_PREFIX
 import dev.stade.group.GroupManager
 import dev.stade.identity.LocalIdentity
 import dev.stade.identity.StadeId
 import dev.stade.message.MessageManager
+import dev.stade.message.REACTION_BODY_PREFIX
+import dev.stade.message.parseReactionWrapper
 import dev.stade.transport.Connection
 import dev.stade.ui.i18n.I18n
 import kotlinx.coroutines.CancellationException
@@ -71,6 +74,7 @@ class SyncEngine(
         data class HandshakeRejected(val reason: String) : SyncEvent
         data class DecryptFailed(val contactId: String) : SyncEvent
         data class SendFailed(val contactId: String, val reason: String) : SyncEvent
+        data class ReactionUpdated(val messageId: String) : SyncEvent
     }
 
     suspend fun queueOutgoing(owner: LocalIdentity, contact: Contact, messageId: String, body: String, timestamp: Long) {
@@ -398,6 +402,26 @@ class SyncEngine(
                     val bodyStr = plain.decodeToString()
 
                     when {
+                        bodyStr.startsWith(REACTION_BODY_PREFIX) -> {
+                            val wrapper = parseReactionWrapper(bodyStr)
+                            if (wrapper != null) {
+                                if (wrapper.add) messages.upsertReaction(wrapper.targetMessageId, contact.id, wrapper.emoji)
+                                else messages.deleteReaction(wrapper.targetMessageId, contact.id)
+                                _events.tryEmit(SyncEvent.ReactionUpdated(wrapper.targetMessageId))
+                            }
+                        }
+                        groupManager != null && bodyStr.startsWith(GRP_RXN_PREFIX) -> {
+                            val stripped = bodyStr.removePrefix(GRP_RXN_PREFIX)
+                            val colonIdx = stripped.indexOf(':')
+                            if (colonIdx >= 0) {
+                                val wrapper = parseReactionWrapper(stripped.substring(colonIdx + 1))
+                                if (wrapper != null) {
+                                    if (wrapper.add) messages.upsertReaction(wrapper.targetMessageId, contact.id, wrapper.emoji)
+                                    else messages.deleteReaction(wrapper.targetMessageId, contact.id)
+                                    _events.tryEmit(SyncEvent.ReactionUpdated(wrapper.targetMessageId))
+                                }
+                            }
+                        }
                         groupManager != null && bodyStr.startsWith(GRP_MSG_PREFIX) -> {
                             val groupId = groupManager.handleIncomingGroupMsg(contact.id, payload.messageId, bodyStr, payload.timestamp)
                             if (groupId != null) _events.tryEmit(SyncEvent.GroupMessageReceived(groupId))

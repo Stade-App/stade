@@ -44,8 +44,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 sealed interface Screen {
     data object Onboarding : Screen
     data object Contacts : Screen
-    data class Chat(val contactId: String) : Screen
-    data class GroupChat(val groupId: String) : Screen
+    data class Chat(val contactId: String, val highlightMessageId: String? = null) : Screen
+    data class GroupChat(val groupId: String, val highlightMessageId: String? = null) : Screen
     data class GroupMembers(val groupId: String) : Screen
     data object CreateGroup : Screen
     data class Verify(val contactId: String, val fromScreen: Screen) : Screen
@@ -367,6 +367,7 @@ private fun UnlockedApp(
                     container = container,
                     owner = identity!!,
                     contactId = currentChat.contactId,
+                    highlightMessageId = currentChat.highlightMessageId,
                     onBack = { screen = Screen.Contacts },
                     onOpenProfile = {
                         screen = Screen.Verify(contactId = currentChat.contactId, fromScreen = currentChat)
@@ -375,11 +376,13 @@ private fun UnlockedApp(
                 )
             }
             screen is Screen.GroupChat -> {
-                val currentGroupId = (screen as Screen.GroupChat).groupId
+                val currentGroupChat = screen as Screen.GroupChat
+                val currentGroupId = currentGroupChat.groupId
                 GroupChatScreen(
                     container = container,
                     owner = identity!!,
                     groupId = currentGroupId,
+                    highlightMessageId = currentGroupChat.highlightMessageId,
                     onBack = { screen = Screen.Contacts },
                     onOpenMembers = { screen = Screen.GroupMembers(currentGroupId) }
                 )
@@ -416,6 +419,12 @@ private fun UnlockedApp(
                     onCreateGroup = { screen = Screen.CreateGroup },
                     onLongPressVerify = { contactId ->
                         screen = Screen.Verify(contactId = contactId, fromScreen = currentContactsScreen)
+                    },
+                    onOpenChatMessage = { contactId, messageId ->
+                        screen = Screen.Chat(contactId, highlightMessageId = messageId)
+                    },
+                    onOpenGroupMessage = { groupId, messageId ->
+                        screen = Screen.GroupChat(groupId, highlightMessageId = messageId)
                     }
                 )
             }

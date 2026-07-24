@@ -59,6 +59,8 @@ kotlin {
                 implementation(libs.bouncycastle)
                 implementation(libs.zxing.core)
                 implementation(libs.concentus)
+                implementation(libs.ktor.client.core)
+                implementation(libs.ktor.client.cio)
             }
         }
         val androidMain by getting {

@@ -55,6 +55,7 @@ object TurkishStrings : AppStrings() {
     override val noContactsTitle = "Henüz kişin yok"
     override val noContactsHint = "Yeni bir kişi eklemek için sağ alttaki butona dokun."
     override val noSearchResults = "Eşleşen kişi yok"
+    override val searchResultsSectionMessages = "Mesajlar"
     override val showVerificationCode = "Doğrulama kodunu göster"
     override val viewProfileAction = "Profili görüntüle"
     override val deleteContact = "Kişiyi sil"
@@ -299,6 +300,8 @@ object TurkishStrings : AppStrings() {
     override val screenshotBlockingTitle = "Ekran görüntüsü almayı devre dışı bırak"
     override val screenshotBlockingOnSubtitle = "Uygulama içeriği son uygulamalar'da gizlenir; ekran görüntüsü alınamaz"
     override val screenshotBlockingOffSubtitle = "Uygulama içeriği son uygulamalar'da görünür"
+    override val linkPreviewsSettingTitle = "Bağlantı önizlemeleri"
+    override val linkPreviewsSettingSubtitle = "Aldığınız bağlantılar için başlık ve açıklama getirir, her zaman Tor üzerinden"
 
     override val autoLockNeverInfoTitle = "«Asla» Seçeneği Hakkında"
     override val autoLockNeverInfoBody =

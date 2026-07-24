@@ -93,5 +93,6 @@ const val GRP_WELCOME_PREFIX = "\u0002GRPW:"
 const val GRP_INV_PREFIX = "\u0002GRPI:"
 const val GRP_KICK_PREFIX = "GRPK:"
 const val GRP_LEAVE_PREFIX = "GRPL:"
+const val GRP_RXN_PREFIX = "GRPR:"
 const val GROUP_INVITE_PREFIX = "STADE-GRP:"
 

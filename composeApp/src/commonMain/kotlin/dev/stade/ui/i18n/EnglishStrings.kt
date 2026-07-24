@@ -55,6 +55,7 @@ object EnglishStrings : AppStrings() {
     override val noContactsTitle = "No contacts yet"
     override val noContactsHint = "Tap the button in the bottom right to add a new contact."
     override val noSearchResults = "No matching contacts"
+    override val searchResultsSectionMessages = "Messages"
     override val showVerificationCode = "Show verification code"
     override val viewProfileAction = "View profile"
     override val deleteContact = "Delete contact"
@@ -298,6 +299,8 @@ object EnglishStrings : AppStrings() {
     override val screenshotBlockingTitle = "Disable screenshot capture"
     override val screenshotBlockingOnSubtitle = "App content hidden in recent apps; screenshots disabled"
     override val screenshotBlockingOffSubtitle = "App content visible in recent apps"
+    override val linkPreviewsSettingTitle = "Link previews"
+    override val linkPreviewsSettingSubtitle = "Fetch a title and description for links you receive, always routed through Tor"
 
     override val autoLockNeverInfoTitle = "About the 'Never' Option"
     override val autoLockNeverInfoBody =
