@@ -90,6 +90,10 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.setContactVerified(contactId)
     }
 
+    fun setKind(contactId: String, kind: Int) {
+        db.stadeDbQueries.setContactKind(kind.toLong(), contactId)
+    }
+
     fun delete(contactId: String) {
         db.stadeDbQueries.deleteContact(contactId)
     }
@@ -117,6 +121,7 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
             verified = verified == 1L,
             lastSeen = lastSeen,
             createdAt = createdAt,
-            addresses = addresses.split("\n").filter { it.isNotBlank() }
+            addresses = addresses.split("\n").filter { it.isNotBlank() },
+            kind = kind.toInt()
         )
 }

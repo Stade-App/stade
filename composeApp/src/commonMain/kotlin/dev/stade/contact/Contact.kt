@@ -17,7 +17,8 @@ data class Contact(
     val verified: Boolean,
     val lastSeen: Long,
     val createdAt: Long,
-    val addresses: List<String> = emptyList()
+    val addresses: List<String> = emptyList(),
+    val kind: Int = 0
 ) {
     val stadeId: String get() = id
     override fun equals(other: Any?): Boolean = other is Contact && other.id == id

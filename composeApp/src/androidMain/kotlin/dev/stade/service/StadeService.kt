@@ -179,6 +179,7 @@ class StadeService : Service() {
         val userPerson = Person.Builder().setName("Me").build()
         val notif = NotificationCompat.Builder(this, msgChannelId)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .apply { avatarBitmap?.let { setLargeIcon(it) } }
             .setStyle(
                 NotificationCompat.MessagingStyle(userPerson)
                     .addMessage(preview, System.currentTimeMillis(), senderPerson)

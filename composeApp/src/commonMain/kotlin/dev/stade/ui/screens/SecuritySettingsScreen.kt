@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Grid3x3
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -116,6 +117,7 @@ private fun SecuritySettingsContent(
     val scrambleEnabled = remember(refreshTick) { container.secrets.isScrambleKeypadEnabled() }
     val sessionTimeout = remember(refreshTick) { container.secrets.sessionTimeoutSeconds() }
     val screenshotBlockingEnabled = remember(refreshTick) { container.secrets.isScreenshotBlockingEnabled() }
+    val linkPreviewsEnabled = remember(refreshTick) { dev.stade.link.getLinkPreviewsEnabled(container.db) }
     var timeoutMenuOpen by remember { mutableStateOf(false) }
     var showNeverInfoDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -182,10 +184,31 @@ private fun SecuritySettingsContent(
                     }
                 }
 
-                if (isScreenPrivacySupported) {
-                    item {
-                        SecuritySectionLabel(strings.privacySection)
-                        SecurityGroup {
+                item {
+                    SecuritySectionLabel(strings.privacySection)
+                    SecurityGroup {
+                        val linkPreviewsShape = if (isScreenPrivacySupported) {
+                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                        } else {
+                            MaterialTheme.shapes.large
+                        }
+                        SecuritySwitchRow(
+                            icon = Icons.Default.Link,
+                            tint = MaterialTheme.colorScheme.primary,
+                            title = strings.linkPreviewsSettingTitle,
+                            subtitle = strings.linkPreviewsSettingSubtitle,
+                            checked = linkPreviewsEnabled,
+                            onCheckedChange = {
+                                dev.stade.link.setLinkPreviewsEnabled(container.db, it)
+                                refreshTick++
+                            },
+                            modifier = Modifier
+                                .then(if (isScreenPrivacySupported) Modifier.padding(bottom = 2.dp) else Modifier)
+                                .background(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = linkPreviewsShape)
+                                .clip(linkPreviewsShape)
+                        )
+                        if (isScreenPrivacySupported) {
+                            val screenshotShape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
                             SecuritySwitchRow(
                                 icon = Icons.Default.VisibilityOff,
                                 tint = MaterialTheme.colorScheme.primary,
@@ -197,11 +220,8 @@ private fun SecuritySettingsContent(
                                     refreshTick++
                                 },
                                 modifier = Modifier
-                                    .background(
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        shape = MaterialTheme.shapes.large
-                                    )
-                                    .clip(MaterialTheme.shapes.large)
+                                    .background(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = screenshotShape)
+                                    .clip(screenshotShape)
                             )
                         }
                     }

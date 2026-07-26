@@ -21,6 +21,10 @@ import dev.stade.identity.StadeId
 import dev.stade.message.MessageManager
 import dev.stade.message.REACTION_BODY_PREFIX
 import dev.stade.message.parseReactionWrapper
+import dev.stade.stadium.STD_JOIN_PREFIX
+import dev.stade.stadium.STD_MSG_PREFIX
+import dev.stade.stadium.STD_WELCOME_PREFIX
+import dev.stade.stadium.StadiumManager
 import dev.stade.transport.Connection
 import dev.stade.ui.i18n.I18n
 import kotlinx.coroutines.CancellationException
@@ -50,7 +54,8 @@ class SyncEngine(
     private val ratchet: RatchetSessions,
     private val outbox: Outbox,
     private val handshakeService: HandshakeService,
-    val groupManager: GroupManager? = null
+    val groupManager: GroupManager? = null,
+    val stadiumManager: StadiumManager? = null
 ) {
     private val protocolVersion = 2
     private val json = Json { ignoreUnknownKeys = true }
@@ -75,6 +80,7 @@ class SyncEngine(
         data class DecryptFailed(val contactId: String) : SyncEvent
         data class SendFailed(val contactId: String, val reason: String) : SyncEvent
         data class ReactionUpdated(val messageId: String) : SyncEvent
+        data class StadiumMessageReceived(val stadiumId: String) : SyncEvent
     }
 
     suspend fun queueOutgoing(owner: LocalIdentity, contact: Contact, messageId: String, body: String, timestamp: Long) {
@@ -475,6 +481,41 @@ class SyncEngine(
                         groupManager != null && bodyStr.startsWith(GRP_LEAVE_PREFIX) -> {
                             val groupId = groupManager.handleMemberLeft(contact.id, bodyStr)
                             if (groupId != null) _events.tryEmit(SyncEvent.GroupMemberRemoved(groupId))
+                        }
+                        stadiumManager != null && bodyStr.startsWith(STD_JOIN_PREFIX) -> {
+                            val welcomeBody = stadiumManager.handleJoinRequest(contact.id, bodyStr)
+                            if (welcomeBody != null) {
+                                runCatching {
+                                    val msgId = Encoding.toHex(crypto.randomBytes(16))
+                                    val ts = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+                                    val sealed = ratchet.seal(owner, contact, welcomeBody.encodeToByteArray())
+                                    val mp = MessagePayload(msgId, ts, sealed)
+                                    val frame = json.encodeToString(MessagePayload.serializer(), mp).encodeToByteArray()
+                                    outbox.enqueue(contact.id, msgId, frame)
+                                    outboxSignal.tryEmit(Unit)
+                                }
+                            }
+                        }
+                        stadiumManager != null && bodyStr.startsWith(STD_WELCOME_PREFIX) -> {
+                            stadiumManager.handleStadiumWelcome(owner.id, contact.id, bodyStr)
+                        }
+                        stadiumManager != null && bodyStr.startsWith(STD_MSG_PREFIX) -> {
+                            val stripped = bodyStr.removePrefix(STD_MSG_PREFIX)
+                            val colonIdx = stripped.indexOf(':')
+                            if (colonIdx >= 0) {
+                                val stadiumId = stripped.substring(0, colonIdx)
+                                val rest = stripped.substring(colonIdx + 1)
+                                val newlineIdx = rest.indexOf('\n')
+                                if (newlineIdx >= 0) {
+                                    val memberCount = rest.substring(0, newlineIdx).toLongOrNull()
+                                    val stadiumBody = rest.substring(newlineIdx + 1)
+                                    val stadium = stadiumManager.getStadium(stadiumId)
+                                    if (memberCount != null && stadium != null && !stadium.isOwner && stadium.creatorStadeId == contact.id) {
+                                        val ok = stadiumManager.handleIncomingBroadcast(stadiumId, payload.messageId, memberCount, stadiumBody, payload.timestamp)
+                                        if (ok) _events.tryEmit(SyncEvent.StadiumMessageReceived(stadiumId))
+                                    }
+                                }
+                            }
                         }
                         else -> {
                             val saved = messages.saveIncoming(payload.messageId, contact.id, bodyStr, payload.timestamp)

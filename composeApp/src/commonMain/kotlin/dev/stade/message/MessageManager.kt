@@ -17,7 +17,8 @@ data class SearchResult(
     val isGroup: Boolean,
     val title: String,
     val snippet: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val isStadium: Boolean = false
 )
 
 class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {

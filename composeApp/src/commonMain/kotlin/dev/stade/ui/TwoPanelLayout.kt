@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -98,9 +99,13 @@ import dev.stade.ui.screens.AboutScreen
 import dev.stade.ui.screens.AddContactScreen
 import dev.stade.ui.screens.ChatScreen
 import dev.stade.ui.screens.CreateGroupScreen
+import dev.stade.ui.screens.CreateStadiumScreen
 import dev.stade.ui.screens.GroupChatScreen
 import dev.stade.ui.screens.GroupMembersScreen
+import dev.stade.ui.screens.JoinStadiumScreen
+import dev.stade.ui.screens.ManageStadiumScreen
 import dev.stade.ui.screens.PinSetupScreen
+import dev.stade.ui.screens.StadiumScreen
 import dev.stade.ui.screens.SettingsScreen
 import dev.stade.ui.screens.TransportsScreen
 import dev.stade.ui.screens.VerifyContactScreen
@@ -119,6 +124,10 @@ private sealed class PanelRight {
     data class GroupChat(val groupId: String, val highlightMessageId: String? = null) : PanelRight()
     data class GroupMembers(val groupId: String) : PanelRight()
     data object CreateGroup : PanelRight()
+    data class Stadium(val stadiumId: String, val highlightMessageId: String? = null) : PanelRight()
+    data object CreateStadium : PanelRight()
+    data class ManageStadium(val stadiumId: String) : PanelRight()
+    data object JoinStadium : PanelRight()
     data object Settings : PanelRight()
     data object Security : PanelRight()
     data object Transports : PanelRight()
@@ -131,21 +140,26 @@ private sealed class PanelRight {
 private sealed class PanelChatItem {
     data class ContactItem(val contact: Contact, val lastMessageTs: Long? = null, val pinnedAtValue: Long? = null) : PanelChatItem()
     data class GroupItem(val group: GroupInfo, val lastMessageTs: Long? = null, val pinnedAtValue: Long? = null) : PanelChatItem()
+    data class StadiumItem(val stadium: dev.stade.stadium.StadiumInfo, val lastMessageTs: Long? = null, val pinnedAtValue: Long? = null) : PanelChatItem()
     val displayName: String get() = when (this) {
         is ContactItem -> contact.nickname
         is GroupItem   -> group.name
+        is StadiumItem -> stadium.name
     }
     val key: String get() = when (this) {
         is ContactItem -> contact.id
         is GroupItem   -> "grp_${group.id}"
+        is StadiumItem -> "std_${stadium.id}"
     }
     val sortKey: Long get() = when (this) {
         is ContactItem -> lastMessageTs ?: 0L
         is GroupItem   -> lastMessageTs ?: 0L
+        is StadiumItem -> lastMessageTs ?: stadium.createdAt
     }
     val pinnedAt: Long? get() = when (this) {
         is ContactItem -> pinnedAtValue
         is GroupItem   -> pinnedAtValue
+        is StadiumItem -> pinnedAtValue
     }
 }
 @OptIn(ExperimentalMaterial3Api::class)
@@ -157,8 +171,10 @@ fun TwoPanelLayout(
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
-    val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
+    val allContacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
+    val contacts by remember(allContacts) { derivedStateOf { allContacts.filter { it.kind == 0 } } }
     val groups by container.groups.observeGroups(owner.id).collectAsState(initial = emptyList())
+    val stadiums by container.stadiums.observeStadiums(owner.id).collectAsState(initial = emptyList())
     val connectedSet by container.sync.connectedContacts.collectAsState()
     val pinned by container.pinnedChats.observePinned(owner.id).collectAsState(initial = emptyMap())
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
@@ -176,6 +192,13 @@ fun TwoPanelLayout(
     val groupLastMessages by remember(groups) {
         combine(
             groups.map { g -> container.groups.observeLastMessage(g.id) }
+                .ifEmpty { listOf(kotlinx.coroutines.flow.flowOf(null)) }
+        ) { it.toList() }
+    }.collectAsState(initial = emptyList())
+
+    val stadiumLastMessages by remember(stadiums) {
+        combine(
+            stadiums.map { s -> container.stadiums.observeLastMessage(s.id) }
                 .ifEmpty { listOf(kotlinx.coroutines.flow.flowOf(null)) }
         ) { it.toList() }
     }.collectAsState(initial = emptyList())
@@ -213,13 +236,18 @@ fun TwoPanelLayout(
         else contacts.filter { it.nickname.contains(query.trim(), ignoreCase = true) }
     }
 
-    val combinedPanelItems = remember(filtered, groups, query, contactLastMessages, groupLastMessages, pinned) {
+    val combinedPanelItems = remember(filtered, groups, stadiums, query, contactLastMessages, groupLastMessages, stadiumLastMessages, pinned) {
         val q = query.trim()
         val result = mutableListOf<PanelChatItem>()
         groups
             .filter { q.isBlank() || it.name.contains(q, ignoreCase = true) }
             .forEachIndexed { i, g ->
                 result.add(PanelChatItem.GroupItem(g, groupLastMessages.getOrNull(i)?.timestamp, pinned["grp_${g.id}"]))
+            }
+        stadiums
+            .filter { q.isBlank() || it.name.contains(q, ignoreCase = true) }
+            .forEachIndexed { i, s ->
+                result.add(PanelChatItem.StadiumItem(s, stadiumLastMessages.getOrNull(i)?.timestamp, pinned["std_${s.id}"]))
             }
         filtered.forEachIndexed { i, c ->
             val origIdx = contacts.indexOf(c)
@@ -241,7 +269,7 @@ fun TwoPanelLayout(
         }
         delay(200)
         val results = withContext(Dispatchers.Default) {
-            (container.messages.searchMessages(owner.id, q) + container.groups.searchMessages(owner.id, q))
+            (container.messages.searchMessages(owner.id, q) + container.groups.searchMessages(owner.id, q) + container.stadiums.searchMessages(owner.id, q))
                 .sortedByDescending { it.timestamp }
                 .take(30)
         }
@@ -377,7 +405,7 @@ fun TwoPanelLayout(
                         )
                     }
 
-                    if (contacts.isEmpty()) {
+                    if (contacts.isEmpty() && groups.isEmpty() && stadiums.isEmpty()) {
                         Box(
                             modifier = Modifier.fillMaxSize().padding(24.dp),
                             contentAlignment = Alignment.Center
@@ -479,6 +507,27 @@ fun TwoPanelLayout(
                                                 }
                                             )
                                         }
+                                        is PanelChatItem.StadiumItem -> {
+                                            val stadium = item.stadium
+                                            val isStadiumSelected by remember(stadium.id) {
+                                                derivedStateOf {
+                                                    when (val r = right) {
+                                                        is PanelRight.Stadium -> r.stadiumId == stadium.id
+                                                        is PanelRight.ManageStadium -> r.stadiumId == stadium.id
+                                                        else -> false
+                                                    }
+                                                }
+                                            }
+                                            PanelStadiumRow(
+                                                stadium = stadium,
+                                                selected = isStadiumSelected,
+                                                pinned = item.pinnedAt != null,
+                                                onClick = { right = PanelRight.Stadium(stadium.id) },
+                                                onTogglePin = {
+                                                    container.pinnedChats.setPinned(owner.id, item.key, item.pinnedAt == null)
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                                 if (query.isNotBlank() && panelMessageResults.isNotEmpty()) {
@@ -494,8 +543,11 @@ fun TwoPanelLayout(
                                         PanelMessageSearchRow(
                                             result = result,
                                             onClick = {
-                                                right = if (result.isGroup) PanelRight.GroupChat(result.chatId, highlightMessageId = result.messageId)
-                                                else PanelRight.Chat(result.chatId, highlightMessageId = result.messageId)
+                                                right = when {
+                                                    result.isStadium -> PanelRight.Stadium(result.chatId, highlightMessageId = result.messageId)
+                                                    result.isGroup -> PanelRight.GroupChat(result.chatId, highlightMessageId = result.messageId)
+                                                    else -> PanelRight.Chat(result.chatId, highlightMessageId = result.messageId)
+                                                }
                                             }
                                         )
                                     }
@@ -575,6 +627,50 @@ fun TwoPanelLayout(
                                                     style = MaterialTheme.typography.labelLarge
                                                 )
                                                 Icon(Icons.Default.PersonAdd, contentDescription = null)
+                                            }
+                                        }
+                                        Surface(
+                                            onClick = {
+                                                isFabExpanded = false
+                                                right = PanelRight.CreateStadium
+                                            },
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            shadowElevation = 6.dp
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Text(
+                                                    text = strings.createStadiumAction,
+                                                    style = MaterialTheme.typography.labelLarge
+                                                )
+                                                Icon(Icons.Default.Podcasts, contentDescription = null)
+                                            }
+                                        }
+                                        Surface(
+                                            onClick = {
+                                                isFabExpanded = false
+                                                right = PanelRight.JoinStadium
+                                            },
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            shadowElevation = 6.dp
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Text(
+                                                    text = strings.joinStadiumAction,
+                                                    style = MaterialTheme.typography.labelLarge
+                                                )
+                                                Icon(Icons.Default.Podcasts, contentDescription = null)
                                             }
                                         }
                                     }
@@ -734,6 +830,35 @@ fun TwoPanelLayout(
                     onOpenProfile = { memberId ->
                         right = PanelRight.Verify(memberId, from = PanelRight.GroupMembers(rp.groupId))
                     }
+                )
+
+                is PanelRight.Stadium -> StadiumScreen(
+                    container = container,
+                    owner = owner,
+                    stadiumId = rp.stadiumId,
+                    onBack = { right = PanelRight.Empty },
+                    onManage = { right = PanelRight.ManageStadium(rp.stadiumId) }
+                )
+
+                is PanelRight.ManageStadium -> ManageStadiumScreen(
+                    container = container,
+                    owner = owner,
+                    stadiumId = rp.stadiumId,
+                    onBack = { right = PanelRight.Stadium(rp.stadiumId) },
+                    onDeleted = { right = PanelRight.Empty }
+                )
+
+                is PanelRight.CreateStadium -> CreateStadiumScreen(
+                    container = container,
+                    owner = owner,
+                    onBack = { right = PanelRight.Empty },
+                    onStadiumCreated = { stadiumId -> right = PanelRight.Stadium(stadiumId) }
+                )
+
+                is PanelRight.JoinStadium -> JoinStadiumScreen(
+                    container = container,
+                    owner = owner,
+                    onBack = { right = PanelRight.Empty }
                 )
             }
         }
@@ -1140,6 +1265,133 @@ private fun PanelGroupRow(
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
+            }
+        }
+
+        DropdownMenu(
+            expanded = showContextMenu,
+            onDismissRequest = { showContextMenu = false },
+            offset = menuOffset
+        ) {
+            DropdownMenuItem(
+                text = { Text(if (pinned) strings.unpinChatAction else strings.pinChatAction) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.PushPin,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onTogglePin()
+                }
+            )
+        }
+    }
+}
+@Composable
+private fun PanelStadiumRow(
+    stadium: dev.stade.stadium.StadiumInfo,
+    selected: Boolean,
+    pinned: Boolean,
+    onClick: () -> Unit,
+    onTogglePin: () -> Unit
+) {
+    val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
+    val strings = LocalStrings.current
+
+    var showContextMenu by remember { mutableStateOf(false) }
+    var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
+    var rowHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+
+    Box(modifier = Modifier.onSizeChanged { rowHeightPx = it.height }) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(bg)
+                .clickable(onClick = onClick)
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                                val pos = event.changes.firstOrNull()?.position
+                                if (pos != null) {
+                                    menuOffset = with(density) {
+                                        DpOffset(
+                                            x = pos.x.toDp(),
+                                            y = pos.y.toDp() - rowHeightPx.toDp()
+                                        )
+                                    }
+                                }
+                                event.changes.forEach { it.consume() }
+                                showContextMenu = true
+                            }
+                        }
+                    }
+                }
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier
+                    .size(width = 3.dp, height = 36.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+                    )
+            )
+            Spacer(Modifier.width(8.dp))
+
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Podcasts,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stadium.name,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (pinned) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = strings.pinChatAction,
+                            modifier = Modifier.size(14.dp).rotate(45f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    strings.stadiumSubscriberCount(stadium.memberCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
 

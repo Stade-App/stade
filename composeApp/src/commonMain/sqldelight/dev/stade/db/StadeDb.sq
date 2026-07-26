@@ -27,6 +27,7 @@ CREATE TABLE Contact (
     lastSeen INTEGER NOT NULL DEFAULT 0,
     createdAt INTEGER NOT NULL,
     addresses TEXT NOT NULL DEFAULT '',
+    kind INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(ownerId) REFERENCES LocalIdentity(id)
 );
 
@@ -115,6 +116,9 @@ UPDATE Contact SET addresses = ? WHERE id = ?;
 
 renameContact:
 UPDATE Contact SET nickname = ? WHERE id = ?;
+
+setContactKind:
+UPDATE Contact SET kind = ? WHERE id = ?;
 
 deleteContact:
 DELETE FROM Contact WHERE id = ?;
@@ -359,4 +363,94 @@ WHERE StadeGroup.ownerId = :ownerId
 AND GroupMessage.body LIKE '%' || :query || '%'
 AND GroupMessage.body NOT LIKE 'STADE_IMG_V1:%' AND GroupMessage.body NOT LIKE 'STADE_VOI_V1:%'
 ORDER BY GroupMessage.timestamp DESC LIMIT :resultLimit;
+
+CREATE TABLE Stadium (
+    id TEXT NOT NULL PRIMARY KEY,
+    ownerId TEXT NOT NULL,
+    name TEXT NOT NULL,
+    creatorStadeId TEXT NOT NULL,
+    isOwner INTEGER NOT NULL DEFAULT 0,
+    inviteToken TEXT NOT NULL,
+    memberCount INTEGER NOT NULL DEFAULT 0,
+    createdAt INTEGER NOT NULL
+);
+
+CREATE TABLE StadiumMember (
+    stadiumId TEXT NOT NULL,
+    contactId TEXT NOT NULL,
+    joinedAt INTEGER NOT NULL,
+    PRIMARY KEY(stadiumId, contactId)
+);
+
+CREATE TABLE StadiumMessage (
+    id TEXT NOT NULL PRIMARY KEY,
+    stadiumId TEXT NOT NULL,
+    body TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    outgoing INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX idxStadiumMessage ON StadiumMessage(stadiumId, timestamp);
+
+insertStadium:
+INSERT INTO Stadium(id, ownerId, name, creatorStadeId, isOwner, inviteToken, memberCount, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+selectStadiums:
+SELECT * FROM Stadium WHERE ownerId = ? ORDER BY name;
+
+selectStadium:
+SELECT * FROM Stadium WHERE id = ?;
+
+deleteStadium:
+DELETE FROM Stadium WHERE id = ?;
+
+renameStadium:
+UPDATE Stadium SET name = ? WHERE id = ?;
+
+setStadiumMemberCount:
+UPDATE Stadium SET memberCount = ? WHERE id = ?;
+
+insertStadiumMember:
+INSERT OR IGNORE INTO StadiumMember(stadiumId, contactId, joinedAt) VALUES (?, ?, ?);
+
+selectStadiumMembers:
+SELECT * FROM StadiumMember WHERE stadiumId = ?;
+
+countStadiumMembers:
+SELECT COUNT(*) FROM StadiumMember WHERE stadiumId = ?;
+
+deleteStadiumMembers:
+DELETE FROM StadiumMember WHERE stadiumId = ?;
+
+insertStadiumMessage:
+INSERT INTO StadiumMessage(id, stadiumId, body, timestamp, outgoing) VALUES (?, ?, ?, ?, ?);
+
+selectStadiumMessages:
+SELECT * FROM StadiumMessage WHERE stadiumId = ? ORDER BY timestamp ASC;
+
+selectLastStadiumMessage:
+SELECT * FROM StadiumMessage WHERE stadiumId = ? ORDER BY timestamp DESC LIMIT 1;
+
+stadiumMessageExists:
+SELECT COUNT(*) FROM StadiumMessage WHERE id = ?;
+
+deleteStadiumMessages:
+DELETE FROM StadiumMessage WHERE stadiumId = ?;
+
+wipeStadiums:
+DELETE FROM Stadium;
+
+wipeStadiumMembers:
+DELETE FROM StadiumMember;
+
+wipeStadiumMessages:
+DELETE FROM StadiumMessage;
+
+searchStadiumMessages:
+SELECT StadiumMessage.*, Stadium.name AS stadiumName FROM StadiumMessage
+JOIN Stadium ON Stadium.id = StadiumMessage.stadiumId
+WHERE Stadium.ownerId = :ownerId
+AND StadiumMessage.body LIKE '%' || :query || '%'
+AND StadiumMessage.body NOT LIKE 'STADE_IMG_V1:%' AND StadiumMessage.body NOT LIKE 'STADE_VOI_V1:%'
+ORDER BY StadiumMessage.timestamp DESC LIMIT :resultLimit;
 

@@ -22,13 +22,17 @@ import dev.stade.ui.screens.AddContactScreen
 import dev.stade.ui.screens.ChatScreen
 import dev.stade.ui.screens.ContactsScreen
 import dev.stade.ui.screens.CreateGroupScreen
+import dev.stade.ui.screens.CreateStadiumScreen
 import dev.stade.ui.screens.GroupChatScreen
 import dev.stade.ui.screens.GroupMembersScreen
+import dev.stade.ui.screens.JoinStadiumScreen
 import dev.stade.ui.screens.LockScreen
+import dev.stade.ui.screens.ManageStadiumScreen
 import dev.stade.ui.screens.OnboardingScreen
 import dev.stade.ui.screens.PinSetupScreen
 import dev.stade.ui.screens.SecuritySettingsScreen
 import dev.stade.ui.screens.SettingsScreen
+import dev.stade.ui.screens.StadiumScreen
 import dev.stade.ui.screens.TransportsScreen
 import dev.stade.ui.screens.VerifyContactScreen
 import dev.stade.ui.i18n.LocalStrings
@@ -48,6 +52,10 @@ sealed interface Screen {
     data class GroupChat(val groupId: String, val highlightMessageId: String? = null) : Screen
     data class GroupMembers(val groupId: String) : Screen
     data object CreateGroup : Screen
+    data class Stadium(val stadiumId: String, val highlightMessageId: String? = null) : Screen
+    data object CreateStadium : Screen
+    data class ManageStadium(val stadiumId: String) : Screen
+    data object JoinStadium : Screen
     data class Verify(val contactId: String, val fromScreen: Screen) : Screen
     data object Settings : Screen
     data object Security : Screen
@@ -199,6 +207,7 @@ private fun UnlockedApp(
         if (current != null) {
             container.connections.start(current)
             container.groupChat.start(current, this)
+            container.stadiumChat.start(current, this)
         } else {
             container.connections.stop()
         }
@@ -278,6 +287,10 @@ private fun UnlockedApp(
                 is Screen.GroupChat -> screen = Screen.Contacts
                 is Screen.GroupMembers -> screen = Screen.GroupChat(s.groupId)
                 Screen.CreateGroup -> screen = Screen.Contacts
+                is Screen.Stadium -> screen = Screen.Contacts
+                is Screen.ManageStadium -> screen = Screen.Stadium(s.stadiumId)
+                Screen.CreateStadium -> screen = Screen.Contacts
+                Screen.JoinStadium -> screen = Screen.Contacts
 
                 is Screen.Verify -> screen = s.fromScreen
 
@@ -406,6 +419,37 @@ private fun UnlockedApp(
                 onBack = { screen = Screen.Contacts },
                 onGroupCreated = { groupId -> screen = Screen.GroupChat(groupId) }
             )
+            screen is Screen.Stadium -> {
+                val currentStadium = screen as Screen.Stadium
+                StadiumScreen(
+                    container = container,
+                    owner = identity!!,
+                    stadiumId = currentStadium.stadiumId,
+                    onBack = { screen = Screen.Contacts },
+                    onManage = { screen = Screen.ManageStadium(currentStadium.stadiumId) }
+                )
+            }
+            screen is Screen.ManageStadium -> {
+                val currentManage = screen as Screen.ManageStadium
+                ManageStadiumScreen(
+                    container = container,
+                    owner = identity!!,
+                    stadiumId = currentManage.stadiumId,
+                    onBack = { screen = Screen.Stadium(currentManage.stadiumId) },
+                    onDeleted = { screen = Screen.Contacts }
+                )
+            }
+            screen == Screen.CreateStadium -> CreateStadiumScreen(
+                container = container,
+                owner = identity!!,
+                onBack = { screen = Screen.Contacts },
+                onStadiumCreated = { stadiumId -> screen = Screen.Stadium(stadiumId) }
+            )
+            screen == Screen.JoinStadium -> JoinStadiumScreen(
+                container = container,
+                owner = identity!!,
+                onBack = { screen = Screen.Contacts }
+            )
             else -> {
                 val currentContactsScreen = screen
 
@@ -414,9 +458,12 @@ private fun UnlockedApp(
                     owner = identity!!,
                     onOpenChat = { screen = Screen.Chat(it) },
                     onOpenGroupChat = { screen = Screen.GroupChat(it) },
+                    onOpenStadium = { screen = Screen.Stadium(it) },
                     onOpenSettings = { screen = Screen.Settings },
                     onAddContact = { screen = Screen.AddContact },
                     onCreateGroup = { screen = Screen.CreateGroup },
+                    onCreateStadium = { screen = Screen.CreateStadium },
+                    onJoinStadium = { screen = Screen.JoinStadium },
                     onLongPressVerify = { contactId ->
                         screen = Screen.Verify(contactId = contactId, fromScreen = currentContactsScreen)
                     },
@@ -425,6 +472,9 @@ private fun UnlockedApp(
                     },
                     onOpenGroupMessage = { groupId, messageId ->
                         screen = Screen.GroupChat(groupId, highlightMessageId = messageId)
+                    },
+                    onOpenStadiumMessage = { stadiumId, messageId ->
+                        screen = Screen.Stadium(stadiumId, highlightMessageId = messageId)
                     }
                 )
             }

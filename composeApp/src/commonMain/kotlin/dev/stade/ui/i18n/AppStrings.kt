@@ -368,6 +368,26 @@ abstract class AppStrings {
     abstract val imageSaveFailed: String
     abstract val imageCopied: String
     abstract val imageCopyFailed: String
+
+    abstract val saveAction: String
+    abstract val createStadiumTitle: String
+    abstract val createStadiumAction: String
+    abstract val createStadiumHint: String
+    abstract val stadiumNameLabel: String
+    abstract fun stadiumSubscriberCount(count: Long): String
+    abstract val manageStadiumTitle: String
+    abstract val stadiumInviteLabel: String
+    abstract val stadiumInviteHint: String
+    abstract val copyStadiumInviteAction: String
+    abstract val stadiumRenamed: String
+    abstract val deleteStadiumAction: String
+    abstract val deleteStadiumConfirmTitle: String
+    abstract val deleteStadiumConfirmBody: String
+    abstract val joinStadiumTitle: String
+    abstract val joinStadiumAction: String
+    abstract val joinStadiumHint: String
+    abstract val notAStadiumInvite: String
+    abstract fun stadiumJoinDialing(name: String): String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.PushPin
 import dev.stade.group.GroupInfo
 import androidx.compose.material.icons.filled.Person
@@ -105,21 +106,26 @@ import kotlinx.coroutines.flow.combine
 private sealed class ChatListItem {
     data class ContactItem(val contact: Contact, val lastMessageTs: Long? = null, val pinnedAtValue: Long? = null) : ChatListItem()
     data class GroupItem(val group: GroupInfo, val lastMessageTs: Long? = null, val pinnedAtValue: Long? = null) : ChatListItem()
+    data class StadiumItem(val stadium: dev.stade.stadium.StadiumInfo, val lastMessageTs: Long? = null, val pinnedAtValue: Long? = null) : ChatListItem()
     val displayName: String get() = when (this) {
         is ContactItem -> contact.nickname
         is GroupItem   -> group.name
+        is StadiumItem -> stadium.name
     }
     val key: String get() = when (this) {
         is ContactItem -> contact.id
         is GroupItem   -> "grp_${group.id}"
+        is StadiumItem -> "std_${stadium.id}"
     }
     val sortKey: Long get() = when (this) {
         is ContactItem -> lastMessageTs ?: 0L
         is GroupItem   -> lastMessageTs ?: 0L
+        is StadiumItem -> lastMessageTs ?: stadium.createdAt
     }
     val pinnedAt: Long? get() = when (this) {
         is ContactItem -> pinnedAtValue
         is GroupItem   -> pinnedAtValue
+        is StadiumItem -> pinnedAtValue
     }
 }
 
@@ -130,15 +136,21 @@ fun ContactsScreen(
     owner: LocalIdentity,
     onOpenChat: (String) -> Unit,
     onOpenGroupChat: (String) -> Unit,
+    onOpenStadium: (String) -> Unit = {},
     onOpenSettings: () -> Unit,
     onAddContact: () -> Unit,
     onCreateGroup: () -> Unit,
+    onCreateStadium: () -> Unit = {},
+    onJoinStadium: () -> Unit = {},
     onLongPressVerify: (String) -> Unit,
     onOpenChatMessage: (String, String) -> Unit = { _, _ -> },
-    onOpenGroupMessage: (String, String) -> Unit = { _, _ -> }
+    onOpenGroupMessage: (String, String) -> Unit = { _, _ -> },
+    onOpenStadiumMessage: (String, String) -> Unit = { _, _ -> }
 ) {
-    val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
+    val allContacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
+    val contacts by remember(allContacts) { derivedStateOf { allContacts.filter { it.kind == 0 } } }
     val groups by container.groups.observeGroups(owner.id).collectAsState(initial = emptyList())
+    val stadiums by container.stadiums.observeStadiums(owner.id).collectAsState(initial = emptyList())
     val connectedSet by container.sync.connectedContacts.collectAsState()
     val pinned by container.pinnedChats.observePinned(owner.id).collectAsState(initial = emptyMap())
     val scope = rememberCoroutineScope()
@@ -154,6 +166,13 @@ fun ContactsScreen(
     val groupLastMessages by remember(groups) {
         combine(
             groups.map { g -> container.groups.observeLastMessage(g.id) }
+                .ifEmpty { listOf(kotlinx.coroutines.flow.flowOf(null)) }
+        ) { it.toList() }
+    }.collectAsState(initial = emptyList())
+
+    val stadiumLastMessages by remember(stadiums) {
+        combine(
+            stadiums.map { s -> container.stadiums.observeLastMessage(s.id) }
                 .ifEmpty { listOf(kotlinx.coroutines.flow.flowOf(null)) }
         ) { it.toList() }
     }.collectAsState(initial = emptyList())
@@ -187,6 +206,20 @@ fun ContactsScreen(
                     ) {
                         Icon(
                             Icons.Default.Group,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    is ChatListItem.StadiumItem -> Box(
+                        Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.tertiaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Podcasts,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onTertiaryContainer,
                             modifier = Modifier.size(28.dp)
@@ -360,14 +393,14 @@ fun ContactsScreen(
         }
         delay(200)
         val results = withContext(Dispatchers.Default) {
-            (container.messages.searchMessages(owner.id, q) + container.groups.searchMessages(owner.id, q))
+            (container.messages.searchMessages(owner.id, q) + container.groups.searchMessages(owner.id, q) + container.stadiums.searchMessages(owner.id, q))
                 .sortedByDescending { it.timestamp }
                 .take(30)
         }
         messageResults = results
     }
 
-    val combinedItems by remember(filtered, groups, searchActive, query, contactLastMessages, groupLastMessages, pinned) {
+    val combinedItems by remember(filtered, groups, stadiums, searchActive, query, contactLastMessages, groupLastMessages, stadiumLastMessages, pinned) {
         derivedStateOf {
             val q = query.trim()
             val result = mutableListOf<ChatListItem>()
@@ -375,6 +408,11 @@ fun ContactsScreen(
                 .filter { !searchActive || q.isBlank() || it.name.contains(q, ignoreCase = true) }
                 .forEachIndexed { i, g ->
                     result.add(ChatListItem.GroupItem(g, groupLastMessages.getOrNull(i)?.timestamp, pinned["grp_${g.id}"]))
+                }
+            stadiums
+                .filter { !searchActive || q.isBlank() || it.name.contains(q, ignoreCase = true) }
+                .forEachIndexed { i, s ->
+                    result.add(ChatListItem.StadiumItem(s, stadiumLastMessages.getOrNull(i)?.timestamp, pinned["std_${s.id}"]))
                 }
             filtered.forEachIndexed { i, c ->
                 val origIdx = contacts.indexOf(c)
@@ -544,6 +582,50 @@ fun ContactsScreen(
                                 Icon(Icons.Default.PersonAdd, contentDescription = null)
                             }
                         }
+                        Surface(
+                            onClick = {
+                                isFabExpanded = false
+                                onCreateStadium()
+                            },
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                            shadowElevation = 6.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = strings.createStadiumAction,
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                                Icon(Icons.Default.Podcasts, contentDescription = null)
+                            }
+                        }
+                        Surface(
+                            onClick = {
+                                isFabExpanded = false
+                                onJoinStadium()
+                            },
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                            shadowElevation = 6.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = strings.joinStadiumAction,
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                                Icon(Icons.Default.Podcasts, contentDescription = null)
+                            }
+                        }
                     }
                 }
 
@@ -576,7 +658,7 @@ fun ContactsScreen(
             }
         }
     ) { padding ->
-        if (contacts.isEmpty() && groups.isEmpty()) {
+        if (contacts.isEmpty() && groups.isEmpty() && stadiums.isEmpty()) {
             EmptyContacts(Modifier.fillMaxSize().padding(padding))
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -615,6 +697,15 @@ fun ContactsScreen(
                                 onLongPress = { actionItem = item }
                             )
                         }
+                        is ChatListItem.StadiumItem -> {
+                            val stadium = item.stadium
+                            StadiumRow(
+                                stadium = stadium,
+                                pinned = item.pinnedAt != null,
+                                onClick = { onOpenStadium(stadium.id) },
+                                onLongPress = { actionItem = item }
+                            )
+                        }
                     }
                 }
                 if (searchActive && query.isNotBlank() && messageResults.isNotEmpty()) {
@@ -630,8 +721,11 @@ fun ContactsScreen(
                         MessageSearchRow(
                             result = result,
                             onClick = {
-                                if (result.isGroup) onOpenGroupMessage(result.chatId, result.messageId)
-                                else onOpenChatMessage(result.chatId, result.messageId)
+                                when {
+                                    result.isStadium -> onOpenStadiumMessage(result.chatId, result.messageId)
+                                    result.isGroup -> onOpenGroupMessage(result.chatId, result.messageId)
+                                    else -> onOpenChatMessage(result.chatId, result.messageId)
+                                }
                             }
                         )
                     }
@@ -937,6 +1031,80 @@ private fun GroupRow(
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun StadiumRow(
+    stadium: dev.stade.stadium.StadiumInfo,
+    pinned: Boolean,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    val strings = LocalStrings.current
+    val subtleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.Transparent,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = { onClick() },
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onLongPress()
+                    }
+                )
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.Podcasts,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+
+            Spacer(Modifier.width(16.dp))
+
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stadium.name,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    if (pinned) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = strings.pinChatAction,
+                            modifier = Modifier.size(14.dp).rotate(45f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    strings.stadiumSubscriberCount(stadium.memberCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = subtleColor,
+                    maxLines = 1
+                )
             }
         }
     }
