@@ -448,5 +448,6 @@ object TurkishStrings : AppStrings() {
     override val joinStadiumHint = "Abone olarak katılmak için aşağıya bir Stadium davet bağlantısı yapıştırın."
     override val notAStadiumInvite = "Bu bir Stadium davet bağlantısına benzemiyor."
     override fun stadiumJoinDialing(name: String) = "\"$name\" adlı Stadium'a bağlanılıyor…"
+    override fun stadiumJoined(name: String) = "✓ \"$name\" adlı Stadium'a katıldınız"
 }
 

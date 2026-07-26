@@ -858,7 +858,8 @@ fun TwoPanelLayout(
                 is PanelRight.JoinStadium -> JoinStadiumScreen(
                     container = container,
                     owner = owner,
-                    onBack = { right = PanelRight.Empty }
+                    onBack = { right = PanelRight.Empty },
+                    onJoined = { stadiumId -> right = PanelRight.Stadium(stadiumId) }
                 )
             }
         }

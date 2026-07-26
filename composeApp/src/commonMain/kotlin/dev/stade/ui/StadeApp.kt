@@ -448,7 +448,8 @@ private fun UnlockedApp(
             screen == Screen.JoinStadium -> JoinStadiumScreen(
                 container = container,
                 owner = identity!!,
-                onBack = { screen = Screen.Contacts }
+                onBack = { screen = Screen.Contacts },
+                onJoined = { stadiumId -> screen = Screen.Stadium(stadiumId) }
             )
             else -> {
                 val currentContactsScreen = screen

@@ -449,5 +449,6 @@ object EnglishStrings : AppStrings() {
     override val joinStadiumHint = "Paste a Stadium invite link below to join as a subscriber."
     override val notAStadiumInvite = "That doesn't look like a Stadium invite link."
     override fun stadiumJoinDialing(name: String) = "Connecting to \"$name\"…"
+    override fun stadiumJoined(name: String) = "✓ Joined \"$name\""
 }
 

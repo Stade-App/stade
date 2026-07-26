@@ -34,11 +34,18 @@ import dev.stade.identity.LocalIdentity
 import dev.stade.stadium.PendingStadiumJoin
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.inviteErrorText
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun JoinStadiumScreen(container: AppContainer, owner: LocalIdentity, onBack: () -> Unit) {
+fun JoinStadiumScreen(
+    container: AppContainer,
+    owner: LocalIdentity,
+    onBack: () -> Unit,
+    onJoined: (String) -> Unit = {}
+) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
@@ -115,13 +122,31 @@ fun JoinStadiumScreen(container: AppContainer, owner: LocalIdentity, onBack: () 
                             status = strings.inviteAcceptedNoAddr
                             return@launch
                         }
-                        container.stadiums.storePendingJoin(
-                            payload.stadeId,
-                            PendingStadiumJoin(stadiumData.stadiumId, stadiumData.stadiumName, stadiumData.inviteToken)
-                        )
-                        container.connections.queueDial(addrs)
+                        val pending = PendingStadiumJoin(stadiumData.stadiumId, stadiumData.stadiumName, stadiumData.inviteToken)
+                        container.stadiums.storePendingJoin(payload.stadeId, pending)
                         status = strings.stadiumJoinDialing(stadiumData.stadiumName)
                         pastedCode = ""
+
+                        val existingContact = container.contacts.findByStadeId(payload.stadeId)
+                        if (existingContact != null) {
+                            container.stadiums.clearPendingJoin(payload.stadeId)
+                            container.stadiumChat.sendJoinRequest(owner, existingContact.id, pending)
+                        } else {
+                            container.connections.queueDial(addrs)
+                        }
+
+                        val joined = withTimeoutOrNull(60_000L) {
+                            container.stadiums.observeStadiums(owner.id).first { list ->
+                                list.any { it.id == stadiumData.stadiumId }
+                            }
+                            true
+                        } ?: false
+                        status = if (joined) {
+                            onJoined(stadiumData.stadiumId)
+                            strings.stadiumJoined(stadiumData.stadiumName)
+                        } else {
+                            strings.connectionTimeout
+                        }
                     }
                 }
             ) { Text(strings.joinStadiumAction) }

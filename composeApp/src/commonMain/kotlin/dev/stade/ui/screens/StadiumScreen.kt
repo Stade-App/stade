@@ -6,10 +6,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -70,6 +75,7 @@ fun StadiumScreen(
 
     val current = stadium
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
@@ -100,39 +106,6 @@ fun StadiumScreen(
                     navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
-        },
-        bottomBar = {
-            if (current?.isOwner == true) {
-                Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = input,
-                            onValueChange = { input = it },
-                            placeholder = { Text(strings.typeMessagePlaceholder) },
-                            modifier = Modifier.weight(1f),
-                            shape = MaterialTheme.shapes.large
-                        )
-                        Spacer(Modifier.padding(4.dp))
-                        IconButton(
-                            enabled = input.isNotBlank(),
-                            onClick = {
-                                val body = input.trim()
-                                if (body.isEmpty()) return@IconButton
-                                input = ""
-                                val stadiumSnapshot = current
-                                if (stadiumSnapshot != null) {
-                                    scope.launch { container.stadiumChat.post(owner, stadiumSnapshot, body) }
-                                }
-                            }
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.sendButton)
-                        }
-                    }
-                }
-            }
         }
     ) { padding ->
         if (current == null) {
@@ -144,14 +117,49 @@ fun StadiumScreen(
                 )
             }
         } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
             ) {
-                items(messages, key = { it.id }) { msg ->
-                    StadiumBubble(msg)
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(messages, key = { it.id }) { msg ->
+                        StadiumBubble(msg)
+                    }
+                }
+                if (current.isOwner) {
+                    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = input,
+                                onValueChange = { input = it },
+                                placeholder = { Text(strings.typeMessagePlaceholder) },
+                                modifier = Modifier.weight(1f),
+                                shape = MaterialTheme.shapes.large
+                            )
+                            Spacer(Modifier.padding(4.dp))
+                            IconButton(
+                                enabled = input.isNotBlank(),
+                                onClick = {
+                                    val body = input.trim()
+                                    if (body.isEmpty()) return@IconButton
+                                    input = ""
+                                    scope.launch { container.stadiumChat.post(owner, current, body) }
+                                }
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.sendButton)
+                            }
+                        }
+                    }
                 }
             }
         }

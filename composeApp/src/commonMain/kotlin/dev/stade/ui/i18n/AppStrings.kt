@@ -388,6 +388,7 @@ abstract class AppStrings {
     abstract val joinStadiumHint: String
     abstract val notAStadiumInvite: String
     abstract fun stadiumJoinDialing(name: String): String
+    abstract fun stadiumJoined(name: String): String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }
