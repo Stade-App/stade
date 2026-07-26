@@ -71,8 +71,6 @@ class RatchetSessions(
             val out = ratchet.decrypt(state, frame, ad)
             if (out != null) {
                 persist(contact.id, state)
-            } else {
-                states.remove(contact.id)
             }
             out
         }

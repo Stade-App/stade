@@ -226,7 +226,7 @@ class DoubleRatchet(
         val recvPub = state.dhRecvPub ?: return
         var localChain = chain
         var counter = state.recvCounter
-        val limit = until.coerceAtMost(counter + 128)
+        val limit = until.coerceAtMost(counter + MAX_SKIP_PER_STEP)
         while (counter < limit) {
             val (next, mk) = kdfChain(localChain)
             state.skipped[SkippedKey(recvPub.toList(), counter)] = mk
@@ -235,6 +235,10 @@ class DoubleRatchet(
         }
         state.recvChainKey = localChain
         state.recvCounter = counter
+        while (state.skipped.size > MAX_SKIPPED_STORED) {
+            val oldest = state.skipped.keys.firstOrNull() ?: break
+            state.skipped.remove(oldest)
+        }
     }
 
     private fun dhRatchet(state: State, header: Header, incomingKemSs: ByteArray?) {
@@ -274,6 +278,9 @@ class DoubleRatchet(
     }
 
     companion object {
+        private const val MAX_SKIP_PER_STEP = 8000
+        private const val MAX_SKIPPED_STORED = 10000
+
         private fun writeInt(out: ByteArray, offset: Int, value: Int) {
             out[offset] = ((value ushr 24) and 0xff).toByte()
             out[offset + 1] = ((value ushr 16) and 0xff).toByte()

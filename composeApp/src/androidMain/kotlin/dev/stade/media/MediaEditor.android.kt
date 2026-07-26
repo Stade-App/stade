@@ -5,9 +5,26 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.view.WindowManager
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
 import java.io.ByteArrayOutputStream
 import kotlin.math.roundToInt
+
+@Composable
+actual fun ForceFullScreenDialogWindow() {
+    val view = LocalView.current
+    SideEffect {
+        val dialogWindowProvider = view.parent as? DialogWindowProvider
+        dialogWindowProvider?.window?.setLayout(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT
+        )
+    }
+}
 
 actual fun applyMediaEdits(original: ByteArray, crop: CropRect?, strokes: List<EditStroke>): ByteArray {
     val src = BitmapFactory.decodeByteArray(original, 0, original.size) ?: return original

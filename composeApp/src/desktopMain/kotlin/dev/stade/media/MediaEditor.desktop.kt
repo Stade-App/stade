@@ -1,5 +1,6 @@
 package dev.stade.media
 
+import androidx.compose.runtime.Composable
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.RenderingHints
@@ -70,4 +71,8 @@ actual fun applyMediaEdits(original: ByteArray, crop: CropRect?, strokes: List<E
     val out = ByteArrayOutputStream()
     ImageIO.write(rgbImage, "jpg", out)
     return out.toByteArray()
+}
+
+@Composable
+actual fun ForceFullScreenDialogWindow() {
 }

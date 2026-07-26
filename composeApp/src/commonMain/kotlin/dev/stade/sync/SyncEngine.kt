@@ -106,6 +106,8 @@ class SyncEngine(
             }
             val (contact, isNew) = handshakeOutcome
             contacts.markSeen(contact.id, Clock.System.now().toEpochMilliseconds())
+            val stale = sessionsLock.withLock { sessions[contact.id] }
+            stale?.let { runCatching { it.cancelAndJoin() } }
             val session = sessionsLock.withLock {
                 sessions[contact.id]?.let { runCatching { it.cancel() } }
                 ContactSession(this@coroutineScope, owner, contact, connection).also { sessions[contact.id] = it }
@@ -328,6 +330,14 @@ class SyncEngine(
         fun notifyOutbox() { outboxSignal.tryEmit(Unit) }
 
         fun cancel() { rootJob?.cancel() }
+
+        suspend fun cancelAndJoin() {
+            val job = rootJob
+            if (job != null) {
+                job.cancel()
+                runCatching { job.join() }
+            }
+        }
 
         suspend fun run() = coroutineScope {
             rootJob = coroutineContext[Job]

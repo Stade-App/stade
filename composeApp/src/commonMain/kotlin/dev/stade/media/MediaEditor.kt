@@ -65,6 +65,9 @@ data class CropRect(val left: Float, val top: Float, val right: Float, val botto
 
 expect fun applyMediaEdits(original: ByteArray, crop: CropRect?, strokes: List<EditStroke>): ByteArray
 
+@Composable
+expect fun ForceFullScreenDialogWindow()
+
 private enum class EditorMode { CROP, DRAW }
 
 private val swatchColors = listOf(Color.Red, Color(0xFFFFC107), Color(0xFF2196F3), Color(0xFF4CAF50), Color.White, Color.Black)
@@ -98,6 +101,7 @@ fun MediaEditorDialog(
         onDismissRequest = { if (!saving) onCancel() },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        ForceFullScreenDialogWindow()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -242,7 +246,6 @@ fun MediaEditorDialog(
                         val bw = boxSizePx.width.toFloat()
                         val bh = boxSizePx.height.toFloat()
 
-                        // Whole-rect move handle (drawn first so corner handles stay on top for touch)
                         Box(
                             modifier = Modifier
                                 .offset { IntOffset((crop.left * bw).toInt(), (crop.top * bh).toInt()) }
