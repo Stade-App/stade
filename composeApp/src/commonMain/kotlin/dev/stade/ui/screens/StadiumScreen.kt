@@ -72,6 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -84,6 +85,7 @@ import dev.stade.audio.rememberAudioPermissionState
 import dev.stade.audio.rememberAudioPlayer
 import dev.stade.audio.rememberAudioRecorder
 import dev.stade.identity.LocalIdentity
+import dev.stade.media.MediaEditorDialog
 import dev.stade.message.MessageType
 import dev.stade.stadium.StadiumMessage
 import dev.stade.ui.copyImageToClipboard
@@ -121,6 +123,7 @@ fun StadiumScreen(
 
     val MAX_IMAGE_BYTES = 3 * 1024 * 1024
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
+    var editingImageIndex by remember { mutableStateOf<Int?>(null) }
 
     var banner by remember { mutableStateOf<StadiumBannerData?>(null) }
     var bannerKey by remember { mutableStateOf(0) }
@@ -278,6 +281,7 @@ fun StadiumScreen(
                             onRemoveImage = { idx ->
                                 pendingImages = pendingImages.toMutableList().also { it.removeAt(idx) }
                             },
+                            onEditImage = { idx -> editingImageIndex = idx },
                             onRemoveVoiceClip = { pendingVoiceClip = null },
                             onSend = {
                                 val text = draft.trim()
@@ -306,6 +310,17 @@ fun StadiumScreen(
                             onToggleRecording = { toggleRecording() }
                         )
                     }
+                }
+                val editIdx = editingImageIndex
+                if (editIdx != null && editIdx < pendingImages.size) {
+                    MediaEditorDialog(
+                        imageBytes = pendingImages[editIdx],
+                        onSave = { edited ->
+                            pendingImages = pendingImages.toMutableList().also { it[editIdx] = edited }
+                            editingImageIndex = null
+                        },
+                        onCancel = { editingImageIndex = null }
+                    )
                 }
                 StadiumTopBanner(
                     data = banner,
@@ -546,6 +561,7 @@ private fun StadiumComposer(
     isRecording: Boolean,
     onChange: (String) -> Unit,
     onRemoveImage: (Int) -> Unit,
+    onEditImage: (Int) -> Unit,
     onRemoveVoiceClip: () -> Unit,
     onSend: () -> Unit,
     onPickImage: () -> Unit,
@@ -575,7 +591,8 @@ private fun StadiumComposer(
                             modifier = Modifier
                                 .size(72.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                .clickable { onEditImage(idx) },
                             contentAlignment = Alignment.Center
                         ) {
                             if (bitmap != null) {
@@ -670,7 +687,12 @@ private fun StadiumComposer(
                 shape = MaterialTheme.shapes.large,
                 trailingIcon = {
                     IconButton(onClick = onPickImage) {
-                        Icon(Icons.Default.Attachment, contentDescription = strings.attachPhoto, tint = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            Icons.Default.Attachment,
+                            contentDescription = strings.attachPhoto,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.rotate(270f)
+                        )
                     }
                 }
             )
