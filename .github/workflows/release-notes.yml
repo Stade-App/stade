@@ -63,18 +63,18 @@ jobs:
 
           title_for() {
             case "$1" in
-              feat) echo "✨ Features" ;;
-              fix) echo "🐛 Bug Fixes" ;;
-              perf) echo "⚡ Performance" ;;
-              refactor) echo "♻️ Refactoring" ;;
-              docs) echo "📝 Documentation" ;;
-              style) echo "🎨 Style" ;;
-              test) echo "✅ Tests" ;;
-              build) echo "📦 Build" ;;
-              ci) echo "👷 CI" ;;
-              chore) echo "🧹 Chores" ;;
-              revert) echo "⏪ Reverts" ;;
-              other) echo "📌 Other Changes" ;;
+              feat) echo "Features" ;;
+              fix) echo "Bug Fixes" ;;
+              perf) echo "Performance" ;;
+              refactor) echo "Refactoring" ;;
+              docs) echo "Documentation" ;;
+              style) echo "Style" ;;
+              test) echo "Tests" ;;
+              build) echo "Build" ;;
+              ci) echo "CI" ;;
+              chore) echo "Chores" ;;
+              revert) echo "Reverts" ;;
+              other) echo "Other Changes" ;;
             esac
           }
 
