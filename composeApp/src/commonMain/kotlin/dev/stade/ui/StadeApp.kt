@@ -194,6 +194,15 @@ private fun UnlockedApp(
         }
     }
 
+    val pendingOpenStadiumId by container.pendingOpenStadium.collectAsState()
+    LaunchedEffect(pendingOpenStadiumId, identity?.id) {
+        val id = pendingOpenStadiumId
+        if (id != null && identity != null) {
+            screen = Screen.Stadium(id)
+            container.pendingOpenStadium.value = null
+        }
+    }
+
     val pendingGoHome by container.pendingGoHome.collectAsState()
     LaunchedEffect(pendingGoHome, identity?.id) {
         if (pendingGoHome && identity != null) {

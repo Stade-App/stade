@@ -24,7 +24,6 @@ class MainActivity : ComponentActivity() {
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    /** Son uygulanan FLAG_SECURE durumu; aynı değerle tekrar setFlags/clearFlags çağrısını önler. */
     private var lastSecureFlagState: Boolean? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,6 +51,7 @@ class MainActivity : ComponentActivity() {
     private fun handleNotificationIntent(intent: Intent?) {
         val app = application as StadeApplication
         intent?.getStringExtra(EXTRA_OPEN_CHAT_ID)?.let { app.handleOpenChatIntent(it) }
+        intent?.getStringExtra(EXTRA_OPEN_STADIUM_ID)?.let { app.handleOpenStadiumIntent(it) }
         if (intent?.getBooleanExtra(EXTRA_GO_HOME, false) == true) app.handleGoHomeIntent()
     }
 
@@ -71,11 +71,6 @@ class MainActivity : ComponentActivity() {
         clearAllMessageNotifications()
     }
 
-    /**
-     * FLAG_SECURE etkinken arka plandan dönerken pencere yüzeyi yeniden oluşturulabilir.
-     * Odak geri kazanıldığında decor view'ı invalidate ederek Compose'u yeniden çizmeye
-     * zorluyoruz; bu, gri ekran sorununu ortadan kaldırır.
-     */
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
@@ -111,6 +106,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_OPEN_CHAT_ID = "open_chat_contact_id"
+        const val EXTRA_OPEN_STADIUM_ID = "open_stadium_id"
         const val EXTRA_GO_HOME = "go_home"
     }
 }

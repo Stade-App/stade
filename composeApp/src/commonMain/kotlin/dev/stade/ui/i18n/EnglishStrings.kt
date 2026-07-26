@@ -450,5 +450,7 @@ object EnglishStrings : AppStrings() {
     override val notAStadiumInvite = "That doesn't look like a Stadium invite link."
     override fun stadiumJoinDialing(name: String) = "Connecting to \"$name\"…"
     override fun stadiumJoined(name: String) = "✓ Joined \"$name\""
+    override val muteStadiumAction = "Mute Stadium"
+    override val unmuteStadiumAction = "Unmute Stadium"
 }
 

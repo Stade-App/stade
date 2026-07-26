@@ -372,7 +372,8 @@ CREATE TABLE Stadium (
     isOwner INTEGER NOT NULL DEFAULT 0,
     inviteToken TEXT NOT NULL,
     memberCount INTEGER NOT NULL DEFAULT 0,
-    createdAt INTEGER NOT NULL
+    createdAt INTEGER NOT NULL,
+    muted INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE StadiumMember (
@@ -409,6 +410,9 @@ UPDATE Stadium SET name = ? WHERE id = ?;
 
 setStadiumMemberCount:
 UPDATE Stadium SET memberCount = ? WHERE id = ?;
+
+setStadiumMuted:
+UPDATE Stadium SET muted = ? WHERE id = ?;
 
 insertStadiumMember:
 INSERT OR IGNORE INTO StadiumMember(stadiumId, contactId, joinedAt) VALUES (?, ?, ?);

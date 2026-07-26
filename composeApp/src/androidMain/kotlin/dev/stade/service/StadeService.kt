@@ -9,6 +9,8 @@ import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
 import dev.stade.MainActivity
 import dev.stade.StadeApplication
@@ -118,6 +120,16 @@ class StadeService : Service() {
                                     showMessageNotification(event.contactId, senderName, preview)
                                 }
                             }
+                            is SyncEngine.SyncEvent.StadiumMessageReceived -> {
+                                if (!getNotificationsEnabled().value) return@collect
+                                val stadium = container.stadiums.getStadium(event.stadiumId)
+                                if (stadium == null || stadium.muted) return@collect
+                                if (container.isAppInForeground.value && container.activeContactId == event.stadiumId) return@collect
+                                val preview = container.stadiums.lastMessage(event.stadiumId)?.body
+                                    ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage, dev.stade.ui.i18n.I18n.current.voiceMessage) }
+                                    ?: dev.stade.ui.i18n.I18n.current.notifNewMessageFallback
+                                showMessageNotification(event.stadiumId, stadium.name, preview, isStadium = true)
+                            }
                             else -> Unit
                         }
                     }
@@ -160,23 +172,45 @@ class StadeService : Service() {
 
 
 
-    private fun showMessageNotification(contactId: String, senderName: String, preview: String) {
+    private fun showMessageNotification(contactId: String, senderName: String, preview: String, isStadium: Boolean = false) {
         val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         val openIntent = PendingIntent.getActivity(
             this,
             contactId.hashCode(),
             Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra(MainActivity.EXTRA_OPEN_CHAT_ID, contactId)
+                if (isStadium) putExtra(MainActivity.EXTRA_OPEN_STADIUM_ID, contactId)
+                else putExtra(MainActivity.EXTRA_OPEN_CHAT_ID, contactId)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val avatarBitmap = runCatching { NotificationAvatar.bitmapFor(senderName) }.getOrNull()
+        val avatarIcon = avatarBitmap?.let { IconCompat.createWithBitmap(it) }
         val senderPerson = Person.Builder()
             .setName(senderName)
-            .apply { avatarBitmap?.let { setIcon(IconCompat.createWithBitmap(it)) } }
+            .setKey(contactId)
+            .apply { avatarIcon?.let { setIcon(it) } }
             .build()
         val userPerson = Person.Builder().setName("Me").build()
+
+        val shortcutId = "${if (isStadium) "stadium" else "contact"}_$contactId"
+        runCatching {
+            val shortcutIntent = Intent(this, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                if (isStadium) putExtra(MainActivity.EXTRA_OPEN_STADIUM_ID, contactId)
+                else putExtra(MainActivity.EXTRA_OPEN_CHAT_ID, contactId)
+            }
+            val shortcut = ShortcutInfoCompat.Builder(this, shortcutId)
+                .setShortLabel(senderName)
+                .setLongLived(true)
+                .setIntent(shortcutIntent)
+                .setPerson(senderPerson)
+                .setCategories(setOf("android.shortcut.conversation"))
+                .apply { avatarIcon?.let { setIcon(it) } }
+                .build()
+            ShortcutManagerCompat.pushDynamicShortcut(this, shortcut)
+        }
+
         val notif = NotificationCompat.Builder(this, msgChannelId)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
             .apply { avatarBitmap?.let { setLargeIcon(it) } }
@@ -186,6 +220,8 @@ class StadeService : Service() {
             )
             .setContentTitle(senderName)
             .setContentText(preview)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setShortcutId(shortcutId)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(openIntent)

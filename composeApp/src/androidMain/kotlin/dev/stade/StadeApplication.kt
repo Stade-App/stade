@@ -27,15 +27,19 @@ class StadeApplication : Application() {
     val containerFlow = kotlinx.coroutines.flow.MutableStateFlow<AppContainer?>(null)
 
     private var pendingChatAtBoot: String? = null
+    private var pendingStadiumAtBoot: String? = null
     private var pendingGoHomeAtBoot: Boolean = false
 
-    /** Called by MainActivity when a notification tap should open a specific chat. */
     fun handleOpenChatIntent(contactId: String) {
         val c = activeContainer
         if (c != null) c.pendingOpenChat.value = contactId else pendingChatAtBoot = contactId
     }
 
-    /** Called by MainActivity when a notification tap should just bring the app home. */
+    fun handleOpenStadiumIntent(stadiumId: String) {
+        val c = activeContainer
+        if (c != null) c.pendingOpenStadium.value = stadiumId else pendingStadiumAtBoot = stadiumId
+    }
+
     fun handleGoHomeIntent() {
         val c = activeContainer
         if (c != null) c.pendingGoHome.value = true else pendingGoHomeAtBoot = true
@@ -72,6 +76,8 @@ class StadeApplication : Application() {
                 containerFlow.value = c
                 pendingChatAtBoot?.let { c.pendingOpenChat.value = it }
                 pendingChatAtBoot = null
+                pendingStadiumAtBoot?.let { c.pendingOpenStadium.value = it }
+                pendingStadiumAtBoot = null
                 if (pendingGoHomeAtBoot) {
                     c.pendingGoHome.value = true
                     pendingGoHomeAtBoot = false

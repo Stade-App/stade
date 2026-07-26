@@ -74,6 +74,10 @@ class StadiumManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.renameStadium(name, stadiumId)
     }
 
+    fun setMuted(stadiumId: String, muted: Boolean) {
+        db.stadeDbQueries.setStadiumMuted(if (muted) 1L else 0L, stadiumId)
+    }
+
     fun deleteStadium(stadiumId: String) {
         db.stadeDbQueries.transaction {
             db.stadeDbQueries.deleteStadiumMessages(stadiumId)
@@ -188,7 +192,8 @@ class StadiumManager(private val db: StadeDb, private val crypto: CryptoApi) {
         isOwner = isOwner == 1L,
         inviteToken = inviteToken,
         memberCount = memberCount,
-        createdAt = createdAt
+        createdAt = createdAt,
+        muted = muted == 1L
     )
 
     private fun dev.stade.db.StadiumMessage.toStadiumMessage() = StadiumMessage(

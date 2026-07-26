@@ -14,7 +14,8 @@ data class StadiumInfo(
     val isOwner: Boolean,
     val inviteToken: String,
     val memberCount: Long,
-    val createdAt: Long
+    val createdAt: Long,
+    val muted: Boolean = false
 )
 
 data class StadiumMessage(

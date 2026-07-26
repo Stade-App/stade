@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -216,6 +218,15 @@ fun TwoPanelLayout(
         if (id != null) {
             right = PanelRight.Chat(id)
             container.pendingOpenChat.value = null
+        }
+    }
+
+    val pendingOpenStadiumId by container.pendingOpenStadium.collectAsState()
+    LaunchedEffect(pendingOpenStadiumId) {
+        val id = pendingOpenStadiumId
+        if (id != null) {
+            right = PanelRight.Stadium(id)
+            container.pendingOpenStadium.value = null
         }
     }
 
@@ -525,6 +536,9 @@ fun TwoPanelLayout(
                                                 onClick = { right = PanelRight.Stadium(stadium.id) },
                                                 onTogglePin = {
                                                     container.pinnedChats.setPinned(owner.id, item.key, item.pinnedAt == null)
+                                                },
+                                                onToggleMute = {
+                                                    container.stadiums.setMuted(stadium.id, !stadium.muted)
                                                 }
                                             )
                                         }
@@ -610,28 +624,6 @@ fun TwoPanelLayout(
                                         Surface(
                                             onClick = {
                                                 isFabExpanded = false
-                                                right = PanelRight.AddContact
-                                            },
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.primaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            shadowElevation = 6.dp
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                Text(
-                                                    text = strings.addContactAction,
-                                                    style = MaterialTheme.typography.labelLarge
-                                                )
-                                                Icon(Icons.Default.PersonAdd, contentDescription = null)
-                                            }
-                                        }
-                                        Surface(
-                                            onClick = {
-                                                isFabExpanded = false
                                                 right = PanelRight.CreateStadium
                                             },
                                             shape = CircleShape,
@@ -671,6 +663,28 @@ fun TwoPanelLayout(
                                                     style = MaterialTheme.typography.labelLarge
                                                 )
                                                 Icon(Icons.Default.Podcasts, contentDescription = null)
+                                            }
+                                        }
+                                        Surface(
+                                            onClick = {
+                                                isFabExpanded = false
+                                                right = PanelRight.AddContact
+                                            },
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            shadowElevation = 6.dp
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Text(
+                                                    text = strings.addContactAction,
+                                                    style = MaterialTheme.typography.labelLarge
+                                                )
+                                                Icon(Icons.Default.PersonAdd, contentDescription = null)
                                             }
                                         }
                                     }
@@ -1297,7 +1311,8 @@ private fun PanelStadiumRow(
     selected: Boolean,
     pinned: Boolean,
     onClick: () -> Unit,
-    onTogglePin: () -> Unit
+    onTogglePin: () -> Unit,
+    onToggleMute: () -> Unit
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
     val strings = LocalStrings.current
@@ -1413,6 +1428,20 @@ private fun PanelStadiumRow(
                 onClick = {
                     showContextMenu = false
                     onTogglePin()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(if (stadium.muted) strings.unmuteStadiumAction else strings.muteStadiumAction) },
+                leadingIcon = {
+                    Icon(
+                        if (stadium.muted) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onToggleMute()
                 }
             )
         }
