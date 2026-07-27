@@ -23,6 +23,9 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
     fun all(): List<Contact> =
         db.stadeDbQueries.selectAllContacts().executeAsList().map { it.toDomain() }
 
+    fun contacts(ownerId: String): List<Contact> =
+        db.stadeDbQueries.selectContacts(ownerId).executeAsList().map { it.toDomain() }
+
     fun get(id: String): Contact? =
         db.stadeDbQueries.selectContact(id).executeAsOneOrNull()?.toDomain()
 

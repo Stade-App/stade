@@ -62,9 +62,9 @@ fun GroupMembersScreen(
     val scope = rememberCoroutineScope()
 
     val group = remember(groupId) { container.groups.getGroup(groupId) }
-    val memberIds by container.groups.observeMembers(groupId)
+    val memberIds by remember(groupId) { container.groups.observeMembers(groupId) }
         .collectAsState(initial = group?.memberIds ?: emptyList())
-    val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
+    val contacts by remember(owner.id) { container.contacts.observeContacts(owner.id) }.collectAsState(initial = emptyList())
     val contactsById = remember(contacts) { contacts.associateBy { it.id } }
 
     val isOwner = remember(group?.creatorStadeId) {

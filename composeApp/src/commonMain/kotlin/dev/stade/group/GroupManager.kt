@@ -91,7 +91,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
             .map { rows -> rows.map { it.toGroupMessage() } }
 
     fun observeLastMessage(groupId: String): Flow<GroupMessage?> =
-        db.stadeDbQueries.selectLastGroupMessage(groupId)
+        db.stadeDbQueries.selectLastGroupMessagePreview(groupId)
             .asFlow()
             .mapToOneOrNull(Dispatchers.Default)
             .map { it?.toGroupMessage() }
@@ -102,7 +102,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
             .mapToOne(Dispatchers.Default)
 
     fun lastMessage(groupId: String): GroupMessage? =
-        db.stadeDbQueries.selectLastGroupMessage(groupId).executeAsOneOrNull()?.toGroupMessage()
+        db.stadeDbQueries.selectLastGroupMessagePreview(groupId).executeAsOneOrNull()?.toGroupMessage()
 
     fun unreadCount(groupId: String): Long =
         db.stadeDbQueries.countGroupUnread(groupId).executeAsOne()
@@ -268,6 +268,16 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
         }
 
     private fun dev.stade.db.GroupMessage.toGroupMessage() = GroupMessage(
+        id = id,
+        groupId = groupId,
+        senderId = senderId,
+        body = body,
+        timestamp = timestamp,
+        isOwn = outgoing == 1L,
+        isRead = read == 1L
+    )
+
+    private fun dev.stade.db.SelectLastGroupMessagePreview.toGroupMessage() = GroupMessage(
         id = id,
         groupId = groupId,
         senderId = senderId,

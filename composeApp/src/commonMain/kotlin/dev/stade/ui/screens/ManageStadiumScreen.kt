@@ -56,7 +56,7 @@ fun ManageStadiumScreen(
 ) {
     val strings = LocalStrings.current
     val clipboard = LocalClipboardManager.current
-    val stadiums by container.stadiums.observeStadiums(owner.id).collectAsState(initial = emptyList())
+    val stadiums by remember(owner.id) { container.stadiums.observeStadiums(owner.id) }.collectAsState(initial = emptyList())
     val stadium = stadiums.find { it.id == stadiumId }
     var name by remember(stadium?.id) { mutableStateOf(stadium?.name ?: "") }
     var showDeleteDialog by remember { mutableStateOf(false) }

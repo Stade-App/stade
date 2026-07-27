@@ -97,6 +97,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -180,7 +181,8 @@ fun ChatScreen(
     val clipboard = LocalClipboardManager.current
     val haptic = LocalHapticFeedback.current
     val contact = remember(contactId) { container.contacts.get(contactId) }
-    val messages by container.messages.observeMessages(contactId).collectAsState(initial = emptyList())
+    val rawMessages by remember(contactId) { container.messages.observeMessages(contactId) }.collectAsState(initial = null)
+    val messages = rawMessages ?: emptyList()
     val connected by container.sync.connectedContacts.collectAsState()
     val isOnline by remember(contactId) { derivedStateOf { connected.contains(contactId) } }
     val diagnostics by container.connections.diagnostics.collectAsState()
@@ -268,7 +270,9 @@ fun ChatScreen(
     LaunchedEffect(contactId, messages.size) { container.messages.markRead(contactId) }
 
     var prevMessageCount by remember { mutableStateOf(0) }
-    LaunchedEffect(messages.size) {
+    var scrollReady by remember(contactId) { mutableStateOf(false) }
+    LaunchedEffect(rawMessages) {
+        if (rawMessages == null) return@LaunchedEffect
         if (messages.isNotEmpty()) {
             if (prevMessageCount == 0) {
                 listState.scrollToItem(messages.lastIndex)
@@ -277,6 +281,7 @@ fun ChatScreen(
             }
         }
         prevMessageCount = messages.size
+        scrollReady = true
     }
 
     var flashedMessageId by remember { mutableStateOf<String?>(null) }
@@ -595,7 +600,9 @@ fun ChatScreen(
                     )
                 }
 
-                if (messages.isEmpty()) {
+                if (rawMessages == null) {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth())
+                } else if (messages.isEmpty()) {
                     Box(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center
@@ -618,12 +625,14 @@ fun ChatScreen(
                         }
                     }
                 } else {
+                    val messagesById = remember(messages) { messages.associateBy { it.id } }
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp),
+                            .padding(horizontal = 8.dp)
+                            .alpha(if (scrollReady) 1f else 0f),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                         contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
@@ -634,9 +643,9 @@ fun ChatScreen(
                                     (msg.timestamp - prev.timestamp) < 60_000L
                             val isSelected = selectedMessageIds.contains(msg.id)
                             val isHighlighted = flashedMessageId == msg.id
-                            val reactions by container.messages.observeReactionsForMessage(msg.id).collectAsState(initial = emptyList())
-                            val quotedMsg = remember(msg.id, msg.replyToId, messages) {
-                                msg.replyToId?.let { rid -> messages.firstOrNull { it.id == rid } }
+                            val reactions by remember(msg.id) { container.messages.observeReactionsForMessage(msg.id) }.collectAsState(initial = emptyList())
+                            val quotedMsg = remember(msg.id, msg.replyToId, messagesById) {
+                                msg.replyToId?.let { rid -> messagesById[rid] }
                             }
                             val quoted = remember(msg.id, quotedMsg) {
                                 when {

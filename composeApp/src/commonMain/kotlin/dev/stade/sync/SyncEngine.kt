@@ -58,7 +58,7 @@ class SyncEngine(
     val groupManager: GroupManager? = null,
     val stadiumManager: StadiumManager? = null
 ) {
-    private val protocolVersion = 2
+    private val protocolVersion = 3
     private val json = Json { ignoreUnknownKeys = true }
     private val _events = MutableSharedFlow<SyncEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<SyncEvent> = _events
@@ -404,7 +404,12 @@ class SyncEngine(
                     val payload = runCatching {
                         json.decodeFromString(MessagePayload.serializer(), record.payload.decodeToString())
                     }.getOrNull() ?: return
-                    if (messages.exists(payload.messageId)) {
+                    // Every payload type (not just plain 1:1 messages - reactions, group/Stadium
+                    // control frames) must be deduped here: the sender resends anything unacked on
+                    // every reconnect, and re-decrypting an already-consumed ratchet frame always
+                    // fails, surfacing as a spurious "failed to decrypt" even though the first
+                    // delivery succeeded.
+                    if (messages.isEnvelopeProcessed(payload.messageId)) {
                         val ack = AckPayload(payload.messageId)
                         runCatching {
                             connection.send(FrameCodec.encode(SyncRecord(RecordType.ACK, json.encodeToString(AckPayload.serializer(), ack).encodeToByteArray())))
@@ -416,6 +421,7 @@ class SyncEngine(
                         _events.tryEmit(SyncEvent.DecryptFailed(contact.id))
                         return
                     }
+                    messages.markEnvelopeProcessed(payload.messageId, contact.id, Clock.System.now().toEpochMilliseconds())
                     val bodyStr = plain.decodeToString()
 
                     when {

@@ -94,6 +94,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -170,10 +171,11 @@ fun GroupChatScreen(
     val haptic = LocalHapticFeedback.current
 
     val group = remember(groupId) { container.groups.getGroup(groupId) }
-    val memberIds by container.groups.observeMembers(groupId)
+    val memberIds by remember(groupId) { container.groups.observeMembers(groupId) }
         .collectAsState(initial = group?.memberIds ?: emptyList())
-    val messages by container.groups.observeMessages(groupId).collectAsState(initial = emptyList())
-    val contacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
+    val rawMessages by remember(groupId) { container.groups.observeMessages(groupId) }.collectAsState(initial = null)
+    val messages = rawMessages ?: emptyList()
+    val contacts by remember(owner.id) { container.contacts.observeContacts(owner.id) }.collectAsState(initial = emptyList())
     val listState = rememberLazyListState()
     val linkPreviewsEnabled = remember { getLinkPreviewsEnabled(container.db) }
     var draft by remember { mutableStateOf(TextFieldValue("")) }
@@ -250,7 +252,9 @@ fun GroupChatScreen(
     }
 
     var prevMessageCount by remember { mutableStateOf(0) }
-    LaunchedEffect(messages.size) {
+    var scrollReady by remember(groupId) { mutableStateOf(false) }
+    LaunchedEffect(rawMessages) {
+        if (rawMessages == null) return@LaunchedEffect
         if (messages.isNotEmpty()) {
             if (prevMessageCount == 0) {
                 listState.scrollToItem(messages.lastIndex)
@@ -259,6 +263,7 @@ fun GroupChatScreen(
             }
         }
         prevMessageCount = messages.size
+        scrollReady = true
     }
 
     var flashedMessageId by remember { mutableStateOf<String?>(null) }
@@ -664,7 +669,9 @@ fun GroupChatScreen(
                         prevColumnHeight = size.height
                     }
             ) {
-                if (messages.isEmpty()) {
+                if (rawMessages == null) {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth())
+                } else if (messages.isEmpty()) {
                     Box(
                         Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center
@@ -698,12 +705,14 @@ fun GroupChatScreen(
                         }
                     }
                 } else {
+                    val messagesById = remember(messages) { messages.associateBy { it.id } }
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp),
+                            .padding(horizontal = 8.dp)
+                            .alpha(if (scrollReady) 1f else 0f),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                         contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
@@ -718,9 +727,9 @@ fun GroupChatScreen(
                             }
                             val isSelected = selectedMessageIds.contains(msg.id)
                             val isHighlighted = flashedMessageId == msg.id
-                            val reactions by container.messages.observeReactionsForMessage(msg.id).collectAsState(initial = emptyList())
-                            val quotedMsg = remember(msg.id, msg.replyToId, messages) {
-                                msg.replyToId?.let { rid -> messages.firstOrNull { it.id == rid } }
+                            val reactions by remember(msg.id) { container.messages.observeReactionsForMessage(msg.id) }.collectAsState(initial = emptyList())
+                            val quotedMsg = remember(msg.id, msg.replyToId, messagesById) {
+                                msg.replyToId?.let { rid -> messagesById[rid] }
                             }
                             val quoted = remember(msg.id, quotedMsg) {
                                 when {

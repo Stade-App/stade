@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+private const val PROCESSED_ENVELOPE_RETENTION_MS = 30L * 24 * 60 * 60 * 1000
+
 data class SearchResult(
     val messageId: String,
     val chatId: String,
@@ -48,7 +50,7 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
             .map { rows -> rows.map { it.toMessage() } }
 
     fun observeLastMessage(contactId: String): Flow<Message?> =
-        db.stadeDbQueries.selectLastMessage(contactId)
+        db.stadeDbQueries.selectLastMessagePreview(contactId)
             .asFlow()
             .mapToOneOrNull(Dispatchers.Default)
             .map { it?.toMessage() }
@@ -59,7 +61,7 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
             .mapToOne(Dispatchers.Default)
 
     fun lastMessage(contactId: String): Message? =
-        db.stadeDbQueries.selectLastMessage(contactId).executeAsOneOrNull()?.toMessage()
+        db.stadeDbQueries.selectLastMessagePreview(contactId).executeAsOneOrNull()?.toMessage()
 
     fun unreadCount(contactId: String): Long =
         db.stadeDbQueries.countUnread(contactId).executeAsOne()
@@ -74,6 +76,14 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
 
     fun exists(messageId: String): Boolean =
         db.stadeDbQueries.messageExists(messageId).executeAsOne() > 0L
+
+    fun isEnvelopeProcessed(messageId: String): Boolean =
+        db.stadeDbQueries.envelopeProcessed(messageId).executeAsOne() > 0L
+
+    fun markEnvelopeProcessed(messageId: String, contactId: String, timestamp: Long) {
+        db.stadeDbQueries.markEnvelopeProcessed(messageId, contactId, timestamp)
+        db.stadeDbQueries.pruneProcessedEnvelope(timestamp - PROCESSED_ENVELOPE_RETENTION_MS)
+    }
 
     fun newId(): String = Encoding.toHex(crypto.randomBytes(16))
 
@@ -111,6 +121,13 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
     }
 
     private fun dev.stade.db.Message.toMessage(): Message =
+        Message(
+            id, contactId,
+            if (direction == "IN") MessageDirection.IN else MessageDirection.OUT,
+            body, timestamp, delivered == 1L, read == 1L
+        )
+
+    private fun dev.stade.db.SelectLastMessagePreview.toMessage(): Message =
         Message(
             id, contactId,
             if (direction == "IN") MessageDirection.IN else MessageDirection.OUT,

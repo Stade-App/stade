@@ -25,7 +25,9 @@ class RatchetSessions(
         states[contact.id]?.let { return it }
         val saved = contact.ratchetState
         val state = if (saved != null) {
-            val snap = json.decodeFromString(RatchetSnapshot.serializer(), saved.decodeToString())
+            val text = saved.decodeToString()
+            val snap = runCatching { json.decodeFromString(RatchetSnapshot.serializer(), text) }
+                .getOrElse { json.decodeFromString(LegacyRatchetSnapshot.serializer(), text).toCurrent() }
             val loaded = RatchetSerializer.fromSnapshot(snap)
             if (loaded.sendChainKey == null || loaded.recvChainKey == null || loaded.dhRecvPub == null) {
                 ratchet.initSymmetric(

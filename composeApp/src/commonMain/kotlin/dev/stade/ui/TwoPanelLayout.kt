@@ -173,12 +173,16 @@ fun TwoPanelLayout(
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
-    val allContacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
+    val allContacts by remember(owner.id) { container.contacts.observeContacts(owner.id) }
+        .collectAsState(initial = remember(owner.id) { container.contacts.contacts(owner.id) })
     val contacts by remember(allContacts) { derivedStateOf { allContacts.filter { it.kind == 0 } } }
-    val groups by container.groups.observeGroups(owner.id).collectAsState(initial = emptyList())
-    val stadiums by container.stadiums.observeStadiums(owner.id).collectAsState(initial = emptyList())
+    val groups by remember(owner.id) { container.groups.observeGroups(owner.id) }
+        .collectAsState(initial = remember(owner.id) { container.groups.allGroups(owner.id) })
+    val stadiums by remember(owner.id) { container.stadiums.observeStadiums(owner.id) }
+        .collectAsState(initial = remember(owner.id) { container.stadiums.allStadiums(owner.id) })
     val connectedSet by container.sync.connectedContacts.collectAsState()
-    val pinned by container.pinnedChats.observePinned(owner.id).collectAsState(initial = emptyMap())
+    val pinned by remember(owner.id) { container.pinnedChats.observePinned(owner.id) }
+        .collectAsState(initial = remember(owner.id) { container.pinnedChats.pinned(owner.id) })
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
     var query by remember { mutableStateOf("") }
     var isFabExpanded by remember { mutableStateOf(false) }
@@ -189,21 +193,21 @@ fun TwoPanelLayout(
             contacts.map { c -> container.messages.observeLastMessage(c.id) }
                 .ifEmpty { listOf(kotlinx.coroutines.flow.flowOf(null)) }
         ) { it.toList() }
-    }.collectAsState(initial = emptyList())
+    }.collectAsState(initial = contacts.map { container.messages.lastMessage(it.id) }.ifEmpty { listOf(null) })
 
     val groupLastMessages by remember(groups) {
         combine(
             groups.map { g -> container.groups.observeLastMessage(g.id) }
                 .ifEmpty { listOf(kotlinx.coroutines.flow.flowOf(null)) }
         ) { it.toList() }
-    }.collectAsState(initial = emptyList())
+    }.collectAsState(initial = groups.map { container.groups.lastMessage(it.id) }.ifEmpty { listOf(null) })
 
     val stadiumLastMessages by remember(stadiums) {
         combine(
             stadiums.map { s -> container.stadiums.observeLastMessage(s.id) }
                 .ifEmpty { listOf(kotlinx.coroutines.flow.flowOf(null)) }
         ) { it.toList() }
-    }.collectAsState(initial = emptyList())
+    }.collectAsState(initial = stadiums.map { container.stadiums.lastMessage(it.id) }.ifEmpty { listOf(null) })
 
     val pendingInvite by container.pendingInvite.collectAsState()
     LaunchedEffect(pendingInvite) {
@@ -452,10 +456,10 @@ fun TwoPanelLayout(
                                     when (item) {
                                         is PanelChatItem.ContactItem -> {
                                             val contact = item.contact
-                                            val lastMsg by container.messages.observeLastMessage(contact.id)
-                                                .collectAsState(initial = null)
-                                            val unread by container.messages.observeUnreadCount(contact.id)
-                                                .collectAsState(initial = 0L)
+                                            val lastMsg by remember(contact.id) { container.messages.observeLastMessage(contact.id) }
+                                                .collectAsState(initial = remember(contact.id) { container.messages.lastMessage(contact.id) })
+                                            val unread by remember(contact.id) { container.messages.observeUnreadCount(contact.id) }
+                                                .collectAsState(initial = remember(contact.id) { container.messages.unreadCount(contact.id) })
                                             val preview by remember(lastMsg?.id) {
                                                 derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage) } }
                                             }
@@ -489,10 +493,10 @@ fun TwoPanelLayout(
                                         }
                                         is PanelChatItem.GroupItem -> {
                                             val group = item.group
-                                            val lastGroupMsg by container.groups.observeLastMessage(group.id)
-                                                .collectAsState(initial = null)
-                                            val groupUnread by container.groups.observeUnreadCount(group.id)
-                                                .collectAsState(initial = 0L)
+                                            val lastGroupMsg by remember(group.id) { container.groups.observeLastMessage(group.id) }
+                                                .collectAsState(initial = remember(group.id) { container.groups.lastMessage(group.id) })
+                                            val groupUnread by remember(group.id) { container.groups.observeUnreadCount(group.id) }
+                                                .collectAsState(initial = remember(group.id) { container.groups.unreadCount(group.id) })
                                             val groupPreview by remember(lastGroupMsg?.id) {
                                                 derivedStateOf { lastGroupMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage) } }
                                             }

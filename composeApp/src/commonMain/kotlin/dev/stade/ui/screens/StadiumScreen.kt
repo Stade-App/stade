@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -76,6 +77,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -122,9 +124,10 @@ fun StadiumScreen(
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
-    val stadiums by container.stadiums.observeStadiums(owner.id).collectAsState(initial = emptyList())
+    val stadiums by remember(owner.id) { container.stadiums.observeStadiums(owner.id) }.collectAsState(initial = emptyList())
     val stadium = remember(stadiums, stadiumId) { stadiums.find { it.id == stadiumId } }
-    val messages by container.stadiums.observeMessages(stadiumId).collectAsState(initial = emptyList())
+    val rawMessages by remember(stadiumId) { container.stadiums.observeMessages(stadiumId) }.collectAsState(initial = null)
+    val messages = rawMessages ?: emptyList()
     val connected by container.sync.connectedContacts.collectAsState()
     val listState = rememberLazyListState()
 
@@ -202,8 +205,19 @@ fun StadiumScreen(
         }
     }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+    var prevMessageCount by remember(stadiumId) { mutableStateOf(0) }
+    var scrollReady by remember(stadiumId) { mutableStateOf(false) }
+    LaunchedEffect(rawMessages) {
+        if (rawMessages == null) return@LaunchedEffect
+        if (messages.isNotEmpty()) {
+            if (prevMessageCount == 0) {
+                listState.scrollToItem(messages.lastIndex)
+            } else {
+                listState.animateScrollToItem(messages.lastIndex)
+            }
+        }
+        prevMessageCount = messages.size
+        scrollReady = true
     }
 
     val current = stadium
@@ -319,7 +333,7 @@ fun StadiumScreen(
                     }
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        modifier = Modifier.fillMaxWidth().weight(1f).alpha(if (scrollReady) 1f else 0f),
                         contentPadding = PaddingValues(12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -410,6 +424,13 @@ fun StadiumScreen(
                         )
                     }
                 }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                )
                 val editIdx = editingImageIndex
                 if (editIdx != null && editIdx < pendingImages.size) {
                     MediaEditorDialog(

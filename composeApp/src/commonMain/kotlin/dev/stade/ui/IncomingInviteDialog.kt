@@ -42,7 +42,7 @@ fun IncomingInviteDialog(
     var accepted by remember(code) { mutableStateOf(false) }
     var targetId by remember(code) { mutableStateOf<String?>(null) }
 
-    val knownContacts by container.contacts.observeContacts(owner.id).collectAsState(initial = emptyList())
+    val knownContacts by remember(owner.id) { container.contacts.observeContacts(owner.id) }.collectAsState(initial = emptyList())
     val isAdded = targetId != null && knownContacts.any { it.id == targetId }
     LaunchedEffect(isAdded) {
         if (isAdded) {

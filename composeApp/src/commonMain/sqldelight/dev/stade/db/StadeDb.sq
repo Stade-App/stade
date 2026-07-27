@@ -75,6 +75,14 @@ CREATE TABLE KeyValue (
     value BLOB NOT NULL
 );
 
+CREATE TABLE ProcessedEnvelope (
+    messageId TEXT NOT NULL PRIMARY KEY,
+    contactId TEXT NOT NULL,
+    processedAt INTEGER NOT NULL
+);
+
+CREATE INDEX idxProcessedEnvelope ON ProcessedEnvelope(processedAt);
+
 selectAllIdentities:
 SELECT * FROM LocalIdentity;
 
@@ -147,6 +155,9 @@ SELECT * FROM Message WHERE contactId = ? ORDER BY timestamp ASC;
 selectLastMessage:
 SELECT * FROM Message WHERE contactId = ? ORDER BY timestamp DESC LIMIT 1;
 
+selectLastMessagePreview:
+SELECT id, contactId, direction, substr(body, 1, 200) AS body, timestamp, delivered, read FROM Message WHERE contactId = ? ORDER BY timestamp DESC LIMIT 1;
+
 markDelivered:
 UPDATE Message SET delivered = 1 WHERE id = ?;
 
@@ -207,6 +218,15 @@ DELETE FROM KeyValue WHERE key = ?;
 selectKvPrefixed:
 SELECT key, value FROM KeyValue WHERE key LIKE ? ORDER BY key;
 
+envelopeProcessed:
+SELECT COUNT(*) FROM ProcessedEnvelope WHERE messageId = ?;
+
+markEnvelopeProcessed:
+INSERT OR IGNORE INTO ProcessedEnvelope(messageId, contactId, processedAt) VALUES (?, ?, ?);
+
+pruneProcessedEnvelope:
+DELETE FROM ProcessedEnvelope WHERE processedAt < ?;
+
 wipeMessages:
 DELETE FROM Message;
 
@@ -227,6 +247,9 @@ DELETE FROM TransportSetting;
 
 wipeKeyValue:
 DELETE FROM KeyValue;
+
+wipeProcessedEnvelope:
+DELETE FROM ProcessedEnvelope;
 
 CREATE TABLE StadeGroup (
     id TEXT NOT NULL PRIMARY KEY,
@@ -294,6 +317,9 @@ SELECT * FROM GroupMessage WHERE groupId = ? ORDER BY timestamp ASC;
 
 selectLastGroupMessage:
 SELECT * FROM GroupMessage WHERE groupId = ? ORDER BY timestamp DESC LIMIT 1;
+
+selectLastGroupMessagePreview:
+SELECT id, groupId, senderId, substr(body, 1, 200) AS body, timestamp, outgoing, read FROM GroupMessage WHERE groupId = ? ORDER BY timestamp DESC LIMIT 1;
 
 countGroupUnread:
 SELECT COUNT(*) FROM GroupMessage WHERE groupId = ? AND read = 0 AND outgoing = 0;

@@ -32,4 +32,11 @@ class PinnedChats(private val db: StadeDb) {
                 }
             }
     }
+
+    fun pinned(ownerId: String): Map<String, Long> {
+        val prefix = "pin.$ownerId."
+        return db.stadeDbQueries.selectKvPrefixed("$prefix%").executeAsList().associate { row ->
+            row.key.removePrefix(prefix) to (row.value_.decodeToString().toLongOrNull() ?: 0L)
+        }
+    }
 }

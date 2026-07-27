@@ -113,6 +113,13 @@ class AppContainer(
         }.onFailure {
             runCatching { createdDriver.execute(null, "ALTER TABLE Stadium ADD COLUMN muted INTEGER NOT NULL DEFAULT 0", 0) }
         }
+        runCatching {
+            createdDriver.executeQuery(null, "SELECT messageId FROM ProcessedEnvelope LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "CREATE TABLE IF NOT EXISTS ProcessedEnvelope (messageId TEXT NOT NULL PRIMARY KEY, contactId TEXT NOT NULL, processedAt INTEGER NOT NULL)", 0) }
+            runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxProcessedEnvelope ON ProcessedEnvelope(processedAt)", 0) }
+        }
         db = database
     }
 
@@ -178,6 +185,7 @@ class AppContainer(
                 db.stadeDbQueries.wipeIdentities()
                 db.stadeDbQueries.wipeTransports()
                 db.stadeDbQueries.wipeKeyValue()
+                db.stadeDbQueries.wipeProcessedEnvelope()
             }
         }
         runCatching { driver.close() }
