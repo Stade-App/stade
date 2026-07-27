@@ -10,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,7 +33,8 @@ data class DialAttempt(
 class ConnectionManager(
     private val registry: ConnectionRegistry,
     private val contacts: ContactManager,
-    private val sync: SyncEngine
+    private val sync: SyncEngine,
+    private val transportSettings: TransportSettings
 ) {
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
@@ -45,6 +45,7 @@ class ConnectionManager(
     private val pendingDial = mutableSetOf<String>()
     private val pendingAttempts = mutableMapOf<String, Int>()
     private val pendingWake = Channel<Unit>(capacity = Channel.CONFLATED)
+    private val dialerWake = Channel<Unit>(capacity = Channel.CONFLATED)
 
     private val _diagnostics = MutableStateFlow<Map<String, Map<String, DialAttempt>>>(emptyMap())
     val diagnostics: StateFlow<Map<String, Map<String, DialAttempt>>> = _diagnostics.asStateFlow()
@@ -104,6 +105,7 @@ class ConnectionManager(
         ownerRef = owner
         if (!scope.isActive) scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         for (plugin in registry.all()) {
+            if (!isEnabled(plugin.type)) continue
             tasks += scope.launch {
                 runCatching {
                     plugin.start { connection -> sync.handleConnection(owner, connection) }
@@ -120,6 +122,7 @@ class ConnectionManager(
         val owner = ownerRef ?: return@withLock
         val plugin = registry.get(type) ?: return@withLock
         runCatching { plugin.stop() }
+        if (!isEnabled(type)) return@withLock
         if (!scope.isActive) scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         tasks += scope.launch {
             runCatching {
@@ -127,6 +130,29 @@ class ConnectionManager(
             }
         }
     }
+
+    /** Bir taşıma katmanını canlıyken açar/kapatır; devre dışı bırakma anında dinleyiciyi/keşfi durdurur, mevcut oturumlara dokunmaz. */
+    suspend fun setTransportEnabled(type: TransportType, enabled: Boolean) = mutex.withLock {
+        transportSettings.setEnabled(type, enabled)
+        val plugin = registry.get(type) ?: return@withLock
+        if (enabled) {
+            val owner = ownerRef ?: return@withLock
+            if (plugin.info.value.running) return@withLock
+            if (!scope.isActive) scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            tasks += scope.launch {
+                runCatching {
+                    plugin.start { connection -> sync.handleConnection(owner, connection) }
+                }
+            }
+        } else {
+            runCatching { plugin.stop() }
+        }
+        dialerWake.trySend(Unit)
+        pendingWake.trySend(Unit)
+    }
+
+    private fun isEnabled(type: TransportType): Boolean =
+        runCatching { transportSettings.get(type).enabled }.getOrDefault(true)
 
     private suspend fun stopInternal() {
         ownerRef = null
@@ -155,8 +181,17 @@ class ConnectionManager(
                     backoff[contact.id] = now + 10_000L
                 }
             }
-            delay(5_000)
+            select<Unit> {
+                dialerWake.onReceive { }
+                onTimeout(5_000) { }
+            }
         }
+    }
+
+    fun retryContact(contactId: String) {
+        backoff.remove(contactId)
+        backoff.keys.removeAll { it == contactId || it.startsWith("$contactId|") }
+        dialerWake.trySend(Unit)
     }
 
     /** Bekleyen davet adreslerini mevcut kişi bağlantı döngüsünden bağımsız olarak dener. */
@@ -286,6 +321,7 @@ class ConnectionManager(
         }
         if ((backoff[contact.id] ?: 0L) <= now) {
             for (plugin in registry.all()) {
+                if (!isEnabled(plugin.type)) continue
                 val discoverable = plugin as? DiscoverableTransport ?: continue
                 for (addr in discoverable.discoveredPeers()) {
                     if (sync.isConnected(contact.id)) return attempted
@@ -312,6 +348,7 @@ class ConnectionManager(
             address.startsWith("lan://") -> TransportType.LAN
             else -> return null
         }
+        if (!isEnabled(type)) return null
         return registry.get(type)
     }
 

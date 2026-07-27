@@ -7,6 +7,7 @@ import dev.stade.identity.LocalIdentity
 import dev.stade.message.encodeImageBody
 import dev.stade.message.encodeReactionBody
 import dev.stade.message.encodeReplyBody
+import dev.stade.message.encodeVideoBody
 import dev.stade.message.encodeVoiceBody
 import dev.stade.sync.SyncEngine
 import kotlinx.coroutines.CoroutineScope
@@ -49,12 +50,16 @@ class GroupChatService(
         return true
     }
 
-    suspend fun sendImage(owner: LocalIdentity, groupId: String, imageBytes: ByteArray, replyToId: String? = null): Boolean {
-        return sendMessage(owner, groupId, encodeImageBody(imageBytes), replyToId)
+    suspend fun sendImage(owner: LocalIdentity, groupId: String, imageBytes: ByteArray, replyToId: String? = null, caption: String = ""): Boolean {
+        return sendMessage(owner, groupId, encodeImageBody(imageBytes, caption), replyToId)
     }
 
     suspend fun sendVoice(owner: LocalIdentity, groupId: String, opusBytes: ByteArray, durationMs: Int, replyToId: String? = null): Boolean {
         return sendMessage(owner, groupId, encodeVoiceBody(opusBytes, durationMs), replyToId)
+    }
+
+    suspend fun sendVideo(owner: LocalIdentity, groupId: String, videoBytes: ByteArray, replyToId: String? = null, caption: String = ""): Boolean {
+        return sendMessage(owner, groupId, encodeVideoBody(videoBytes, caption), replyToId)
     }
 
     suspend fun kickMember(owner: LocalIdentity, group: GroupInfo, memberId: String): Boolean {

@@ -5,11 +5,15 @@ import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 enum class MessageDirection { IN, OUT }
-enum class MessageType { TEXT, IMAGE, VOICE }
+enum class MessageType { TEXT, IMAGE, VOICE, VIDEO }
 const val IMAGE_BODY_PREFIX = "STADE_IMG_V1:"
 const val VOICE_BODY_PREFIX = "STADE_VOI_V1:"
+const val VIDEO_BODY_PREFIX = "STADE_VID_V1:"
 const val REPLY_BODY_PREFIX = "STADE_RPL_V1:"
 const val REACTION_BODY_PREFIX = "STADE_RXN_V1:"
+
+// Keeps Base64 body + JSON-array ratchet-frame encoding under FrameCodec's 4 MB cap (same ceiling voice clips are sized against).
+const val MAX_ATTACHMENT_BYTES = 700 * 1024
 
 @Serializable
 data class Message(
@@ -34,14 +38,28 @@ data class Message(
         get() = when {
             effectiveBody.startsWith(IMAGE_BODY_PREFIX) -> MessageType.IMAGE
             effectiveBody.startsWith(VOICE_BODY_PREFIX) -> MessageType.VOICE
+            effectiveBody.startsWith(VIDEO_BODY_PREFIX) -> MessageType.VIDEO
             else -> MessageType.TEXT
         }
 
     @OptIn(ExperimentalEncodingApi::class)
     fun imageBytes(): ByteArray? =
         if (type == MessageType.IMAGE)
-            runCatching { Base64.Default.decode(effectiveBody.removePrefix(IMAGE_BODY_PREFIX)) }.getOrNull()
+            runCatching { Base64.Default.decode(effectiveBody.removePrefix(IMAGE_BODY_PREFIX).substringBefore('\n')) }.getOrNull()
         else null
+
+    @OptIn(ExperimentalEncodingApi::class)
+    fun videoBytes(): ByteArray? =
+        if (type == MessageType.VIDEO)
+            runCatching { Base64.Default.decode(effectiveBody.removePrefix(VIDEO_BODY_PREFIX).substringBefore('\n')) }.getOrNull()
+        else null
+
+    val caption: String
+        get() = when (type) {
+            MessageType.IMAGE -> effectiveBody.removePrefix(IMAGE_BODY_PREFIX).substringAfter('\n', "")
+            MessageType.VIDEO -> effectiveBody.removePrefix(VIDEO_BODY_PREFIX).substringAfter('\n', "")
+            else -> ""
+        }
 
     @OptIn(ExperimentalEncodingApi::class)
     fun voiceOpusBytes(): ByteArray? =
@@ -64,8 +82,12 @@ data class Message(
 }
 
 @OptIn(ExperimentalEncodingApi::class)
-fun encodeImageBody(bytes: ByteArray): String =
-    IMAGE_BODY_PREFIX + Base64.Default.encode(bytes)
+fun encodeImageBody(bytes: ByteArray, caption: String = ""): String =
+    IMAGE_BODY_PREFIX + Base64.Default.encode(bytes) + if (caption.isNotEmpty()) "\n$caption" else ""
+
+@OptIn(ExperimentalEncodingApi::class)
+fun encodeVideoBody(bytes: ByteArray, caption: String = ""): String =
+    VIDEO_BODY_PREFIX + Base64.Default.encode(bytes) + if (caption.isNotEmpty()) "\n$caption" else ""
 
 @OptIn(ExperimentalEncodingApi::class)
 fun encodeVoiceBody(opusBytes: ByteArray, durationMs: Int): String {

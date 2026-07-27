@@ -40,7 +40,10 @@ import stade.composeapp.generated.resources.app_icon_desktop
 import org.jetbrains.compose.resources.painterResource
 import com.sun.jna.Library
 import com.sun.jna.Native
+import com.sun.jna.WString
 import com.sun.jna.platform.win32.WinDef
+import com.sun.jna.win32.StdCallLibrary
+import com.sun.jna.win32.W32APIOptions
 
 @Volatile
 private var desktopContainerRef: AppContainer? = null
@@ -70,6 +73,24 @@ private fun deliverForwardedInvite(invite: String) {
     foregroundTick.value = foregroundTick.value + 1
 }
 
+
+private interface Shell32Ext : StdCallLibrary {
+    fun SetCurrentProcessExplicitAppUserModelID(appId: WString): Int
+
+    companion object {
+        val INSTANCE: Shell32Ext = Native.load("shell32", Shell32Ext::class.java, W32APIOptions.DEFAULT_OPTIONS)
+    }
+}
+
+private const val WINDOWS_APP_USER_MODEL_ID = "Stade"
+
+private fun applyWindowsAppUserModelId() {
+    val os = System.getProperty("os.name", "").lowercase()
+    if (!os.contains("win")) return
+    runCatching {
+        Shell32Ext.INSTANCE.SetCurrentProcessExplicitAppUserModelID(WString(WINDOWS_APP_USER_MODEL_ID))
+    }
+}
 
 private interface Dwmapi : Library {
     fun DwmSetWindowAttribute(
@@ -115,6 +136,7 @@ private fun applyLinuxDarkTheme() {
 }
 
 fun main(args: Array<String>) {
+    applyWindowsAppUserModelId()
     applyLinuxDarkTheme()
 
     val singleInstanceRoot = java.io.File(System.getProperty("user.home") ?: ".", ".stade")

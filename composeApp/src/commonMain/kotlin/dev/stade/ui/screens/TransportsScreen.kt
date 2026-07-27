@@ -96,9 +96,11 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
                                 }
                                 Switch(
                                     checked = cfg.enabled,
-                                    onCheckedChange = {
-                                        container.transportSettings.setEnabled(cfg.type, it)
-                                        configs = container.transportSettings.all()
+                                    onCheckedChange = { enabled ->
+                                        scope.launch {
+                                            runCatching { container.connections.setTransportEnabled(cfg.type, enabled) }
+                                            configs = container.transportSettings.all()
+                                        }
                                     }
                                 )
                             }

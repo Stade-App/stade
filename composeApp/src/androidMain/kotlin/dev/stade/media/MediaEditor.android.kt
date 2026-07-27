@@ -11,6 +11,8 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import java.io.ByteArrayOutputStream
 import kotlin.math.roundToInt
 
@@ -18,11 +20,14 @@ import kotlin.math.roundToInt
 actual fun ForceFullScreenDialogWindow() {
     val view = LocalView.current
     SideEffect {
-        val dialogWindowProvider = view.parent as? DialogWindowProvider
-        dialogWindowProvider?.window?.setLayout(
+        val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
+        window.setLayout(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT
         )
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Flipping decorFitsSystemWindows after the window's already attached doesn't retrigger a dispatch on its own.
+        ViewCompat.requestApplyInsets(window.decorView)
     }
 }
 

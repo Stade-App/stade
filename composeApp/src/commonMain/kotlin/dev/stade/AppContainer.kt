@@ -134,7 +134,7 @@ class AppContainer(
         transportFactory(db).forEach { reg.register(it) }
     }
     val transportSettings = TransportSettings(db)
-    val connections = ConnectionManager(transports, contacts, sync).also {
+    val connections = ConnectionManager(transports, contacts, sync, transportSettings).also {
         sync.selfAddressesProvider = { it.selfAddresses() }
     }
 

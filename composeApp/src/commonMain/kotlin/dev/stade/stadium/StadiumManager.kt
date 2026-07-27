@@ -86,6 +86,23 @@ class StadiumManager(private val db: StadeDb, private val crypto: CryptoApi) {
         }
     }
 
+    fun leaveStadium(stadiumId: String) {
+        db.stadeDbQueries.transaction {
+            db.stadeDbQueries.deleteStadiumMessages(stadiumId)
+            db.stadeDbQueries.deleteStadium(stadiumId)
+        }
+    }
+
+    fun handleLeaveRequest(contactId: String, rawBody: String): String? {
+        val stadiumId = rawBody.removePrefix(STD_LEAVE_PREFIX)
+        val stadium = db.stadeDbQueries.selectStadium(stadiumId).executeAsOneOrNull() ?: return null
+        if (stadium.isOwner != 1L) return null
+        db.stadeDbQueries.deleteStadiumMember(stadiumId, contactId)
+        val count = db.stadeDbQueries.countStadiumMembers(stadiumId).executeAsOne()
+        db.stadeDbQueries.setStadiumMemberCount(count, stadiumId)
+        return stadiumId
+    }
+
     fun handleIncomingBroadcast(stadiumId: String, messageId: String, memberCount: Long, body: String, timestamp: Long): Boolean {
         val stadium = db.stadeDbQueries.selectStadium(stadiumId).executeAsOneOrNull() ?: return false
         if (stadium.isOwner == 1L) return false

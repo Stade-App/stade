@@ -67,6 +67,7 @@ import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -132,6 +133,7 @@ import dev.stade.link.fetchLinkPreview
 import dev.stade.link.getLinkPreviewsEnabled
 import dev.stade.media.MediaEditorDialog
 import dev.stade.message.IMAGE_BODY_PREFIX
+import dev.stade.message.MAX_ATTACHMENT_BYTES
 import dev.stade.message.Message
 import dev.stade.message.MessageDirection
 import dev.stade.message.MessageType
@@ -148,7 +150,9 @@ import dev.stade.ui.components.maskAddress
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.i18n.LocalStrings
+import dev.stade.ui.openVideoExternally
 import dev.stade.ui.rememberMultiImagePickerLauncher
+import dev.stade.ui.rememberVideoPickerLauncher
 import dev.stade.ui.saveImageToGallery
 import dev.stade.ui.theme.StadeColors
 import kotlinx.coroutines.Dispatchers
@@ -186,6 +190,7 @@ fun ChatScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var diagnosticsExpanded by remember(contactId) { mutableStateOf(false) }
+    var showClearAddressesDialog by remember { mutableStateOf(false) }
 
     var selectedMessageIds by remember(contactId) { mutableStateOf<Set<String>>(emptySet()) }
     val inSelectionMode by remember { derivedStateOf { selectedMessageIds.isNotEmpty() } }
@@ -286,18 +291,25 @@ fun ChatScreen(
         }
     }
 
-    val MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3 MB
-
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
     var editingImageIndex by remember { mutableStateOf<Int?>(null) }
 
     val imagePicker = rememberMultiImagePickerLauncher { imagesList ->
-        val accepted = imagesList.filter { it.size <= MAX_IMAGE_BYTES }
+        val accepted = imagesList.filter { it.size <= MAX_ATTACHMENT_BYTES }
         if (accepted.size != imagesList.size) {
             showNotification(strings.photoTooBig, NotificationKind.Error)
         }
         if (accepted.isNotEmpty()) {
             pendingImages = pendingImages + accepted
+        }
+    }
+
+    var pendingVideo by remember { mutableStateOf<ByteArray?>(null) }
+    val videoPicker = rememberVideoPickerLauncher { bytes ->
+        if (bytes.size <= MAX_ATTACHMENT_BYTES) {
+            pendingVideo = bytes
+        } else {
+            showNotification(strings.videoTooBig, NotificationKind.Error)
         }
     }
 
@@ -395,6 +407,26 @@ fun ChatScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showSelectionDeleteDialog = false }) { Text(strings.cancel) }
+            }
+        )
+    }
+
+    if (showClearAddressesDialog && contact != null) {
+        AlertDialog(
+            onDismissRequest = { showClearAddressesDialog = false },
+            title = { Text(strings.clearAddressesConfirmTitle) },
+            text = { Text(strings.clearAddressesConfirmBody) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearAddressesDialog = false
+                    scope.launch {
+                        runCatching { container.contacts.setAddresses(contact.id, emptyList()) }
+                        showNotification(strings.addressesCleared, NotificationKind.Info)
+                    }
+                }) { Text(strings.clearAddresses, color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAddressesDialog = false }) { Text(strings.cancel) }
             }
         )
     }
@@ -555,12 +587,11 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        onClear = {
-                            scope.launch {
-                                runCatching { container.contacts.setAddresses(contact.id, emptyList()) }
-                                showNotification(strings.addressesCleared, NotificationKind.Info)
-                            }
-                        }
+                        onRetry = {
+                            container.connections.retryContact(contact.id)
+                            showNotification(strings.retryingConnection, NotificationKind.Info)
+                        },
+                        onClear = { showClearAddressesDialog = true }
                     )
                 }
 
@@ -612,7 +643,7 @@ fun ChatScreen(
                                     msg.replyToId == null -> null
                                     quotedMsg != null -> ReplyQuoteInfo(
                                         senderLabel = if (quotedMsg.direction == MessageDirection.OUT) strings.youLabel else (contact?.nickname ?: ""),
-                                        snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage)
+                                        snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage)
                                     ) {
                                         val target = messages.indexOfFirst { it.id == quotedMsg.id }
                                         if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
@@ -678,6 +709,28 @@ fun ChatScreen(
                                         },
                                         onDoubleTap = { toggleReaction(msg.id, reactions) }
                                     )
+                                } else if (msg.type == MessageType.VIDEO) {
+                                    VideoBubble(
+                                        msg = msg,
+                                        tightWithPrev = tight,
+                                        selected = isSelected,
+                                        highlighted = isHighlighted,
+                                        inSelectionMode = inSelectionMode,
+                                        quoted = quoted,
+                                        reactions = reactions,
+                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            toggleSelection(msg.id)
+                                        },
+                                        onDoubleTap = { toggleReaction(msg.id, reactions) },
+                                        onPlayVideo = { bytes ->
+                                            scope.launch {
+                                                val ok = openVideoExternally(bytes)
+                                                if (!ok) showNotification(strings.videoOpenFailed, NotificationKind.Error)
+                                            }
+                                        }
+                                    )
                                 } else {
                                     Bubble(
                                         msg = msg,
@@ -705,12 +758,13 @@ fun ChatScreen(
                 Composer(
                     draft = draft,
                     pendingImages = pendingImages,
+                    pendingVideo = pendingVideo,
                     pendingVoiceClip = pendingVoiceClip,
                     isRecording = isRecording,
                     replyPreview = replyTarget?.let { target ->
                         ReplyQuoteInfo(
                             senderLabel = if (target.direction == MessageDirection.OUT) strings.youLabel else (contact?.nickname ?: ""),
-                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage),
+                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage),
                             onClick = {}
                         )
                     },
@@ -719,27 +773,35 @@ fun ChatScreen(
                         pendingImages = pendingImages.toMutableList().also { it.removeAt(idx) }
                     },
                     onEditImage = { idx -> editingImageIndex = idx },
+                    onRemoveVideo = { pendingVideo = null },
                     onRemoveVoiceClip = { pendingVoiceClip = null },
                     onCancelReply = { replyTarget = null },
                     onSend = {
                         val c = contact ?: return@Composer
                         val text = draft.text.trim()
                         val images = pendingImages
+                        val video = pendingVideo
                         val voiceClip = pendingVoiceClip
                         val replyId = replyTarget?.id
-                        if (text.isEmpty() && images.isEmpty() && voiceClip == null) return@Composer
+                        if (text.isEmpty() && images.isEmpty() && video == null && voiceClip == null) return@Composer
                         draft = TextFieldValue("")
                         pendingImages = emptyList()
+                        pendingVideo = null
                         pendingVoiceClip = null
                         replyTarget = null
+                        val hasMedia = images.isNotEmpty() || video != null
                         scope.launch {
-                            if (text.isNotEmpty()) {
+                            if (!hasMedia && text.isNotEmpty()) {
                                 runCatching { container.chat.send(owner, c, text, replyId) }
                                     .onFailure { showNotification(strings.sendFailed(it.message ?: ""), NotificationKind.Error) }
                             }
-                            images.forEach { imageBytes ->
-                                runCatching { container.chat.sendImage(owner, c, imageBytes, replyId) }
+                            images.forEachIndexed { idx, imageBytes ->
+                                runCatching { container.chat.sendImage(owner, c, imageBytes, replyId, if (idx == 0) text else "") }
                                     .onFailure { showNotification(strings.photoSendFailed, NotificationKind.Error) }
+                            }
+                            if (video != null) {
+                                runCatching { container.chat.sendVideo(owner, c, video, replyId, if (images.isEmpty()) text else "") }
+                                    .onFailure { showNotification(strings.videoSendFailed, NotificationKind.Error) }
                             }
                             if (voiceClip != null) {
                                 runCatching { container.chat.sendVoice(owner, c, voiceClip.opusBytes, voiceClip.durationMs, replyId) }
@@ -748,6 +810,7 @@ fun ChatScreen(
                         }
                     },
                     onPickImage = { imagePicker.launch() },
+                    onPickVideo = { videoPicker.launch() },
                     onToggleRecording = { toggleRecording() }
                 )
             }
@@ -848,6 +911,7 @@ private fun DiagnosticsCard(
     addresses: List<String>,
     perAddr: Map<String, DialAttempt>,
     onApplyInvite: (String) -> Unit,
+    onRetry: () -> Unit,
     onClear: () -> Unit,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
@@ -953,6 +1017,11 @@ private fun DiagnosticsCard(
                     )
                 }
                 Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = onRetry,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(strings.retryConnection) }
+                Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = refreshLink,
                     onValueChange = { refreshLink = it },
@@ -988,20 +1057,23 @@ private fun DiagnosticsCard(
 private fun Composer(
     draft: TextFieldValue,
     pendingImages: List<ByteArray>,
+    pendingVideo: ByteArray?,
     pendingVoiceClip: RecordedClip?,
     isRecording: Boolean,
     replyPreview: ReplyQuoteInfo?,
     onChange: (TextFieldValue) -> Unit,
     onRemoveImage: (Int) -> Unit,
     onEditImage: (Int) -> Unit,
+    onRemoveVideo: () -> Unit,
     onRemoveVoiceClip: () -> Unit,
     onCancelReply: () -> Unit,
     onSend: () -> Unit,
     onPickImage: () -> Unit,
+    onPickVideo: () -> Unit,
     onToggleRecording: () -> Unit
 ) {
     val strings = LocalStrings.current
-    val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty() || pendingVoiceClip != null
+    val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty() || pendingVideo != null || pendingVoiceClip != null
 
     Column(
         modifier = Modifier
@@ -1107,6 +1179,41 @@ private fun Composer(
         }
 
         AnimatedVisibility(
+            visible = pendingVideo != null,
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it }
+        ) {
+            val video = pendingVideo
+            if (video != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, top = 8.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.Videocam, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        strings.videoAttached,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onRemoveVideo) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = strings.removeAttachment,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
             visible = pendingVoiceClip != null,
             enter = fadeIn() + slideInVertically { it },
             exit = fadeOut() + slideOutVertically { it }
@@ -1203,6 +1310,17 @@ private fun Composer(
                                 )
                             }
                             innerTextField()
+                        }
+                        IconButton(
+                            onClick = onPickVideo,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Videocam,
+                                contentDescription = strings.attachVideo,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                         IconButton(
                             onClick = onPickImage,
@@ -1702,6 +1820,14 @@ private fun ImageBubble(
                         }
                     }
                 }
+                if (msg.caption.isNotEmpty()) {
+                    Text(
+                        msg.caption,
+                        color = fg,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
                 Spacer(Modifier.height(3.dp))
                 Row(
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -1905,6 +2031,136 @@ private fun VoiceBubble(
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
+                }
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        formatChatTime(msg.timestamp),
+                        color = sub,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    if (outgoing) {
+                        Spacer(Modifier.size(6.dp))
+                        Text(
+                            if (msg.delivered) "✓✓" else "·",
+                            color = sub,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+        }
+        ReactionPill(reactions)
+    }
+}
+
+@Composable
+private fun VideoBubble(
+    msg: Message,
+    tightWithPrev: Boolean,
+    selected: Boolean,
+    highlighted: Boolean,
+    inSelectionMode: Boolean,
+    quoted: ReplyQuoteInfo?,
+    reactions: List<dev.stade.db.MessageReaction>,
+    onShortClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onDoubleTap: () -> Unit,
+    onPlayVideo: (ByteArray) -> Unit
+) {
+    val strings = LocalStrings.current
+    val outgoing = msg.direction == MessageDirection.OUT
+    val align = if (outgoing) Alignment.End else Alignment.Start
+    val bg = if (outgoing) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.surfaceContainerHighest
+    val fg = if (outgoing) MaterialTheme.colorScheme.onPrimary
+    else MaterialTheme.colorScheme.onSurface
+    val sub = fg.copy(alpha = if (outgoing) 0.75f else 0.55f)
+
+    val cornerTop = if (tightWithPrev) 6.dp else 18.dp
+    val cornerSelf = 18.dp
+    val cornerTail = if (tightWithPrev) 18.dp else 4.dp
+
+    var videoBytes by remember(msg.id) { mutableStateOf<ByteArray?>(null) }
+    var decodeDone by remember(msg.id) { mutableStateOf(false) }
+    LaunchedEffect(msg.id) {
+        val bytes = withContext(Dispatchers.Default) { runCatching { msg.videoBytes() }.getOrNull() }
+        videoBytes = bytes
+        decodeDone = true
+    }
+    val currentBytes = videoBytes
+
+    val tintTarget = when {
+        highlighted -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.28f)
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        else -> Color.Transparent
+    }
+    val tint by animateColorAsState(tintTarget)
+
+    val currentOnShortClick by rememberUpdatedState(onShortClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tint)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { currentOnShortClick() },
+                    onLongPress = { currentOnLongClick() },
+                    onDoubleTap = { currentOnDoubleTap() }
+                )
+            }
+            .padding(top = if (tightWithPrev) 1.dp else 6.dp),
+        horizontalAlignment = align
+    ) {
+        Box(
+            Modifier.widthIn(max = 260.dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = if (outgoing) cornerSelf else cornerTop,
+                        topEnd = if (outgoing) cornerTop else cornerSelf,
+                        bottomStart = if (outgoing) cornerSelf else cornerTail,
+                        bottomEnd = if (outgoing) cornerTail else cornerSelf
+                    )
+                )
+                .background(bg)
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Column {
+                if (quoted != null) {
+                    ReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 4.dp))
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(enabled = currentBytes != null) { currentBytes?.let(onPlayVideo) }
+                        .padding(vertical = 2.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(fg.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = strings.tapToPlayVideo, tint = fg)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(strings.videoMessage, color = fg, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (currentBytes == null && decodeDone) "" else strings.tapToPlayVideo,
+                            color = sub,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+                if (msg.caption.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(msg.caption, color = fg, style = MaterialTheme.typography.bodyMedium)
                 }
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {

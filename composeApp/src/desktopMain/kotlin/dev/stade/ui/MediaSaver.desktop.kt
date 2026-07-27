@@ -83,3 +83,17 @@ actual suspend fun copyImageToClipboard(bytes: ByteArray): Boolean =
         }.getOrDefault(false)
     }
 
+actual suspend fun openVideoExternally(bytes: ByteArray): Boolean =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            if (!java.awt.Desktop.isDesktopSupported()) return@withContext false
+            val desktop = java.awt.Desktop.getDesktop()
+            if (!desktop.isSupported(java.awt.Desktop.Action.OPEN)) return@withContext false
+            val dir = File(System.getProperty("java.io.tmpdir"), "stade_videos").apply { mkdirs() }
+            val file = File(dir, "stade_" + System.currentTimeMillis() + ".mp4")
+            file.writeBytes(bytes)
+            desktop.open(file)
+            true
+        }.getOrDefault(false)
+    }
+

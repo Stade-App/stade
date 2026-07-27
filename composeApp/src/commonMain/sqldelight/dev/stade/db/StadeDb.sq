@@ -426,6 +426,9 @@ SELECT COUNT(*) FROM StadiumMember WHERE stadiumId = ?;
 deleteStadiumMembers:
 DELETE FROM StadiumMember WHERE stadiumId = ?;
 
+deleteStadiumMember:
+DELETE FROM StadiumMember WHERE stadiumId = ? AND contactId = ?;
+
 insertStadiumMessage:
 INSERT INTO StadiumMessage(id, stadiumId, body, timestamp, outgoing) VALUES (?, ?, ?, ?, ?);
 

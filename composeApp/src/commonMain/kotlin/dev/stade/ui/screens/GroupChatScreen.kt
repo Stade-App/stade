@@ -50,6 +50,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Attachment
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -130,6 +131,7 @@ import dev.stade.link.extractFirstUrl
 import dev.stade.link.fetchLinkPreview
 import dev.stade.link.getLinkPreviewsEnabled
 import dev.stade.media.MediaEditorDialog
+import dev.stade.message.MAX_ATTACHMENT_BYTES
 import dev.stade.message.MessageType
 import dev.stade.message.previewBody
 import dev.stade.ui.PlatformBackHandler
@@ -139,7 +141,9 @@ import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.i18n.LocalStrings
+import dev.stade.ui.openVideoExternally
 import dev.stade.ui.rememberMultiImagePickerLauncher
+import dev.stade.ui.rememberVideoPickerLauncher
 import dev.stade.ui.saveImageToGallery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -269,18 +273,25 @@ fun GroupChatScreen(
         }
     }
 
-    val MAX_IMAGE_BYTES = 3 * 1024 * 1024
-
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
     var editingImageIndex by remember { mutableStateOf<Int?>(null) }
 
     val imagePicker = rememberMultiImagePickerLauncher { imagesList ->
-        val accepted = imagesList.filter { it.size <= MAX_IMAGE_BYTES }
+        val accepted = imagesList.filter { it.size <= MAX_ATTACHMENT_BYTES }
         if (accepted.size != imagesList.size) {
             notify(strings.photoTooBig, GroupBannerKind.Error)
         }
         if (accepted.isNotEmpty()) {
             pendingImages = pendingImages + accepted
+        }
+    }
+
+    var pendingVideo by remember { mutableStateOf<ByteArray?>(null) }
+    val videoPicker = rememberVideoPickerLauncher { bytes ->
+        if (bytes.size <= MAX_ATTACHMENT_BYTES) {
+            pendingVideo = bytes
+        } else {
+            notify(strings.videoTooBig, GroupBannerKind.Error)
         }
     }
 
@@ -719,7 +730,7 @@ fun GroupChatScreen(
                                             else container.contacts.get(quotedMsg.senderId)?.nickname ?: quotedMsg.senderId.takeLast(6)
                                         GroupReplyQuoteInfo(
                                             senderLabel = quotedSenderName,
-                                            snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage)
+                                            snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage)
                                         ) {
                                             val target = messages.indexOfFirst { it.id == quotedMsg.id }
                                             if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
@@ -788,6 +799,29 @@ fun GroupChatScreen(
                                         },
                                         onDoubleTap = { toggleReaction(msg.id, reactions) }
                                     )
+                                } else if (msg.type == MessageType.VIDEO) {
+                                    GroupVideoBubble(
+                                        msg = msg,
+                                        senderName = senderName,
+                                        tightWithPrev = tight,
+                                        selected = isSelected,
+                                        highlighted = isHighlighted,
+                                        inSelectionMode = inSelectionMode,
+                                        quoted = quoted,
+                                        reactions = reactions,
+                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            toggleSelection(msg.id)
+                                        },
+                                        onDoubleTap = { toggleReaction(msg.id, reactions) },
+                                        onPlayVideo = { bytes ->
+                                            scope.launch {
+                                                val ok = openVideoExternally(bytes)
+                                                if (!ok) notify(strings.videoOpenFailed, GroupBannerKind.Error)
+                                            }
+                                        }
+                                    )
                                 } else {
                                     GroupTextBubble(
                                         msg = msg,
@@ -816,6 +850,7 @@ fun GroupChatScreen(
                 GroupComposer(
                     draft = draft,
                     pendingImages = pendingImages,
+                    pendingVideo = pendingVideo,
                     pendingVoiceClip = pendingVoiceClip,
                     isRecording = isRecording,
                     replyPreview = replyTarget?.let { target ->
@@ -823,7 +858,7 @@ fun GroupChatScreen(
                             else container.contacts.get(target.senderId)?.nickname ?: target.senderId.takeLast(6)
                         GroupReplyQuoteInfo(
                             senderLabel = targetSenderName,
-                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage),
+                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage),
                             onClick = {}
                         )
                     },
@@ -832,26 +867,34 @@ fun GroupChatScreen(
                         pendingImages = pendingImages.toMutableList().also { it.removeAt(idx) }
                     },
                     onEditImage = { idx -> editingImageIndex = idx },
+                    onRemoveVideo = { pendingVideo = null },
                     onRemoveVoiceClip = { pendingVoiceClip = null },
                     onCancelReply = { replyTarget = null },
                     onSend = {
                         val text = draft.text.trim()
                         val images = pendingImages
+                        val video = pendingVideo
                         val voiceClip = pendingVoiceClip
                         val replyId = replyTarget?.id
-                        if (text.isEmpty() && images.isEmpty() && voiceClip == null) return@GroupComposer
+                        if (text.isEmpty() && images.isEmpty() && video == null && voiceClip == null) return@GroupComposer
                         draft = TextFieldValue("")
                         pendingImages = emptyList()
+                        pendingVideo = null
                         pendingVoiceClip = null
                         replyTarget = null
+                        val hasMedia = images.isNotEmpty() || video != null
                         scope.launch {
-                            if (text.isNotEmpty()) {
+                            if (!hasMedia && text.isNotEmpty()) {
                                 runCatching { container.groupChat.sendMessage(owner, groupId, text, replyId) }
                                     .onFailure { notify(strings.sendFailed(it.message ?: ""), GroupBannerKind.Error) }
                             }
-                            images.forEach { imageBytes ->
-                                runCatching { container.groupChat.sendImage(owner, groupId, imageBytes, replyId) }
+                            images.forEachIndexed { idx, imageBytes ->
+                                runCatching { container.groupChat.sendImage(owner, groupId, imageBytes, replyId, if (idx == 0) text else "") }
                                     .onFailure { notify(strings.photoSendFailed, GroupBannerKind.Error) }
+                            }
+                            if (video != null) {
+                                runCatching { container.groupChat.sendVideo(owner, groupId, video, replyId, if (images.isEmpty()) text else "") }
+                                    .onFailure { notify(strings.videoSendFailed, GroupBannerKind.Error) }
                             }
                             if (voiceClip != null) {
                                 runCatching { container.groupChat.sendVoice(owner, groupId, voiceClip.opusBytes, voiceClip.durationMs, replyId) }
@@ -860,6 +903,7 @@ fun GroupChatScreen(
                         }
                     },
                     onPickImage = { imagePicker.launch() },
+                    onPickVideo = { videoPicker.launch() },
                     onToggleRecording = { toggleRecording() }
                 )
             }
@@ -1375,6 +1419,14 @@ private fun GroupImageBubble(
                         }
                     }
                 }
+                if (msg.caption.isNotEmpty()) {
+                    Text(
+                        msg.caption,
+                        color = fg,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
                 Spacer(Modifier.height(3.dp))
                 Row(
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -1592,25 +1644,157 @@ private fun GroupVoiceBubble(
     }
 }
 
+@Composable
+private fun GroupVideoBubble(
+    msg: GroupMessage,
+    senderName: String,
+    tightWithPrev: Boolean,
+    selected: Boolean,
+    highlighted: Boolean,
+    inSelectionMode: Boolean,
+    quoted: GroupReplyQuoteInfo?,
+    reactions: List<dev.stade.db.MessageReaction>,
+    onShortClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onDoubleTap: () -> Unit,
+    onPlayVideo: (ByteArray) -> Unit
+) {
+    val strings = LocalStrings.current
+    val outgoing = msg.isOwn
+    val align = if (outgoing) Alignment.End else Alignment.Start
+    val bg = if (outgoing) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.surfaceContainerHighest
+    val fg = if (outgoing) MaterialTheme.colorScheme.onPrimary
+    else MaterialTheme.colorScheme.onSurface
+    val sub = fg.copy(alpha = if (outgoing) 0.75f else 0.55f)
+
+    val cornerTop = if (tightWithPrev) 6.dp else 18.dp
+    val cornerSelf = 18.dp
+    val cornerTail = if (tightWithPrev) 18.dp else 4.dp
+
+    var videoBytes by remember(msg.id) { mutableStateOf<ByteArray?>(null) }
+    var decodeDone by remember(msg.id) { mutableStateOf(false) }
+    LaunchedEffect(msg.id) {
+        val bytes = withContext(Dispatchers.Default) { runCatching { msg.videoBytes() }.getOrNull() }
+        videoBytes = bytes
+        decodeDone = true
+    }
+    val currentBytes = videoBytes
+    val tintTarget = when {
+        highlighted -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.28f)
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        else -> Color.Transparent
+    }
+    val tint by animateColorAsState(tintTarget)
+    val currentOnShortClick by rememberUpdatedState(onShortClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tint)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { currentOnShortClick() },
+                    onLongPress = { currentOnLongClick() },
+                    onDoubleTap = { currentOnDoubleTap() }
+                )
+            }
+            .padding(top = if (tightWithPrev) 1.dp else 6.dp),
+        horizontalAlignment = align
+    ) {
+        Box(
+            Modifier.widthIn(max = 260.dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = if (outgoing) cornerSelf else cornerTop,
+                        topEnd = if (outgoing) cornerTop else cornerSelf,
+                        bottomStart = if (outgoing) cornerSelf else cornerTail,
+                        bottomEnd = if (outgoing) cornerTail else cornerSelf
+                    )
+                )
+                .background(bg)
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Column {
+                if (!outgoing && !tightWithPrev) {
+                    Text(
+                        senderName,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(2.dp))
+                }
+                if (quoted != null) {
+                    GroupReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 4.dp))
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(enabled = currentBytes != null) { currentBytes?.let(onPlayVideo) }
+                        .padding(vertical = 2.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(fg.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = strings.tapToPlayVideo, tint = fg)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(strings.videoMessage, color = fg, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (currentBytes == null && decodeDone) "" else strings.tapToPlayVideo,
+                            color = sub,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+                if (msg.caption.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(msg.caption, color = fg, style = MaterialTheme.typography.bodyMedium)
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    formatChatTime(msg.timestamp),
+                    color = sub,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.align(Alignment.End)
+                )
+            }
+        }
+        GroupReactionPill(reactions)
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GroupComposer(
     draft: TextFieldValue,
     pendingImages: List<ByteArray>,
+    pendingVideo: ByteArray?,
     pendingVoiceClip: RecordedClip?,
     isRecording: Boolean,
     replyPreview: GroupReplyQuoteInfo?,
     onChange: (TextFieldValue) -> Unit,
     onRemoveImage: (Int) -> Unit,
     onEditImage: (Int) -> Unit,
+    onRemoveVideo: () -> Unit,
     onRemoveVoiceClip: () -> Unit,
     onCancelReply: () -> Unit,
     onSend: () -> Unit,
     onPickImage: () -> Unit,
+    onPickVideo: () -> Unit,
     onToggleRecording: () -> Unit
 ) {
     val strings = LocalStrings.current
-    val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty() || pendingVoiceClip != null
+    val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty() || pendingVideo != null || pendingVoiceClip != null
 
     Column(
         modifier = Modifier
@@ -1716,6 +1900,41 @@ private fun GroupComposer(
         }
 
         AnimatedVisibility(
+            visible = pendingVideo != null,
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it }
+        ) {
+            val video = pendingVideo
+            if (video != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, top = 8.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.Videocam, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        strings.videoAttached,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onRemoveVideo) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = strings.removeAttachment,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
             visible = pendingVoiceClip != null,
             enter = fadeIn() + slideInVertically { it },
             exit = fadeOut() + slideOutVertically { it }
@@ -1812,6 +2031,17 @@ private fun GroupComposer(
                                 )
                             }
                             innerTextField()
+                        }
+                        IconButton(
+                            onClick = onPickVideo,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Videocam,
+                                contentDescription = strings.attachVideo,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                         IconButton(
                             onClick = onPickImage,

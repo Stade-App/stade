@@ -690,7 +690,7 @@ fun ContactsScreen(
                             val lastMsg by container.messages.observeLastMessage(contact.id).collectAsState(initial = null)
                             val unread by container.messages.observeUnreadCount(contact.id).collectAsState(initial = 0L)
                             val preview by remember(lastMsg?.id) {
-                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage) } }
+                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage) } }
                             }
                             ContactRow(
                                 contact = contact,
@@ -707,7 +707,7 @@ fun ContactsScreen(
                             val lastMsg by container.groups.observeLastMessage(group.id).collectAsState(initial = null)
                             val unread by container.groups.observeUnreadCount(group.id).collectAsState(initial = 0L)
                             val preview by remember(lastMsg?.id) {
-                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage) } }
+                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage) } }
                             }
                             GroupRow(
                                 group = group,

@@ -115,7 +115,7 @@ class StadeService : Service() {
                                     val contact = container.contacts.get(event.contactId)
                                     val senderName = contact?.nickname ?: dev.stade.ui.i18n.I18n.current.unknownNickname
                                     val preview = container.messages.lastMessage(event.contactId)?.body
-                                        ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage, dev.stade.ui.i18n.I18n.current.voiceMessage) }
+                                        ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage, dev.stade.ui.i18n.I18n.current.voiceMessage, dev.stade.ui.i18n.I18n.current.videoMessage) }
                                         ?: dev.stade.ui.i18n.I18n.current.notifNewMessageFallback
                                     showMessageNotification(event.contactId, senderName, preview)
                                 }
@@ -126,7 +126,7 @@ class StadeService : Service() {
                                 if (stadium == null || stadium.muted) return@collect
                                 if (container.isAppInForeground.value && container.activeContactId == event.stadiumId) return@collect
                                 val preview = container.stadiums.lastMessage(event.stadiumId)?.body
-                                    ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage, dev.stade.ui.i18n.I18n.current.voiceMessage) }
+                                    ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage, dev.stade.ui.i18n.I18n.current.voiceMessage, dev.stade.ui.i18n.I18n.current.videoMessage) }
                                     ?: dev.stade.ui.i18n.I18n.current.notifNewMessageFallback
                                 showMessageNotification(event.stadiumId, stadium.name, preview, isStadium = true)
                             }

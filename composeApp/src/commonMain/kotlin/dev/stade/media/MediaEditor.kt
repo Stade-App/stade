@@ -6,13 +6,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -161,14 +162,20 @@ fun MediaEditorDialog(
                 }
             }
 
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
+                val availW = maxWidth * 0.94f
+                val availH = maxHeight * 0.94f
+                val fitsByWidth = (availW / aspect) <= availH
+                val targetW = if (fitsByWidth) availW else availH * aspect
+                val targetH = if (fitsByWidth) availW / aspect else availH
+
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.94f)
-                        .aspectRatio(aspect)
+                        .width(targetW)
+                        .height(targetH)
                         .onSizeChanged { boxSizePx = it }
                 ) {
                     androidx.compose.foundation.Image(

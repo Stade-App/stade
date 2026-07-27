@@ -5,6 +5,7 @@ import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
 import dev.stade.identity.LocalIdentity
 import dev.stade.message.encodeImageBody
+import dev.stade.message.encodeVideoBody
 import dev.stade.message.encodeVoiceBody
 import dev.stade.sync.SyncEngine
 import kotlinx.coroutines.CoroutineScope
@@ -45,11 +46,27 @@ class StadiumChatService(
         return true
     }
 
-    suspend fun postImage(owner: LocalIdentity, stadium: StadiumInfo, imageBytes: ByteArray): Boolean =
-        post(owner, stadium, encodeImageBody(imageBytes))
+    suspend fun postImage(owner: LocalIdentity, stadium: StadiumInfo, imageBytes: ByteArray, caption: String = ""): Boolean =
+        post(owner, stadium, encodeImageBody(imageBytes, caption))
 
     suspend fun postVoice(owner: LocalIdentity, stadium: StadiumInfo, opusBytes: ByteArray, durationMs: Int): Boolean =
         post(owner, stadium, encodeVoiceBody(opusBytes, durationMs))
+
+    suspend fun postVideo(owner: LocalIdentity, stadium: StadiumInfo, videoBytes: ByteArray, caption: String = ""): Boolean =
+        post(owner, stadium, encodeVideoBody(videoBytes, caption))
+
+    suspend fun leave(owner: LocalIdentity, stadium: StadiumInfo): Boolean {
+        if (stadium.isOwner) return false
+        val ownerContact = contacts.get(stadium.creatorStadeId)
+        if (ownerContact != null) {
+            val msgId = Encoding.toHex(crypto.randomBytes(16))
+            val timestamp = Clock.System.now().toEpochMilliseconds()
+            val body = "$STD_LEAVE_PREFIX${stadium.id}"
+            runCatching { sync.queueOutgoing(owner, ownerContact, msgId, body, timestamp) }
+        }
+        stadiums.leaveStadium(stadium.id)
+        return true
+    }
 
     suspend fun sendJoinRequest(owner: LocalIdentity, creatorContactId: String, pending: PendingStadiumJoin) {
         val creator = contacts.get(creatorContactId) ?: return

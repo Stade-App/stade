@@ -4,9 +4,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.core.content.FileProvider
 import dev.stade.StadeApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -63,6 +65,24 @@ actual suspend fun copyImageToClipboard(bytes: ByteArray): Boolean =
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = ClipData.newUri(resolver, "image", uri)
             clipboard.setPrimaryClip(clip)
+            true
+        }.getOrDefault(false)
+    }
+
+actual suspend fun openVideoExternally(bytes: ByteArray): Boolean =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            val context = StadeApplication.instance.applicationContext
+            val dir = File(context.cacheDir, "videos").apply { mkdirs() }
+            dir.listFiles()?.forEach { runCatching { it.delete() } }
+            val file = File(dir, "stade_" + System.currentTimeMillis() + ".mp4")
+            FileOutputStream(file).use { it.write(bytes) }
+            val uri = FileProvider.getUriForFile(context, "dev.stade.fileprovider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "video/mp4")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
             true
         }.getOrDefault(false)
     }

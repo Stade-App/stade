@@ -2,6 +2,7 @@
 
 import dev.stade.message.IMAGE_BODY_PREFIX
 import dev.stade.message.MessageType
+import dev.stade.message.VIDEO_BODY_PREFIX
 import dev.stade.message.VOICE_BODY_PREFIX
 import dev.stade.message.parseReplyWrapper
 import kotlin.io.encoding.Base64
@@ -39,14 +40,28 @@ data class GroupMessage(
         get() = when {
             effectiveBody.startsWith(IMAGE_BODY_PREFIX) -> MessageType.IMAGE
             effectiveBody.startsWith(VOICE_BODY_PREFIX) -> MessageType.VOICE
+            effectiveBody.startsWith(VIDEO_BODY_PREFIX) -> MessageType.VIDEO
             else -> MessageType.TEXT
         }
 
     @OptIn(ExperimentalEncodingApi::class)
     fun imageBytes(): ByteArray? =
         if (type == MessageType.IMAGE)
-            runCatching { Base64.Default.decode(effectiveBody.removePrefix(IMAGE_BODY_PREFIX)) }.getOrNull()
+            runCatching { Base64.Default.decode(effectiveBody.removePrefix(IMAGE_BODY_PREFIX).substringBefore('\n')) }.getOrNull()
         else null
+
+    @OptIn(ExperimentalEncodingApi::class)
+    fun videoBytes(): ByteArray? =
+        if (type == MessageType.VIDEO)
+            runCatching { Base64.Default.decode(effectiveBody.removePrefix(VIDEO_BODY_PREFIX).substringBefore('\n')) }.getOrNull()
+        else null
+
+    val caption: String
+        get() = when (type) {
+            MessageType.IMAGE -> effectiveBody.removePrefix(IMAGE_BODY_PREFIX).substringAfter('\n', "")
+            MessageType.VIDEO -> effectiveBody.removePrefix(VIDEO_BODY_PREFIX).substringAfter('\n', "")
+            else -> ""
+        }
 
     @OptIn(ExperimentalEncodingApi::class)
     fun voiceOpusBytes(): ByteArray? =

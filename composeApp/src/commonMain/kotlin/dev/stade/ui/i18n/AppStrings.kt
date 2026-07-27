@@ -84,6 +84,10 @@ abstract class AppStrings {
     abstract val newInviteCodeLabel: String
     abstract val applyInviteCode: String
     abstract val clearAddresses: String
+    abstract val retryConnection: String
+    abstract val retryingConnection: String
+    abstract val clearAddressesConfirmTitle: String
+    abstract val clearAddressesConfirmBody: String
     abstract fun handshakeRejected(reason: String): String
     abstract val contactConnected: String
     abstract val decryptFailed: String
@@ -317,6 +321,14 @@ abstract class AppStrings {
     abstract val micPermissionDenied: String
     abstract val voiceMaxDurationReached: String
 
+    abstract val attachVideo: String
+    abstract val videoMessage: String
+    abstract val videoSendFailed: String
+    abstract val videoTooBig: String
+    abstract val videoAttached: String
+    abstract val tapToPlayVideo: String
+    abstract val videoOpenFailed: String
+
     abstract val replyAction: String
     abstract fun replyingToLabel(name: String): String
     abstract val cancelReply: String
@@ -383,6 +395,12 @@ abstract class AppStrings {
     abstract val deleteStadiumAction: String
     abstract val deleteStadiumConfirmTitle: String
     abstract val deleteStadiumConfirmBody: String
+    abstract val leaveStadiumAction: String
+    abstract val leaveStadiumConfirmTitle: String
+    abstract val leaveStadiumConfirmBody: String
+    abstract val leftStadium: String
+    abstract val stadiumConnectionLost: String
+    abstract val stadiumReconnectAction: String
     abstract val joinStadiumTitle: String
     abstract val joinStadiumAction: String
     abstract val joinStadiumHint: String

@@ -2,6 +2,7 @@ package dev.stade.stadium
 
 import dev.stade.message.IMAGE_BODY_PREFIX
 import dev.stade.message.MessageType
+import dev.stade.message.VIDEO_BODY_PREFIX
 import dev.stade.message.VOICE_BODY_PREFIX
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -32,14 +33,28 @@ data class StadiumMessage(
         get() = when {
             body.startsWith(IMAGE_BODY_PREFIX) -> MessageType.IMAGE
             body.startsWith(VOICE_BODY_PREFIX) -> MessageType.VOICE
+            body.startsWith(VIDEO_BODY_PREFIX) -> MessageType.VIDEO
             else -> MessageType.TEXT
         }
 
     @OptIn(ExperimentalEncodingApi::class)
     fun imageBytes(): ByteArray? =
         if (type == MessageType.IMAGE)
-            runCatching { Base64.Default.decode(body.removePrefix(IMAGE_BODY_PREFIX)) }.getOrNull()
+            runCatching { Base64.Default.decode(body.removePrefix(IMAGE_BODY_PREFIX).substringBefore('\n')) }.getOrNull()
         else null
+
+    @OptIn(ExperimentalEncodingApi::class)
+    fun videoBytes(): ByteArray? =
+        if (type == MessageType.VIDEO)
+            runCatching { Base64.Default.decode(body.removePrefix(VIDEO_BODY_PREFIX).substringBefore('\n')) }.getOrNull()
+        else null
+
+    val caption: String
+        get() = when (type) {
+            MessageType.IMAGE -> body.removePrefix(IMAGE_BODY_PREFIX).substringAfter('\n', "")
+            MessageType.VIDEO -> body.removePrefix(VIDEO_BODY_PREFIX).substringAfter('\n', "")
+            else -> ""
+        }
 
     @OptIn(ExperimentalEncodingApi::class)
     fun voiceOpusBytes(): ByteArray? =
@@ -77,4 +92,5 @@ data class PendingStadiumJoin(
 const val STD_MSG_PREFIX = "STDM:"
 const val STD_JOIN_PREFIX = "STDJ:"
 const val STD_WELCOME_PREFIX = "STDW:"
+const val STD_LEAVE_PREFIX = "STDL:"
 const val STADIUM_INVITE_SUFFIX_MARKER = "::STD::"

@@ -20,13 +20,18 @@ class ChatService(
     }
 
 
-    suspend fun sendImage(owner: LocalIdentity, contact: Contact, imageBytes: ByteArray, replyToId: String? = null): Message {
-        val body = encodeImageBody(imageBytes)
+    suspend fun sendImage(owner: LocalIdentity, contact: Contact, imageBytes: ByteArray, replyToId: String? = null, caption: String = ""): Message {
+        val body = encodeImageBody(imageBytes, caption)
         return send(owner, contact, body, replyToId)
     }
 
     suspend fun sendVoice(owner: LocalIdentity, contact: Contact, opusBytes: ByteArray, durationMs: Int, replyToId: String? = null): Message {
         val body = encodeVoiceBody(opusBytes, durationMs)
+        return send(owner, contact, body, replyToId)
+    }
+
+    suspend fun sendVideo(owner: LocalIdentity, contact: Contact, videoBytes: ByteArray, replyToId: String? = null, caption: String = ""): Message {
+        val body = encodeVideoBody(videoBytes, caption)
         return send(owner, contact, body, replyToId)
     }
 

@@ -22,6 +22,7 @@ import dev.stade.message.MessageManager
 import dev.stade.message.REACTION_BODY_PREFIX
 import dev.stade.message.parseReactionWrapper
 import dev.stade.stadium.STD_JOIN_PREFIX
+import dev.stade.stadium.STD_LEAVE_PREFIX
 import dev.stade.stadium.STD_MSG_PREFIX
 import dev.stade.stadium.STD_WELCOME_PREFIX
 import dev.stade.stadium.StadiumManager
@@ -508,6 +509,9 @@ class SyncEngine(
                         }
                         stadiumManager != null && bodyStr.startsWith(STD_WELCOME_PREFIX) -> {
                             stadiumManager.handleStadiumWelcome(owner.id, contact.id, bodyStr)
+                        }
+                        stadiumManager != null && bodyStr.startsWith(STD_LEAVE_PREFIX) -> {
+                            stadiumManager.handleLeaveRequest(contact.id, bodyStr)
                         }
                         stadiumManager != null && bodyStr.startsWith(STD_MSG_PREFIX) -> {
                             val stripped = bodyStr.removePrefix(STD_MSG_PREFIX)

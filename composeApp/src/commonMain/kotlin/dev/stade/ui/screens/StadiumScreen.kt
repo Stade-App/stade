@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Attachment
 import androidx.compose.material.icons.filled.BrokenImage
@@ -51,6 +52,9 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +62,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -86,6 +91,7 @@ import dev.stade.audio.rememberAudioPlayer
 import dev.stade.audio.rememberAudioRecorder
 import dev.stade.identity.LocalIdentity
 import dev.stade.media.MediaEditorDialog
+import dev.stade.message.MAX_ATTACHMENT_BYTES
 import dev.stade.message.MessageType
 import dev.stade.stadium.StadiumMessage
 import dev.stade.ui.copyImageToClipboard
@@ -93,7 +99,9 @@ import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
+import dev.stade.ui.openVideoExternally
 import dev.stade.ui.rememberMultiImagePickerLauncher
+import dev.stade.ui.rememberVideoPickerLauncher
 import dev.stade.ui.saveImageToGallery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -117,11 +125,13 @@ fun StadiumScreen(
     val stadiums by container.stadiums.observeStadiums(owner.id).collectAsState(initial = emptyList())
     val stadium = remember(stadiums, stadiumId) { stadiums.find { it.id == stadiumId } }
     val messages by container.stadiums.observeMessages(stadiumId).collectAsState(initial = emptyList())
+    val connected by container.sync.connectedContacts.collectAsState()
     val listState = rememberLazyListState()
 
     var draft by remember { mutableStateOf("") }
+    var showLeaveDialog by remember { mutableStateOf(false) }
+    var leaving by remember { mutableStateOf(false) }
 
-    val MAX_IMAGE_BYTES = 3 * 1024 * 1024
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
     var editingImageIndex by remember { mutableStateOf<Int?>(null) }
 
@@ -139,12 +149,21 @@ fun StadiumScreen(
     }
 
     val imagePicker = rememberMultiImagePickerLauncher { imagesList ->
-        val accepted = imagesList.filter { it.size <= MAX_IMAGE_BYTES }
+        val accepted = imagesList.filter { it.size <= MAX_ATTACHMENT_BYTES }
         if (accepted.size != imagesList.size) {
             notify(strings.photoTooBig, StadiumBannerKind.Error)
         }
         if (accepted.isNotEmpty()) {
             pendingImages = pendingImages + accepted
+        }
+    }
+
+    var pendingVideo by remember { mutableStateOf<ByteArray?>(null) }
+    val videoPicker = rememberVideoPickerLauncher { bytes ->
+        if (bytes.size <= MAX_ATTACHMENT_BYTES) {
+            pendingVideo = bytes
+        } else {
+            notify(strings.videoTooBig, StadiumBannerKind.Error)
         }
     }
 
@@ -188,6 +207,35 @@ fun StadiumScreen(
     }
 
     val current = stadium
+
+    if (showLeaveDialog && current != null) {
+        AlertDialog(
+            onDismissRequest = { if (!leaving) showLeaveDialog = false },
+            icon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text(strings.leaveStadiumConfirmTitle) },
+            text = { Text(strings.leaveStadiumConfirmBody, style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = {
+                TextButton(
+                    enabled = !leaving,
+                    onClick = {
+                        leaving = true
+                        scope.launch(Dispatchers.Default) {
+                            runCatching { container.stadiumChat.leave(owner, current) }
+                            withContext(Dispatchers.Main) {
+                                leaving = false
+                                showLeaveDialog = false
+                                onBack()
+                            }
+                        }
+                    }
+                ) { Text(strings.leaveAction, color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(enabled = !leaving, onClick = { showLeaveDialog = false }) { Text(strings.cancel) }
+            }
+        )
+    }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
@@ -211,6 +259,10 @@ fun StadiumScreen(
                     if (current?.isOwner == true) {
                         IconButton(onClick = onManage) {
                             Icon(Icons.Default.Settings, contentDescription = strings.manageStadiumTitle)
+                        }
+                    } else if (current != null) {
+                        IconButton(onClick = { showLeaveDialog = true }) {
+                            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = strings.leaveStadiumAction)
                         }
                     }
                 },
@@ -237,6 +289,34 @@ fun StadiumScreen(
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
                 ) {
+                    if (!current.isOwner && !connected.contains(current.creatorStadeId)) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.WifiOff,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    strings.stadiumConnectionLost,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(onClick = { container.connections.retryContact(current.creatorStadeId) }) {
+                                    Text(strings.stadiumReconnectAction)
+                                }
+                            }
+                        }
+                    }
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxWidth().weight(1f),
@@ -267,6 +347,15 @@ fun StadiumScreen(
                                     }
                                 )
                                 MessageType.VOICE -> StadiumVoiceBubble(msg = msg)
+                                MessageType.VIDEO -> StadiumVideoBubble(
+                                    msg = msg,
+                                    onPlayVideo = { bytes ->
+                                        scope.launch {
+                                            val ok = openVideoExternally(bytes)
+                                            if (!ok) notify(strings.videoOpenFailed, StadiumBannerKind.Error)
+                                        }
+                                    }
+                                )
                                 else -> StadiumTextBubble(msg = msg)
                             }
                         }
@@ -275,6 +364,7 @@ fun StadiumScreen(
                         StadiumComposer(
                             draft = draft,
                             pendingImages = pendingImages,
+                            pendingVideo = pendingVideo,
                             pendingVoiceClip = pendingVoiceClip,
                             isRecording = isRecording,
                             onChange = { draft = it },
@@ -282,23 +372,31 @@ fun StadiumScreen(
                                 pendingImages = pendingImages.toMutableList().also { it.removeAt(idx) }
                             },
                             onEditImage = { idx -> editingImageIndex = idx },
+                            onRemoveVideo = { pendingVideo = null },
                             onRemoveVoiceClip = { pendingVoiceClip = null },
                             onSend = {
                                 val text = draft.trim()
                                 val images = pendingImages
+                                val video = pendingVideo
                                 val voiceClip = pendingVoiceClip
-                                if (text.isEmpty() && images.isEmpty() && voiceClip == null) return@StadiumComposer
+                                if (text.isEmpty() && images.isEmpty() && video == null && voiceClip == null) return@StadiumComposer
                                 draft = ""
                                 pendingImages = emptyList()
+                                pendingVideo = null
                                 pendingVoiceClip = null
+                                val hasMedia = images.isNotEmpty() || video != null
                                 scope.launch {
-                                    if (text.isNotEmpty()) {
+                                    if (!hasMedia && text.isNotEmpty()) {
                                         runCatching { container.stadiumChat.post(owner, current, text) }
                                             .onFailure { notify(strings.sendFailed(it.message ?: ""), StadiumBannerKind.Error) }
                                     }
-                                    images.forEach { imageBytes ->
-                                        runCatching { container.stadiumChat.postImage(owner, current, imageBytes) }
+                                    images.forEachIndexed { idx, imageBytes ->
+                                        runCatching { container.stadiumChat.postImage(owner, current, imageBytes, if (idx == 0) text else "") }
                                             .onFailure { notify(strings.photoSendFailed, StadiumBannerKind.Error) }
+                                    }
+                                    if (video != null) {
+                                        runCatching { container.stadiumChat.postVideo(owner, current, video, if (images.isEmpty()) text else "") }
+                                            .onFailure { notify(strings.videoSendFailed, StadiumBannerKind.Error) }
                                     }
                                     if (voiceClip != null) {
                                         runCatching { container.stadiumChat.postVoice(owner, current, voiceClip.opusBytes, voiceClip.durationMs) }
@@ -307,6 +405,7 @@ fun StadiumScreen(
                                 }
                             },
                             onPickImage = { imagePicker.launch() },
+                            onPickVideo = { videoPicker.launch() },
                             onToggleRecording = { toggleRecording() }
                         )
                     }
@@ -428,6 +527,14 @@ private fun StadiumImageBubble(
                             )
                         }
                     }
+                }
+                if (msg.caption.isNotEmpty()) {
+                    Text(
+                        msg.caption,
+                        color = if (outgoing) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
                 }
                 Spacer(Modifier.height(3.dp))
                 Text(
@@ -552,23 +659,94 @@ private fun StadiumVoiceBubble(msg: StadiumMessage) {
     }
 }
 
+@Composable
+private fun StadiumVideoBubble(msg: StadiumMessage, onPlayVideo: (ByteArray) -> Unit) {
+    val strings = LocalStrings.current
+    val outgoing = msg.isOwn
+    val align = if (outgoing) Alignment.End else Alignment.Start
+    val bg = if (outgoing) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
+    val fg = if (outgoing) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+    val sub = fg.copy(alpha = 0.6f)
+
+    var videoBytes by remember(msg.id) { mutableStateOf<ByteArray?>(null) }
+    var decodeDone by remember(msg.id) { mutableStateOf(false) }
+    LaunchedEffect(msg.id) {
+        val bytes = withContext(Dispatchers.Default) { runCatching { msg.videoBytes() }.getOrNull() }
+        videoBytes = bytes
+        decodeDone = true
+    }
+    val currentBytes = videoBytes
+
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = align) {
+        Box(
+            Modifier.widthIn(max = 260.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(bg)
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(enabled = currentBytes != null) { currentBytes?.let(onPlayVideo) }
+                        .padding(vertical = 2.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(fg.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = strings.tapToPlayVideo, tint = fg)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(strings.videoMessage, color = fg, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (currentBytes == null && decodeDone) "" else strings.tapToPlayVideo,
+                            color = sub,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+                if (msg.caption.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(msg.caption, color = fg, style = MaterialTheme.typography.bodyMedium)
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    formatChatTime(msg.timestamp),
+                    color = sub,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.align(Alignment.End)
+                )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StadiumComposer(
     draft: String,
     pendingImages: List<ByteArray>,
+    pendingVideo: ByteArray?,
     pendingVoiceClip: RecordedClip?,
     isRecording: Boolean,
     onChange: (String) -> Unit,
     onRemoveImage: (Int) -> Unit,
     onEditImage: (Int) -> Unit,
+    onRemoveVideo: () -> Unit,
     onRemoveVoiceClip: () -> Unit,
     onSend: () -> Unit,
     onPickImage: () -> Unit,
+    onPickVideo: () -> Unit,
     onToggleRecording: () -> Unit
 ) {
     val strings = LocalStrings.current
-    val canSend = draft.isNotBlank() || pendingImages.isNotEmpty() || pendingVoiceClip != null
+    val canSend = draft.isNotBlank() || pendingImages.isNotEmpty() || pendingVideo != null || pendingVoiceClip != null
 
     Column(
         modifier = Modifier
@@ -633,6 +811,41 @@ private fun StadiumComposer(
         }
 
         AnimatedVisibility(
+            visible = pendingVideo != null,
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it }
+        ) {
+            val video = pendingVideo
+            if (video != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 12.dp, top = 8.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.Videocam, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        strings.videoAttached,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onRemoveVideo) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = strings.removeAttachment,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
             visible = pendingVoiceClip != null,
             enter = fadeIn() + slideInVertically { it },
             exit = fadeOut() + slideOutVertically { it }
@@ -686,13 +899,22 @@ private fun StadiumComposer(
                 modifier = Modifier.weight(1f),
                 shape = MaterialTheme.shapes.large,
                 trailingIcon = {
-                    IconButton(onClick = onPickImage) {
-                        Icon(
-                            Icons.Default.Attachment,
-                            contentDescription = strings.attachPhoto,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.rotate(270f)
-                        )
+                    Row {
+                        IconButton(onClick = onPickVideo) {
+                            Icon(
+                                Icons.Default.Videocam,
+                                contentDescription = strings.attachVideo,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = onPickImage) {
+                            Icon(
+                                Icons.Default.Attachment,
+                                contentDescription = strings.attachPhoto,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.rotate(270f)
+                            )
+                        }
                     }
                 }
             )
