@@ -84,7 +84,7 @@ class ConnectionManager(
                 }
             }
         }
-        backoff.keys.removeAll { it.startsWith("pending|") }
+        clearBackoffWithPrefix("pending|")
         pendingWake.trySend(Unit)
     }
 
@@ -97,6 +97,44 @@ class ConnectionManager(
             pendingAttempts.remove(addr)
         }
         clearPending(addr)
+    }
+
+    private fun nextPendingAttempt(addr: String): Int = synchronized(pendingDial) {
+        val idx = (pendingAttempts[addr] ?: 0) + 1
+        pendingAttempts[addr] = idx
+        idx
+    }
+
+    private fun backoffUntil(key: String): Long = synchronized(backoff) { backoff[key] ?: 0L }
+
+    private fun setBackoff(key: String, until: Long) {
+        synchronized(backoff) { backoff[key] = until }
+    }
+
+    private fun removeBackoff(key: String) {
+        synchronized(backoff) { backoff.remove(key) }
+    }
+
+    private fun clearBackoffWithPrefix(prefix: String) {
+        synchronized(backoff) { backoff.keys.removeAll { it.startsWith(prefix) } }
+    }
+
+    private fun clearAllBackoff() {
+        synchronized(backoff) { backoff.clear() }
+    }
+
+    private fun isDialing(contactId: String): Boolean = synchronized(dialing) { contactId in dialing }
+
+    private fun markDialing(contactId: String) {
+        synchronized(dialing) { dialing.add(contactId) }
+    }
+
+    private fun unmarkDialing(contactId: String) {
+        synchronized(dialing) { dialing.remove(contactId) }
+    }
+
+    private fun clearDialing() {
+        synchronized(dialing) { dialing.clear() }
     }
 
     suspend fun start(owner: LocalIdentity) = mutex.withLock {
@@ -158,8 +196,8 @@ class ConnectionManager(
         ownerRef = null
         tasks.forEach { it.cancel() }
         tasks.clear()
-        backoff.clear()
-        dialing.clear()
+        clearAllBackoff()
+        clearDialing()
         synchronized(pendingDial) {
             pendingDial.clear()
             pendingAttempts.clear()
@@ -175,10 +213,10 @@ class ConnectionManager(
             val now = nowMs()
             for (contact in contacts.all().filter { it.ownerId == owner.id }) {
                 if (sync.isConnected(contact.id)) continue
-                if (contact.id in dialing) continue
+                if (isDialing(contact.id)) continue
                 val attempted = tryDial(owner, contact, now)
                 if (attempted && !sync.isConnected(contact.id)) {
-                    backoff[contact.id] = now + 10_000L
+                    setBackoff(contact.id, now + 10_000L)
                 }
             }
             select<Unit> {
@@ -189,8 +227,8 @@ class ConnectionManager(
     }
 
     fun retryContact(contactId: String) {
-        backoff.remove(contactId)
-        backoff.keys.removeAll { it == contactId || it.startsWith("$contactId|") }
+        removeBackoff(contactId)
+        clearBackoffWithPrefix("$contactId|")
         dialerWake.trySend(Unit)
     }
 
@@ -220,35 +258,34 @@ class ConnectionManager(
                 continue
             }
             val key = "pending|$addr"
-            if ((backoff[key] ?: 0L) > now) continue
+            if (backoffUntil(key) > now) continue
             val plugin = pluginForAddress(addr)
             if (plugin == null) {
                 recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, I18n.current.dialTransportNotReady))
-                backoff[key] = nowMs() + 4_000L
+                setBackoff(key, nowMs() + 4_000L)
                 continue
             }
             val pluginInfo = plugin.info.value
             if (!pluginInfo.running) {
                 recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.TRYING, I18n.current.dialTransportStarting(pluginInfo.message ?: "")))
-                backoff[key] = nowMs() + 4_000L
+                setBackoff(key, nowMs() + 4_000L)
                 continue
             }
-            val attemptIdx = (pendingAttempts[addr] ?: 0) + 1
-            synchronized(pendingDial) { pendingAttempts[addr] = attemptIdx }
+            val attemptIdx = nextPendingAttempt(addr)
             val transportLabel = when (plugin.type) {
                 TransportType.TOR -> "Tor"
                 TransportType.LAN -> "LAN"
             }
             recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.TRYING, I18n.current.dialConnectingVia(transportLabel, attemptIdx)))
             // Bağlantı denemesi çalışırken aynı adrese paralel deneme açılmasın
-            backoff[key] = nowMs() + 180_000L
+            setBackoff(key, nowMs() + 180_000L)
             scope.launch {
                 val connResult = runCatching { plugin.connect(addr) }
                 val conn = connResult.getOrNull()
                 if (conn == null) {
                     val err = connResult.exceptionOrNull()?.message?.take(120) ?: I18n.current.dialUnreachableTimeout
                     recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, I18n.current.dialConnectFailedRetry(err)))
-                    backoff[key] = nowMs() + nextPendingBackoffMs(attemptIdx)
+                    setBackoff(key, nowMs() + nextPendingBackoffMs(attemptIdx))
                     pendingWake.trySend(Unit)
                     return@launch
                 }
@@ -259,7 +296,7 @@ class ConnectionManager(
                     consumePendingAddress(addr)
                 } else {
                     recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, I18n.current.dialHandshakeFailedRetry))
-                    backoff[key] = nowMs() + nextPendingBackoffMs(attemptIdx)
+                    setBackoff(key, nowMs() + nextPendingBackoffMs(attemptIdx))
                     pendingWake.trySend(Unit)
                 }
             }
@@ -285,22 +322,22 @@ class ConnectionManager(
                 continue
             }
             val key = "${contact.id}|$addr"
-            if ((backoff[key] ?: 0L) > now) continue
+            if (backoffUntil(key) > now) continue
             val plugin = pluginForAddress(addr)
             if (plugin == null) {
                 recordAttempt(contact.id, DialAttempt(addr, now, DialAttempt.Status.CONNECT_FAIL, I18n.current.dialTransportClosed))
                 continue
             }
             attempted = true
-            dialing += contact.id
+            markDialing(contact.id)
             recordAttempt(contact.id, DialAttempt(addr, now, DialAttempt.Status.TRYING))
             val conn = runCatching { plugin.connect(addr) }
             val connection = conn.getOrNull()
             if (connection == null) {
-                dialing -= contact.id
+                unmarkDialing(contact.id)
                 val err = conn.exceptionOrNull()?.message?.take(80) ?: I18n.current.dialUnreachableTimeout
                 recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, err))
-                backoff[key] = nowMs() + 30_000L
+                setBackoff(key, nowMs() + 30_000L)
                 continue
             }
             recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, I18n.current.dialHandshaking))
@@ -311,29 +348,29 @@ class ConnectionManager(
                         recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_OK, I18n.current.dialConnectedOk))
                     } else {
                         recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, I18n.current.dialHandshakeFailed))
-                        backoff[key] = nowMs() + 30_000L
+                        setBackoff(key, nowMs() + 30_000L)
                     }
                 } finally {
-                    dialing -= contact.id
+                    unmarkDialing(contact.id)
                 }
             }
             return attempted
         }
-        if ((backoff[contact.id] ?: 0L) <= now) {
+        if (backoffUntil(contact.id) <= now) {
             for (plugin in registry.all()) {
                 if (!isEnabled(plugin.type)) continue
                 val discoverable = plugin as? DiscoverableTransport ?: continue
                 for (addr in discoverable.discoveredPeers()) {
                     if (sync.isConnected(contact.id)) return attempted
-                    if (contact.id in dialing) return attempted
+                    if (isDialing(contact.id)) return attempted
                     val conn = runCatching { plugin.connect(addr) }.getOrNull() ?: continue
                     attempted = true
-                    dialing += contact.id
+                    markDialing(contact.id)
                     scope.launch {
                         try {
                             sync.handleConnection(owner, conn)
                         } finally {
-                            dialing -= contact.id
+                            unmarkDialing(contact.id)
                         }
                     }
                 }

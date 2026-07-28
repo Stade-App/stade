@@ -191,6 +191,9 @@ DELETE FROM Outbox WHERE id = ?;
 deleteOutboxForMessage:
 DELETE FROM Outbox WHERE messageId = ?;
 
+deleteOutboxForContactMessage:
+DELETE FROM Outbox WHERE messageId = ? AND contactId = ?;
+
 deleteMessageById:
 DELETE FROM Message WHERE id = ?;
 

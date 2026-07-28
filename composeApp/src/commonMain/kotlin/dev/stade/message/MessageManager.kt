@@ -91,9 +91,9 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.markRead(contactId)
     }
 
-    fun markDelivered(messageId: String) {
+    fun markDelivered(messageId: String, contactId: String) {
         db.stadeDbQueries.markDelivered(messageId)
-        db.stadeDbQueries.deleteOutboxForMessage(messageId)
+        db.stadeDbQueries.deleteOutboxForContactMessage(messageId, contactId)
     }
 
     fun saveOutgoing(contactId: String, body: String, timestamp: Long): Message {

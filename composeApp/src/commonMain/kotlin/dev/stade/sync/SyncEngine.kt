@@ -555,8 +555,8 @@ class SyncEngine(
                     val ack = runCatching {
                         json.decodeFromString(AckPayload.serializer(), record.payload.decodeToString())
                     }.getOrNull() ?: return
-                    messages.markDelivered(ack.messageId)
-                    outbox.removeForMessage(ack.messageId)
+                    messages.markDelivered(ack.messageId, contact.id)
+                    outbox.removeForMessage(ack.messageId, contact.id)
                 }
                 RecordType.PING -> { }
                 RecordType.BYE -> { runCatching { connection.close() } }

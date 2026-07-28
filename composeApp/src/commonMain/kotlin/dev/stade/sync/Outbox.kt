@@ -35,5 +35,5 @@ class Outbox(private val db: StadeDb, private val crypto: CryptoApi) {
 
     fun bump(id: String) { db.stadeDbQueries.bumpOutbox(id) }
     fun remove(id: String) { db.stadeDbQueries.deleteOutbox(id) }
-    fun removeForMessage(messageId: String) { db.stadeDbQueries.deleteOutboxForMessage(messageId) }
+    fun removeForMessage(messageId: String, contactId: String) { db.stadeDbQueries.deleteOutboxForContactMessage(messageId, contactId) }
 }
