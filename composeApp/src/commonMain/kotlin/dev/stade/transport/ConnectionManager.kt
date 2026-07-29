@@ -290,7 +290,7 @@ class ConnectionManager(
                     return@launch
                 }
                 recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, I18n.current.dialHandshaking))
-                val sessionConnected = runCatching { sync.handleConnection(owner, conn) }.getOrDefault(false)
+                val sessionConnected = runCatching { sync.handleConnection(owner, conn, outbound = true) }.getOrDefault(false)
                 if (sessionConnected) {
                     recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_OK, I18n.current.dialConnectedOk))
                     consumePendingAddress(addr)
@@ -343,8 +343,8 @@ class ConnectionManager(
             recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, I18n.current.dialHandshaking))
             scope.launch {
                 try {
-                    val sessionConnected = sync.handleConnection(owner, connection)
-                    if (sessionConnected) {
+                    val sessionConnected = sync.handleConnection(owner, connection, outbound = true)
+                    if (sessionConnected || sync.isConnected(contact.id)) {
                         recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_OK, I18n.current.dialConnectedOk))
                     } else {
                         recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, I18n.current.dialHandshakeFailed))
@@ -368,7 +368,7 @@ class ConnectionManager(
                     markDialing(contact.id)
                     scope.launch {
                         try {
-                            sync.handleConnection(owner, conn)
+                            sync.handleConnection(owner, conn, outbound = true)
                         } finally {
                             unmarkDialing(contact.id)
                         }

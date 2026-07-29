@@ -34,6 +34,7 @@ class TorTransport(
     private val mutex = Mutex()
     @Volatile private var inboundOnion: String? = null
     @Volatile private var inboundPort: Int = 0
+    @Volatile private var onionPublished: Boolean = true
     @Volatile private var inboundServer: ServerSocket? = null
     @Volatile private var socksHost: String = defaultSocksHost
     @Volatile private var socksPort: Int = defaultSocksPort
@@ -56,6 +57,18 @@ class TorTransport(
                     }
                     is TorStatus.Failed -> {
                         state.value = TransportInfo(type, "Tor", available = false, running = false, message = "failed to start: ${st.reason}")
+                    }
+                    is TorStatus.Ready -> {
+                        if (st.published && !onionPublished) {
+                            onionPublished = true
+                            mutex.withLock {
+                                val msg = buildString {
+                                    append("SOCKS5 ✓ ($socksHost:$socksPort)")
+                                    if (inboundOnion != null) append(" · onion :$inboundPort ✓")
+                                }
+                                state.value = TransportInfo(type, "Tor", available = true, running = true, message = msg)
+                            }
+                        }
                     }
                     else -> Unit
                 }
@@ -88,6 +101,8 @@ class TorTransport(
             socksPort = ready.socksPort
             inboundOnion = ready.onionHostname
             inboundPort = ready.onionVirtualPort
+            onionPublished = ready.onionPublished ||
+                (embedded?.statusFlow?.value as? TorStatus.Ready)?.published == true
             val listenError: String? = bindError
             if (preBoundServer != null && bindError == null) {
                 runCatching { inboundServer?.close() }
@@ -100,7 +115,8 @@ class TorTransport(
             val msg = buildString {
                 append("SOCKS5 ✓ ($socksHost:$socksPort)")
                 if (inboundOnion != null) {
-                    append(" · onion :$inboundPort ✓")
+                    if (onionPublished) append(" · onion :$inboundPort ✓")
+                    else append(" · onion :$inboundPort (publishing…)")
                 } else if (listenError != null) {
                     append(" · onion NOT LISTENING ($listenError)")
                 }
@@ -303,6 +319,7 @@ class TorTransport(
 
     override fun selfAddress(): String? {
         val o = inboundOnion ?: return null
+        if (embedded != null && !onionPublished) return null
         return if (inboundPort > 0) "tor://$o:$inboundPort" else null
     }
 

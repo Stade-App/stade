@@ -135,20 +135,26 @@ class EmbeddedTorManager(
                 socksPort = socks,
                 onionHostname = "${onion.serviceId}.onion",
                 onionVirtualPort = virtualPort,
-                onionLocalPort = localTarget
+                onionLocalPort = localTarget,
+                onionPublished = published
             )
             ready = result
             controlClient = client
             keepClient = true
             if (published) {
                 runCatching { client.unsubscribeEvents() }
-                status.value = TorStatus.Ready(result.onionHostname)
+                status.value = TorStatus.Ready(result.onionHostname, published = true)
             } else {
-                // Descriptor henüz yayılmamış — Ready ilan ediyoruz ama arka planda izlemeye devam ediyoruz.
-                status.value = TorStatus.Ready(result.onionHostname)
+                // Descriptor henüz yayılmamış — bunu status'a yansıtıp arka planda izlemeye devam ediyoruz,
+                // ta ki gerçekten yayılana kadar bu onion adresini kimseye "hazır" gibi sunmayalım.
+                status.value = TorStatus.Ready(result.onionHostname, published = false)
                 scope.launch {
-                    runCatching { client.waitForOnionPublished(onion.serviceId, timeoutMillis = 240_000) }
+                    val ok = runCatching { client.waitForOnionPublished(onion.serviceId, timeoutMillis = 240_000) }.getOrDefault(false)
                     runCatching { client.unsubscribeEvents() }
+                    if (ok) {
+                        ready = ready?.copy(onionPublished = true)
+                        status.value = TorStatus.Ready(result.onionHostname, published = true)
+                    }
                 }
             }
             return result

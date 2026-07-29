@@ -97,7 +97,7 @@ class SyncEngine(
         sessionsLock.withLock { sessions[contact.id] }?.notifyOutbox()
     }
 
-    suspend fun handleConnection(owner: LocalIdentity, connection: Connection): Boolean {
+    suspend fun handleConnection(owner: LocalIdentity, connection: Connection, outbound: Boolean = false): Boolean {
         var sessionStarted = false
         coroutineScope {
             val handshakeOutcome = handshake(owner, connection)
@@ -107,13 +107,27 @@ class SyncEngine(
             }
             val (contact, isNew) = handshakeOutcome
             contacts.markSeen(contact.id, Clock.System.now().toEpochMilliseconds())
+            // İki taraf aynı anda birbirini ararsa çapraz kapatma döngüsü oluşur: her taraf
+            // farklı bağlantıyı canlı tutup diğerininkini kapatır ve ikisi de düşer. Deterministik
+            // kural: küçük stadeId'li tarafın AÇTIĞI bağlantı kazanır; mevcut oturum varken gelen
+            // tercih-dışı yeni bağlantı sessizce kapatılır.
+            val preferOutbound = owner.stadeId < contact.id
+            if (outbound != preferOutbound) {
+                val existing = sessionsLock.withLock { sessions[contact.id] }
+                if (existing != null) {
+                    runCatching { connection.close() }
+                    return@coroutineScope
+                }
+            }
             val stale = sessionsLock.withLock { sessions[contact.id] }
             stale?.let { runCatching { it.cancelAndJoin() } }
             val session = sessionsLock.withLock {
                 sessions[contact.id]?.let { runCatching { it.cancel() } }
-                ContactSession(this@coroutineScope, owner, contact, connection).also { sessions[contact.id] = it }
+                ContactSession(this@coroutineScope, owner, contact, connection).also {
+                    sessions[contact.id] = it
+                    _connected.value = sessions.keys.toSet()
+                }
             }
-            updateConnectedSet()
             _events.tryEmit(SyncEvent.ContactConnected(contact.id, isNew))
             sessionStarted = true
             try {
@@ -121,16 +135,12 @@ class SyncEngine(
             } finally {
                 sessionsLock.withLock {
                     if (sessions[contact.id] === session) sessions.remove(contact.id)
+                    _connected.value = sessions.keys.toSet()
                 }
-                updateConnectedSet()
                 _events.tryEmit(SyncEvent.ContactDisconnected(contact.id))
             }
         }
         return sessionStarted
-    }
-
-    private fun updateConnectedSet() {
-        _connected.value = sessions.keys.toSet()
     }
 
     private suspend fun handshake(owner: LocalIdentity, connection: Connection): Pair<Contact, Boolean>? {
@@ -392,7 +402,12 @@ class SyncEngine(
                     delay(30_000)
                     runCatching {
                         connection.send(FrameCodec.encode(SyncRecord(RecordType.PING, ByteArray(0))))
-                    }.getOrElse { return }
+                    }.getOrElse {
+                        // Ping gönderilemiyorsa soket ölmüş demektir; bağlantıyı kapat ki receive()
+                        // bloke kalıp oturumu "bağlı" gibi göstermeye devam etmesin.
+                        runCatching { connection.close() }
+                        return
+                    }
                 }
             } catch (_: CancellationException) {
             }
@@ -571,8 +586,12 @@ class SyncEngine(
         sessionsLock.withLock {
             forgottenIds = forgottenIds + contactId
             sessions.remove(contactId)?.let { runCatching { it.cancel() } }
+            _connected.value = sessions.keys.toSet()
         }
-        updateConnectedSet()
         runCatching { ratchet.forget(contactId) }
+    }
+
+    fun unforget(stadeId: String) {
+        forgottenIds = forgottenIds - stadeId
     }
 }

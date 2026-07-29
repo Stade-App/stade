@@ -54,6 +54,7 @@ fun AppContainer.beginAcceptInvite(
         return BeginAcceptResult.Error(strings.alreadyAdded(payload.stadeId))
     }
 
+    sync.unforget(payload.stadeId)
     val addrs = payload.addresses
     if (addrs.isEmpty()) return BeginAcceptResult.NoAddress(payload)
 

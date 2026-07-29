@@ -259,6 +259,7 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                     status = strings.alreadyAdded(parsed.stadeId)
                                     return@launch
                                 }
+                                container.sync.unforget(parsed.stadeId)
                                 val addrs = parsed.addresses
                                 if (addrs.isEmpty()) {
                                     status = strings.inviteAcceptedNoAddr

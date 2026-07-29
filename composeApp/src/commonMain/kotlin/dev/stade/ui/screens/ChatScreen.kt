@@ -582,6 +582,7 @@ fun ChatScreen(
                                         parsed.addresses.isEmpty() ->
                                             showNotification(strings.noConnectionInInvite, NotificationKind.Error)
                                         else -> {
+                                            container.sync.unforget(contact.id)
                                             container.contacts.setAddresses(contact.id, parsed.addresses)
                                             container.connections.queueDial(parsed.addresses)
                                             showNotification(strings.connectionInfoUpdated, NotificationKind.Success)

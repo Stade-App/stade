@@ -122,6 +122,7 @@ fun JoinStadiumScreen(
                             status = strings.inviteAcceptedNoAddr
                             return@launch
                         }
+                        container.sync.unforget(payload.stadeId)
                         val pending = PendingStadiumJoin(stadiumData.stadiumId, stadiumData.stadiumName, stadiumData.inviteToken)
                         container.stadiums.storePendingJoin(payload.stadeId, pending)
                         status = strings.stadiumJoinDialing(stadiumData.stadiumName)
