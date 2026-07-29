@@ -93,8 +93,8 @@ android {
         applicationId = "dev.stade"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.1.3"
+        versionCode = 5
+        versionName = "0.1.4"
     }
 
     val localProps = Properties().also { props ->
@@ -167,7 +167,7 @@ compose.desktop {
                 "java.desktop"
             )
             packageName = "Stade"
-            packageVersion = "0.1.3"
+            packageVersion = "0.1.4"
             windows {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.ico"))
                 menuGroup = "Stade"
@@ -269,7 +269,6 @@ tasks.matching { it.name == "desktopProcessResources" || it.name == "jvmProcessR
     dependsOn(downloadTorBinaries)
 }
 
-// --- Android Tor Expert Bundle (gömülü Tor) ---
 data class AndroidTorAbi(val bundleTriple: String, val abi: String, val shaProp: String)
 
 val androidTorAbis = listOf(
@@ -333,7 +332,6 @@ val downloadAndroidTorBinaries by tasks.registering {
                         from(tarTree(resources.gzip(tmp)))
                         into(extractDir)
                     }
-                    // The bundle ships the tor binary as ./tor/tor (and pluggable transports etc).
                     val torBin = sequenceOf(
                         extractDir.resolve("tor/tor"),
                         extractDir.resolve("tor/libtor.so"),
@@ -342,8 +340,6 @@ val downloadAndroidTorBinaries by tasks.registering {
                     ).firstOrNull { it.isFile }
                         ?: throw GradleException("tor binary not found in bundle for ${abi.abi}")
                     torBin.copyTo(jniDir.resolve("libtor.so"), overwrite = true)
-                    // obfs4 pluggable transport (lyrebird) — packaged under jniLibs (lib*.so naming
-                    // required for Android to extract it into the executable nativeLibraryDir).
                     val lyrebirdBin = sequenceOf(
                         extractDir.resolve("tor/pluggable_transports/lyrebird"),
                         extractDir.resolve("pluggable_transports/lyrebird")
@@ -353,7 +349,6 @@ val downloadAndroidTorBinaries by tasks.registering {
                     } else {
                         logger.warn("[tor-android] lyrebird (obfs4) binary not found in bundle for ${abi.abi} — bridge support will be unavailable")
                     }
-                    // geoip files: extract once into shared assets dir.
                     listOf("geoip", "geoip6").forEach { gn ->
                         val candidate = sequenceOf(
                             extractDir.resolve("data/$gn"),

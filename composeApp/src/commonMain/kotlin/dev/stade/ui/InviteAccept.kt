@@ -48,9 +48,11 @@ fun AppContainer.beginAcceptInvite(
     if (payload.signingPublicKey.contentEquals(owner.publicSigningKey)) {
         return BeginAcceptResult.Error(strings.selfInviteError)
     }
-    if (contacts.findByStadeId(payload.stadeId) != null) {
+    val existing = contacts.findByStadeId(payload.stadeId)
+    if (existing != null) {
         val a = alias.trim()
         if (a.isNotEmpty()) runCatching { contacts.rename(payload.stadeId, a) }
+        if (existing.kind != 0) runCatching { contacts.setKind(existing.id, 0) }
         return BeginAcceptResult.Error(strings.alreadyAdded(payload.stadeId))
     }
 

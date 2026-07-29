@@ -183,10 +183,17 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
             rest.substring(newlineIdx + 1).split('\n').filter { it.isNotBlank() }
         } else emptyList()
 
-        if (db.stadeDbQueries.selectGroup(groupId).executeAsOneOrNull() == null) {
+        val existing = db.stadeDbQueries.selectGroup(groupId).executeAsOneOrNull()
+        if (existing == null) {
+            val pending = getPendingJoinForContact(creatorStadeId)
+            if (pending == null || pending.groupId != groupId) return
             val now = Clock.System.now().toEpochMilliseconds()
             val newToken = Encoding.toHex(crypto.randomBytes(16))
             db.stadeDbQueries.insertGroup(groupId, ownerId, groupName, newToken, now, creatorStadeId)
+            clearPendingJoin(creatorStadeId)
+        } else {
+            if (existing.creatorStadeId.isNotBlank() && existing.creatorStadeId != creatorStadeId) return
+            if (getPendingJoinForContact(creatorStadeId)?.groupId == groupId) clearPendingJoin(creatorStadeId)
         }
         memberIds.forEach { memberId ->
             runCatching { addMember(groupId, memberId) }

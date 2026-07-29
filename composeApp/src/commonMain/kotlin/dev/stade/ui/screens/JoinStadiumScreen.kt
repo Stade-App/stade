@@ -130,7 +130,6 @@ fun JoinStadiumScreen(
 
                         val existingContact = container.contacts.findByStadeId(payload.stadeId)
                         if (existingContact != null) {
-                            container.stadiums.clearPendingJoin(payload.stadeId)
                             container.stadiumChat.sendJoinRequest(owner, existingContact.id, pending)
                         } else {
                             container.connections.queueDial(addrs)

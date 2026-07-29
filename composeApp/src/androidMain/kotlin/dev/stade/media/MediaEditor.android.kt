@@ -26,7 +26,6 @@ actual fun ForceFullScreenDialogWindow() {
             WindowManager.LayoutParams.MATCH_PARENT
         )
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        // Flipping decorFitsSystemWindows after the window's already attached doesn't retrigger a dispatch on its own.
         ViewCompat.requestApplyInsets(window.decorView)
     }
 }

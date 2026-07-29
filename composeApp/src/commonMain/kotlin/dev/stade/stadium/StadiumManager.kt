@@ -145,11 +145,16 @@ class StadiumManager(private val db: StadeDb, private val crypto: CryptoApi) {
 
         val existing = db.stadeDbQueries.selectStadium(stadiumId).executeAsOneOrNull()
         if (existing == null) {
+            val pending = getPendingJoinForContact(creatorStadeId)
+            if (pending == null || pending.stadiumId != stadiumId) return
             val now = Clock.System.now().toEpochMilliseconds()
             val token = Encoding.toHex(crypto.randomBytes(16))
             db.stadeDbQueries.insertStadium(stadiumId, ownerId, name, creatorStadeId, 0L, token, memberCount, now)
+            clearPendingJoin(creatorStadeId)
         } else {
+            if (existing.creatorStadeId != creatorStadeId) return
             db.stadeDbQueries.setStadiumMemberCount(memberCount, stadiumId)
+            if (getPendingJoinForContact(creatorStadeId)?.stadiumId == stadiumId) clearPendingJoin(creatorStadeId)
         }
     }
 
@@ -174,6 +179,22 @@ class StadiumManager(private val db: StadeDb, private val crypto: CryptoApi) {
     fun clearPendingJoin(contactStadeId: String) {
         pendingJoins.remove(contactStadeId)
         runCatching { db.stadeDbQueries.deleteKv("std.pending.$contactStadeId") }
+    }
+
+    fun stadiumsForContact(contactId: String): List<String> =
+        db.stadeDbQueries.memberStadiumIds(contactId).executeAsList()
+
+    fun markPendingFarewell(contactId: String, messageId: String) {
+        runCatching { db.stadeDbQueries.putKv("std.farewell.$contactId", messageId.encodeToByteArray()) }
+    }
+
+    fun takeFarewellIfMatches(contactId: String, messageId: String): Boolean {
+        val raw = runCatching {
+            db.stadeDbQueries.getKv("std.farewell.$contactId").executeAsOneOrNull()
+        }.getOrNull() ?: return false
+        if (raw.decodeToString() != messageId) return false
+        runCatching { db.stadeDbQueries.deleteKv("std.farewell.$contactId") }
+        return true
     }
 
     fun buildInviteLink(handshakeInvite: String, stadium: StadiumInfo): String {

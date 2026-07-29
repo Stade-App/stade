@@ -115,7 +115,6 @@ class EmbeddedTorManager(
                 status.value = TorStatus.Bootstrapping(pct, summary)
             }, timeoutMillis = 180_000)
             if (!ok) error("Tor bootstrap timed out")
-            // HS_DESC event subscription'ını ADD_ONION'dan ÖNCE açıyoruz — UPLOADED event'i kaçmasın.
             client.subscribeHsDescEvents()
             val keyStore = File(appRoot, "tor/onion.key")
             val existingKey = keyStore.takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotEmpty() }
@@ -145,8 +144,6 @@ class EmbeddedTorManager(
                 runCatching { client.unsubscribeEvents() }
                 status.value = TorStatus.Ready(result.onionHostname, published = true)
             } else {
-                // Descriptor henüz yayılmamış — bunu status'a yansıtıp arka planda izlemeye devam ediyoruz,
-                // ta ki gerçekten yayılana kadar bu onion adresini kimseye "hazır" gibi sunmayalım.
                 status.value = TorStatus.Ready(result.onionHostname, published = false)
                 scope.launch {
                     val ok = runCatching { client.waitForOnionPublished(onion.serviceId, timeoutMillis = 240_000) }.getOrDefault(false)
@@ -228,15 +225,6 @@ class EmbeddedTorManager(
     }
 }
 
-/**
- * Mevcut JVM sürecinin PID'ini döner.
- *
- * Java 9+ `ProcessHandle.current().pid()` API'sini reflection ile çağırır.
- * Android veya eski JVM ortamlarında (R8 derleme dahil) `ProcessHandle` sınıfı
- * bulunmayabilir. Reflection sayesinde bu sınıfa doğrudan bir derleme zamanı
- * bağımlılığı oluşmaz ve R8 "Missing class" hatası vermez.
- * API mevcut değilse 0L döner (torrc'ye __OwningControllerProcess satırı eklenmez).
- */
 private fun currentPid(): Long = runCatching {
     val phClass = Class.forName("java.lang.ProcessHandle")
     val currentMethod = phClass.getMethod("current")

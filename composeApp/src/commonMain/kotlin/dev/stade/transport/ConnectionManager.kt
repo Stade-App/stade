@@ -169,7 +169,6 @@ class ConnectionManager(
         }
     }
 
-    /** Bir taşıma katmanını canlıyken açar/kapatır; devre dışı bırakma anında dinleyiciyi/keşfi durdurur, mevcut oturumlara dokunmaz. */
     suspend fun setTransportEnabled(type: TransportType, enabled: Boolean) = mutex.withLock {
         transportSettings.setEnabled(type, enabled)
         val plugin = registry.get(type) ?: return@withLock
@@ -232,7 +231,6 @@ class ConnectionManager(
         dialerWake.trySend(Unit)
     }
 
-    /** Bekleyen davet adreslerini mevcut kişi bağlantı döngüsünden bağımsız olarak dener. */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private suspend fun pendingDialLoop(owner: LocalIdentity) {
         while (scope.isActive) {
@@ -277,7 +275,6 @@ class ConnectionManager(
                 TransportType.LAN -> "LAN"
             }
             recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.TRYING, I18n.current.dialConnectingVia(transportLabel, attemptIdx)))
-            // Bağlantı denemesi çalışırken aynı adrese paralel deneme açılmasın
             setBackoff(key, nowMs() + 180_000L)
             scope.launch {
                 val connResult = runCatching { plugin.connect(addr) }
@@ -300,7 +297,6 @@ class ConnectionManager(
                     pendingWake.trySend(Unit)
                 }
             }
-            // Diğer adresleri de paralel dene; her birinin kendi backoff'u var.
         }
     }
 

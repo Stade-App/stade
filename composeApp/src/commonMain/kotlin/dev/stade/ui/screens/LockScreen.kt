@@ -85,11 +85,6 @@ fun LockScreen(
     vault: Vault,
     onUnlocked: () -> Unit,
     onForgotPin: () -> Unit = {},
-    /**
-     * Çağıran tarafın, vault.wipe() ÇAĞRILMADAN ÖNCE her türlü açık DB/container'ı
-     * kapatması için fırsatı. Windows'ta plaintext DB dosyasını silebilmek için şart.
-     * Null bırakılırsa LockScreen kendi başına vault.wipe() çağırır (geriye uyumluluk).
-     */
     onPrepareWipe: (suspend () -> Unit)? = null
 ) {
     var pin by remember { mutableStateOf("") }

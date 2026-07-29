@@ -10,11 +10,6 @@ import kotlinx.serialization.encoding.Encoder
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
-// This snapshot (including the ML-KEM keys and the skipped-message-key map, now sized up to 8000
-// entries) is JSON-encoded and written to the local DB on every single seal()/open() call, i.e.
-// every message sent or received. Without this, kotlinx.serialization's default ByteArray-as-
-// JSON-array-of-numbers encoding makes that ~3.6x bigger than it needs to be, which is pure
-// per-message CPU/GC/disk-write overhead that isn't sent over the wire at all - purely local.
 @OptIn(ExperimentalEncodingApi::class)
 private object RatchetByteArrayAsBase64Serializer : KSerializer<ByteArray> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("RatchetByteArrayAsBase64", PrimitiveKind.STRING)
@@ -50,9 +45,6 @@ data class RatchetSnapshot(
     val skipped: Map<String, @Serializable(with = RatchetByteArrayAsBase64Serializer::class) ByteArray>
 )
 
-// Matches RatchetSnapshot's pre-Base64 shape (plain ByteArray fields, default JSON-array-of-numbers
-// encoding) so state persisted by older builds can still be read once and transparently migrated -
-// the very next persist() call rewrites it in the compact format.
 @Serializable
 data class LegacyRatchetSnapshot(
     val rootKey: ByteArray,

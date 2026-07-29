@@ -10,10 +10,6 @@ import kotlinx.serialization.encoding.Encoder
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
-// kotlinx.serialization has no built-in Base64 for ByteArray - it defaults to a JSON array of
-// numbers, which is ~3.6x larger on the wire than the bytes themselves. Frame payloads (mainly
-// ratchetFrame, which carries the whole attachment) are large enough that this matters, so encode
-// them as a Base64 string instead (~1.33x) to leave far more headroom under FrameCodec.MAX_LEN.
 @OptIn(ExperimentalEncodingApi::class)
 object ByteArrayAsBase64Serializer : KSerializer<ByteArray> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("ByteArrayAsBase64", PrimitiveKind.STRING)

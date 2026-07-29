@@ -12,10 +12,6 @@ import dev.stade.ui.i18n.I18n
 import dev.stade.ui.i18n.getLocalePreference
 import dev.stade.ui.i18n.localeToStrings
 
-/**
- * Sistem açılışında sadece bir hatırlatma bildirimi gösterir; StadeService'i BAŞLATMAZ.
- * Kullanıcı bildirime dokunup uygulamayı açana kadar mesaj alma/arka plan bağlantısı başlamaz.
- */
 class BootReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return

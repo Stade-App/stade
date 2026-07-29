@@ -255,7 +255,9 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                     status = strings.selfInviteError
                                     return@launch
                                 }
-                                if (container.contacts.findByStadeId(parsed.stadeId) != null) {
+                                val existingContact = container.contacts.findByStadeId(parsed.stadeId)
+                                if (existingContact != null) {
+                                    if (existingContact.kind != 0) runCatching { container.contacts.setKind(existingContact.id, 0) }
                                     status = strings.alreadyAdded(parsed.stadeId)
                                     return@launch
                                 }

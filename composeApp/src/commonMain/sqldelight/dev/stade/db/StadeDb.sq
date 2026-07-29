@@ -458,6 +458,9 @@ DELETE FROM StadiumMember WHERE stadiumId = ?;
 deleteStadiumMember:
 DELETE FROM StadiumMember WHERE stadiumId = ? AND contactId = ?;
 
+memberStadiumIds:
+SELECT stadiumId FROM StadiumMember WHERE contactId = ?;
+
 insertStadiumMessage:
 INSERT INTO StadiumMessage(id, stadiumId, body, timestamp, outgoing) VALUES (?, ?, ?, ?, ?);
 

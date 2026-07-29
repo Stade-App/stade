@@ -12,8 +12,6 @@ const val VIDEO_BODY_PREFIX = "STADE_VID_V1:"
 const val REPLY_BODY_PREFIX = "STADE_RPL_V1:"
 const val REACTION_BODY_PREFIX = "STADE_RXN_V1:"
 
-// Keeps Base64 body + Base64 ratchet-frame encoding under FrameCodec's 4 MB cap, with headroom for
-// a DH-ratchet-step header (~2.3 KB) and a caption, at a comfortable margin below the hard limit.
 const val MAX_ATTACHMENT_BYTES = 1800 * 1024
 
 @Serializable

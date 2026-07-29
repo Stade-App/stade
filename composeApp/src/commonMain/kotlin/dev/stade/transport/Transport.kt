@@ -34,7 +34,6 @@ interface TransportPlugin {
     fun selfAddress(): String?
     fun selfAddresses(): List<String> = listOfNotNull(selfAddress())
 
-    /** Discards any cached running state so the next start() boots fresh with current settings. Default: no-op. */
     suspend fun reload() {}
 }
 

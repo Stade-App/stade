@@ -111,7 +111,6 @@ internal class TorControlClient(host: String, port: Int, connectTimeoutMillis: I
             val code = raw.substring(0, 3).toIntOrNull() ?: 0
             val sep = raw[3]
             val payload = raw.substring(4)
-            // 6xx async events; sync reply ararken atla (event payload'ı acc'a karışmasın)
             if (code in 600..699 && statusCode == 0) {
                 if (sep == '+') {
                     while (true) {

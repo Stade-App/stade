@@ -27,7 +27,6 @@ class GroupChatService(
                 val contact = contacts.get(event.contactId) ?: return@onEach
                 val pending = groups.getPendingJoinForContact(contact.id) ?: return@onEach
                 sendJoinRequest(owner, contact.id, pending)
-                groups.clearPendingJoin(contact.id)
             }
         }.launchIn(scope)
     }

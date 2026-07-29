@@ -9,8 +9,10 @@ import dev.stade.message.encodeVideoBody
 import dev.stade.message.encodeVoiceBody
 import dev.stade.sync.SyncEngine
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 
 class StadiumChatService(
@@ -21,11 +23,27 @@ class StadiumChatService(
 ) {
     fun start(owner: LocalIdentity, scope: CoroutineScope) {
         sync.events.onEach { event ->
-            if (event is SyncEngine.SyncEvent.ContactConnected) {
-                val contact = contacts.get(event.contactId) ?: return@onEach
-                val pending = stadiums.getPendingJoinForContact(contact.id) ?: return@onEach
-                sendJoinRequest(owner, contact.id, pending)
-                stadiums.clearPendingJoin(contact.id)
+            when (event) {
+                is SyncEngine.SyncEvent.ContactConnected -> {
+                    val contact = contacts.get(event.contactId) ?: return@onEach
+                    val pending = stadiums.getPendingJoinForContact(contact.id) ?: return@onEach
+                    if (event.isNew) runCatching { contacts.setKind(contact.id, 1) }
+                    sendJoinRequest(owner, contact.id, pending)
+                }
+                is SyncEngine.SyncEvent.StadiumContactReleased -> {
+                    scope.launch {
+                        delay(2_000)
+                        val stillUsed = stadiums.getPendingJoinForContact(event.contactId) != null ||
+                            stadiums.allStadiums(owner.id).any { it.creatorStadeId == event.contactId } ||
+                            stadiums.stadiumsForContact(event.contactId).isNotEmpty()
+                        if (!stillUsed) {
+                            if (event.forget) sync.forgetContact(event.contactId)
+                            else sync.disconnectContact(event.contactId)
+                            runCatching { contacts.purge(event.contactId) }
+                        }
+                    }
+                }
+                else -> Unit
             }
         }.launchIn(scope)
     }
@@ -62,9 +80,16 @@ class StadiumChatService(
             val msgId = Encoding.toHex(crypto.randomBytes(16))
             val timestamp = Clock.System.now().toEpochMilliseconds()
             val body = "$STD_LEAVE_PREFIX${stadium.id}"
-            runCatching { sync.queueOutgoing(owner, ownerContact, msgId, body, timestamp) }
+            val queued = runCatching { sync.queueOutgoing(owner, ownerContact, msgId, body, timestamp) }.isSuccess
+            stadiums.leaveStadium(stadium.id)
+            if (queued && ownerContact.kind == 1 &&
+                stadiums.allStadiums(owner.id).none { it.creatorStadeId == ownerContact.id }
+            ) {
+                stadiums.markPendingFarewell(ownerContact.id, msgId)
+            }
+        } else {
+            stadiums.leaveStadium(stadium.id)
         }
-        stadiums.leaveStadium(stadium.id)
         return true
     }
 

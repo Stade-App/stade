@@ -9,10 +9,6 @@ data class TorBridgeConfig(
         (if (useBuiltIn) DEFAULT_OBFS4_BRIDGES else emptyList()) + customLines
 
     companion object {
-        /**
-         * Tor Project'in resmi obfs4 varsayılan köprü listesi (Tor Browser ile aynı,
-         * herkese açık, torproject.org tarafından yayımlanan köprüler).
-         */
         val DEFAULT_OBFS4_BRIDGES: List<String> = listOf(
             "obfs4 192.95.36.142:443 CDF2E852BF539B82BD10E27E9115A31734E378C2 cert=qUVQ0srL1JI/vO6V6m/24anYXiJD3QP2HgzUKQtQ7GRqqUvs7P+tG43RtAqdhLOALP7DJQ iat-mode=1",
             "obfs4 37.218.245.14:38224 D9A82D2F9C2F65A18407B1D2B764F130847F8B5D cert=bjRaMrr1BRiAW8IE9U5z27fQaYgOhX1UCmOpg2pFpoMvo6ZgQMzLsaTzzQNTlm7hNcb+Sg iat-mode=0",
@@ -29,10 +25,6 @@ data class TorBridgeConfig(
     }
 }
 
-/**
- * TransportSetting.config alanındaki ham "key=value" blob'unu köprü ayarlarına çevirir.
- * Beklenen anahtarlar: bridgesEnabled, bridgesUseBuiltIn, ve tekrar edebilen bridge=<satır>.
- */
 fun parseBridgeConfig(raw: String): TorBridgeConfig {
     if (raw.isBlank()) return TorBridgeConfig()
     var enabled = false

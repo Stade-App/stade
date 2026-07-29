@@ -7,11 +7,6 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
 
-/**
- * Mirrors the in-app Avatar composable (dev.stade.ui.components.Avatar) pixel-for-pixel logic
- * (same palette, same name->color hash, same initial rule) so notification large icons match
- * the avatar a contact is shown with everywhere else in the app.
- */
 internal object NotificationAvatar {
     private val palette = listOf(
         0xFF1E6091.toInt() to 0xFF61A5C2.toInt(),

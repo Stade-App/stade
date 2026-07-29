@@ -82,6 +82,7 @@ class SyncEngine(
         data class SendFailed(val contactId: String, val reason: String) : SyncEvent
         data class ReactionUpdated(val messageId: String) : SyncEvent
         data class StadiumMessageReceived(val stadiumId: String) : SyncEvent
+        data class StadiumContactReleased(val contactId: String, val forget: Boolean) : SyncEvent
     }
 
     suspend fun queueOutgoing(owner: LocalIdentity, contact: Contact, messageId: String, body: String, timestamp: Long) {
@@ -107,10 +108,6 @@ class SyncEngine(
             }
             val (contact, isNew) = handshakeOutcome
             contacts.markSeen(contact.id, Clock.System.now().toEpochMilliseconds())
-            // İki taraf aynı anda birbirini ararsa çapraz kapatma döngüsü oluşur: her taraf
-            // farklı bağlantıyı canlı tutup diğerininkini kapatır ve ikisi de düşer. Deterministik
-            // kural: küçük stadeId'li tarafın AÇTIĞI bağlantı kazanır; mevcut oturum varken gelen
-            // tercih-dışı yeni bağlantı sessizce kapatılır.
             val preferOutbound = owner.stadeId < contact.id
             if (outbound != preferOutbound) {
                 val existing = sessionsLock.withLock { sessions[contact.id] }
@@ -392,7 +389,12 @@ class SyncEngine(
             while (scope.isActive) {
                 val frame = runCatching { connection.receive() }.getOrNull() ?: return
                 val record = FrameCodec.decode(frame) ?: continue
-                handleRecord(record)
+                try {
+                    handleRecord(record)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Throwable) {
+                }
             }
         }
 
@@ -403,8 +405,6 @@ class SyncEngine(
                     runCatching {
                         connection.send(FrameCodec.encode(SyncRecord(RecordType.PING, ByteArray(0))))
                     }.getOrElse {
-                        // Ping gönderilemiyorsa soket ölmüş demektir; bağlantıyı kapat ki receive()
-                        // bloke kalıp oturumu "bağlı" gibi göstermeye devam etmesin.
                         runCatching { connection.close() }
                         return
                     }
@@ -419,11 +419,6 @@ class SyncEngine(
                     val payload = runCatching {
                         json.decodeFromString(MessagePayload.serializer(), record.payload.decodeToString())
                     }.getOrNull() ?: return
-                    // Every payload type (not just plain 1:1 messages - reactions, group/Stadium
-                    // control frames) must be deduped here: the sender resends anything unacked on
-                    // every reconnect, and re-decrypting an already-consumed ratchet frame always
-                    // fails, surfacing as a spurious "failed to decrypt" even though the first
-                    // delivery succeeded.
                     if (messages.isEnvelopeProcessed(payload.messageId)) {
                         val ack = AckPayload(payload.messageId)
                         runCatching {
@@ -441,7 +436,7 @@ class SyncEngine(
 
                     when {
                         bodyStr.startsWith(REACTION_BODY_PREFIX) -> {
-                            val wrapper = parseReactionWrapper(bodyStr)
+                            val wrapper = if ((contacts.get(contact.id)?.kind ?: 0) == 0) parseReactionWrapper(bodyStr) else null
                             if (wrapper != null) {
                                 if (wrapper.add) messages.upsertReaction(wrapper.targetMessageId, contact.id, wrapper.emoji)
                                 else messages.deleteReaction(wrapper.targetMessageId, contact.id)
@@ -451,7 +446,7 @@ class SyncEngine(
                         groupManager != null && bodyStr.startsWith(GRP_RXN_PREFIX) -> {
                             val stripped = bodyStr.removePrefix(GRP_RXN_PREFIX)
                             val colonIdx = stripped.indexOf(':')
-                            if (colonIdx >= 0) {
+                            if (colonIdx >= 0 && stripped.substring(0, colonIdx) in groupManager.groupsForContact(contact.id)) {
                                 val wrapper = parseReactionWrapper(stripped.substring(colonIdx + 1))
                                 if (wrapper != null) {
                                     if (wrapper.add) messages.upsertReaction(wrapper.targetMessageId, contact.id, wrapper.emoji)
@@ -476,6 +471,15 @@ class SyncEngine(
                                     outbox.enqueue(contact.id, msgId, frame)
                                     outboxSignal.tryEmit(Unit)
                                 }
+                                val joinedGroupId = bodyStr.removePrefix(GRP_JOIN_PREFIX).substringBefore(':')
+                                val ts2 = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+                                for (memberId in groupManager.getMembers(joinedGroupId)) {
+                                    if (memberId == contact.id) continue
+                                    val member = contacts.get(memberId) ?: continue
+                                    if (member.ownerId != owner.id) continue
+                                    val msgId2 = Encoding.toHex(crypto.randomBytes(16))
+                                    runCatching { queueOutgoing(owner, member, msgId2, welcomeBody, ts2) }
+                                }
                             }
                         }
                         groupManager != null && bodyStr.startsWith(GRP_WELCOME_PREFIX) -> {
@@ -483,6 +487,7 @@ class SyncEngine(
                         }
                         groupManager != null && bodyStr.startsWith(GRP_INV_PREFIX) -> {
                             runCatching {
+                                if ((contacts.get(contact.id)?.kind ?: 0) != 0) return@runCatching
                                 val inviteCode = bodyStr.removePrefix(GRP_INV_PREFIX)
                                 val parsed = groupManager.parseInviteLink(inviteCode) ?: return@runCatching
                                 val pending = dev.stade.group.PendingJoinData(
@@ -497,7 +502,6 @@ class SyncEngine(
                                 val frame = json.encodeToString(MessagePayload.serializer(), mp).encodeToByteArray()
                                 outbox.enqueue(contact.id, msgId2, frame)
                                 outboxSignal.tryEmit(Unit)
-                                groupManager.clearPendingJoin(parsed.creatorStadeId)
                                 _events.tryEmit(SyncEvent.GroupInviteReceived(parsed.groupId, parsed.groupName))
                             }
                         }
@@ -526,13 +530,31 @@ class SyncEngine(
                                     outbox.enqueue(contact.id, msgId, frame)
                                     outboxSignal.tryEmit(Unit)
                                 }
+                                runCatching {
+                                    val fresh = contacts.get(contact.id)
+                                    if (fresh != null && fresh.kind == 0 &&
+                                        messages.lastMessage(contact.id) == null &&
+                                        (groupManager?.groupsForContact(contact.id) ?: emptyList()).isEmpty()
+                                    ) contacts.setKind(contact.id, 1)
+                                }
                             }
                         }
                         stadiumManager != null && bodyStr.startsWith(STD_WELCOME_PREFIX) -> {
                             stadiumManager.handleStadiumWelcome(owner.id, contact.id, bodyStr)
                         }
                         stadiumManager != null && bodyStr.startsWith(STD_LEAVE_PREFIX) -> {
-                            stadiumManager.handleLeaveRequest(contact.id, bodyStr)
+                            val leftStadiumId = stadiumManager.handleLeaveRequest(contact.id, bodyStr)
+                            if (leftStadiumId != null) {
+                                val fresh = contacts.get(contact.id)
+                                if (fresh != null && fresh.kind == 1 &&
+                                    stadiumManager.stadiumsForContact(contact.id).isEmpty() &&
+                                    stadiumManager.allStadiums(owner.id).none { it.creatorStadeId == contact.id } &&
+                                    (groupManager?.groupsForContact(contact.id) ?: emptyList()).isEmpty() &&
+                                    messages.lastMessage(contact.id) == null
+                                ) {
+                                    _events.tryEmit(SyncEvent.StadiumContactReleased(contact.id, forget = false))
+                                }
+                            }
                         }
                         stadiumManager != null && bodyStr.startsWith(STD_MSG_PREFIX) -> {
                             val stripped = bodyStr.removePrefix(STD_MSG_PREFIX)
@@ -553,10 +575,12 @@ class SyncEngine(
                             }
                         }
                         else -> {
-                            val saved = messages.saveIncoming(payload.messageId, contact.id, bodyStr, payload.timestamp)
-                            if (saved != null) {
-                                _events.tryEmit(SyncEvent.MessageReceived(contact.id, payload.messageId))
-                                contacts.markSeen(contact.id, payload.timestamp)
+                            if ((contacts.get(contact.id)?.kind ?: 0) == 0) {
+                                val saved = messages.saveIncoming(payload.messageId, contact.id, bodyStr, payload.timestamp)
+                                if (saved != null) {
+                                    _events.tryEmit(SyncEvent.MessageReceived(contact.id, payload.messageId))
+                                    contacts.markSeen(contact.id, payload.timestamp)
+                                }
                             }
                         }
                     }
@@ -572,6 +596,9 @@ class SyncEngine(
                     }.getOrNull() ?: return
                     messages.markDelivered(ack.messageId, contact.id)
                     outbox.removeForMessage(ack.messageId, contact.id)
+                    if (stadiumManager != null && stadiumManager.takeFarewellIfMatches(contact.id, ack.messageId)) {
+                        _events.tryEmit(SyncEvent.StadiumContactReleased(contact.id, forget = true))
+                    }
                 }
                 RecordType.PING -> { }
                 RecordType.BYE -> { runCatching { connection.close() } }
@@ -593,5 +620,12 @@ class SyncEngine(
 
     fun unforget(stadeId: String) {
         forgottenIds = forgottenIds - stadeId
+    }
+
+    suspend fun disconnectContact(contactId: String) {
+        sessionsLock.withLock {
+            sessions.remove(contactId)?.let { runCatching { it.cancel() } }
+            _connected.value = sessions.keys.toSet()
+        }
     }
 }
