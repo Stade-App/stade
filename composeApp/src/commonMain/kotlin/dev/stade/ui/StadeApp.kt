@@ -104,7 +104,7 @@ fun StadeApp(boot: BootContext) {
                         vault = vault,
                         onUnlocked = { unlocked = true },
                         onPrepareWipe = {
-                            container?.let { runCatching { it.close() } }
+                            (container ?: boot.activeContainer())?.let { runCatching { it.close() } }
                             container = null
                         },
                         onForgotPin = {

@@ -244,7 +244,9 @@ class SyncEngine(
         if (existing != null) {
             if (existing.ownerId != owner.id) return null
             if (peerHello.addresses.isNotEmpty()) {
-                val merged = (existing.addresses + peerHello.addresses).distinct()
+                val nonLan = (existing.addresses + peerHello.addresses).filter { !it.startsWith("lan://") }
+                val currentLan = peerHello.addresses.filter { it.startsWith("lan://") }
+                val merged = (nonLan + currentLan).distinct()
                 if (merged != existing.addresses) {
                     runCatching { contacts.setAddresses(existing.id, merged) }
                 }

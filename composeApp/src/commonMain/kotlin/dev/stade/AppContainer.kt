@@ -32,7 +32,9 @@ import dev.stade.transport.TransportSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 class AppContainer(
     driverFactory: DriverFactory,
@@ -164,7 +166,11 @@ class AppContainer(
 
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    @Volatile var isClosed = false
+        private set
+
     suspend fun wipeAllData() {
+        isClosed = true
         runCatching { connections.stop() }
         pendingInvite.value = null
         pendingOpenChat.value = null
@@ -190,9 +196,15 @@ class AppContainer(
         }
         runCatching { driver.close() }
         runCatching { vault.wipe() }
+        runCatching { appScope.cancel() }
     }
 
     fun close() {
+        isClosed = true
+        appScope.launch {
+            runCatching { connections.stop() }
+            runCatching { appScope.cancel() }
+        }
         runCatching { driver.close() }
     }
 }

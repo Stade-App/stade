@@ -68,6 +68,15 @@ class ConnectionManager(
         _diagnostics.value = cur + (contactId to perAddr)
     }
 
+    private fun pruneAttempts(contactId: String, validAddresses: Set<String>) {
+        val cur = _diagnostics.value
+        val perAddr = cur[contactId] ?: return
+        val kept = perAddr.filterKeys { it in validAddresses }
+        if (kept.size != perAddr.size) {
+            _diagnostics.value = cur + (contactId to kept)
+        }
+    }
+
     fun selfAddresses(): List<String> =
         registry.all().flatMap { runCatching { it.selfAddresses() }.getOrDefault(emptyList()) }
             .filter { it.isNotBlank() }
@@ -311,6 +320,7 @@ class ConnectionManager(
     private suspend fun tryDial(owner: LocalIdentity, contact: Contact, now: Long): Boolean {
         var attempted = false
         val selfSet = runCatching { selfAddresses().toSet() }.getOrDefault(emptySet())
+        pruneAttempts(contact.id, contact.addresses.toSet())
         for (addr in contact.addresses) {
             if (sync.isConnected(contact.id)) return attempted
             if (addr in selfSet) {
