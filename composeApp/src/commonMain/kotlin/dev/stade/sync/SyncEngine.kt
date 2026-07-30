@@ -336,6 +336,7 @@ class SyncEngine(
     ) {
         private val outboxSignal = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
         private var rootJob: Job? = null
+        @Volatile private var lastRxAt = Clock.System.now().toEpochMilliseconds()
 
         fun notifyOutbox() { outboxSignal.tryEmit(Unit) }
 
@@ -354,11 +355,13 @@ class SyncEngine(
             val sender = launch { runSender(this@coroutineScope) }
             val receiver = launch { runReceiver(this@coroutineScope) }
             val pinger = launch { runPinger() }
+            val watchdog = launch { runWatchdog() }
             try {
                 receiver.join()
             } finally {
                 sender.cancel()
                 pinger.cancel()
+                watchdog.cancel()
                 runCatching { connection.close() }
             }
         }
@@ -390,6 +393,7 @@ class SyncEngine(
         private suspend fun runReceiver(scope: CoroutineScope) {
             while (scope.isActive) {
                 val frame = runCatching { connection.receive() }.getOrNull() ?: return
+                lastRxAt = Clock.System.now().toEpochMilliseconds()
                 val record = FrameCodec.decode(frame) ?: continue
                 try {
                     handleRecord(record)
@@ -407,6 +411,19 @@ class SyncEngine(
                     runCatching {
                         connection.send(FrameCodec.encode(SyncRecord(RecordType.PING, ByteArray(0))))
                     }.getOrElse {
+                        runCatching { connection.close() }
+                        return
+                    }
+                }
+            } catch (_: CancellationException) {
+            }
+        }
+
+        private suspend fun runWatchdog() {
+            try {
+                while (true) {
+                    delay(15_000)
+                    if (Clock.System.now().toEpochMilliseconds() - lastRxAt > 95_000) {
                         runCatching { connection.close() }
                         return
                     }

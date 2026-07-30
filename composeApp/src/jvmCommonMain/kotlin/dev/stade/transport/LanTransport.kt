@@ -44,7 +44,7 @@ class LanTransport(
         var lastErr: Throwable? = null
         for (candidate in tcpPort..(tcpPort + 9)) {
             try {
-                val s = aSocket(selector).tcp().bind(hostname = "0.0.0.0", port = candidate)
+                val s = aSocket(selector).tcp().bind(hostname = "0.0.0.0", port = candidate) { reuseAddress = true }
                 server = s
                 actualPort = candidate
                 val msg = buildString {
@@ -82,7 +82,10 @@ class LanTransport(
         }
         return kotlinx.coroutines.withTimeoutOrNull(5_000) {
             runCatching {
-                val socket = aSocket(selector).tcp().connect(hostname = host, port = portStr)
+                val socket = aSocket(selector).tcp().connect(hostname = host, port = portStr) {
+                    noDelay = true
+                    keepAlive = true
+                }
                 TcpConnection(socket, "lan://$host:$portStr") as Connection
             }.getOrNull()
         }
@@ -225,7 +228,12 @@ private class DiscoveryService(
         val buffer = ByteArray(512)
         while (scope.isActive) {
             val packet = DatagramPacket(buffer, buffer.size)
-            runCatching { sock.receive(packet) }.getOrElse { return }
+            val received = runCatching { sock.receive(packet) }.isSuccess
+            if (!received) {
+                if (sock.isClosed || !scope.isActive) return
+                kotlinx.coroutines.delay(1_000)
+                continue
+            }
             val text = String(packet.data, 0, packet.length, Charsets.UTF_8)
             val parts = text.split('|')
             if (parts.size < 3 || parts[0] != "STADE") continue

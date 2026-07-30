@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -161,6 +162,24 @@ class ConnectionManager(
         }
         tasks += scope.launch { dialerLoop(owner) }
         tasks += scope.launch { pendingDialLoop(owner) }
+        tasks += scope.launch {
+            sync.events.collect { event ->
+                if (event is SyncEngine.SyncEvent.ContactDisconnected) {
+                    scope.launch {
+                        delay(1_000)
+                        removeBackoff(event.contactId)
+                        clearBackoffWithPrefix("${event.contactId}|")
+                        dialerWake.trySend(Unit)
+                    }
+                }
+            }
+        }
+    }
+
+    fun onNetworkChanged() {
+        clearAllBackoff()
+        dialerWake.trySend(Unit)
+        pendingWake.trySend(Unit)
     }
 
     suspend fun stop() = mutex.withLock { stopInternal() }

@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
@@ -33,6 +35,7 @@ class StadeService : Service() {
     private val notificationId = NotificationIds.FOREGROUND
     private val hiddenNotifId = NotificationIds.HIDDEN_MESSAGES
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -41,6 +44,7 @@ class StadeService : Service() {
         ensureChannels()
         startForeground(notificationId, buildForegroundNotification())
         observeMessages()
+        registerNetworkCallback()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
@@ -48,8 +52,29 @@ class StadeService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        networkCallback?.let { cb ->
+            runCatching {
+                (getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(cb)
+            }
+        }
+        networkCallback = null
         scope.cancel()
         super.onDestroy()
+    }
+
+    private fun registerNetworkCallback() {
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) { notifyNetworkChanged() }
+            override fun onLost(network: Network) { notifyNetworkChanged() }
+        }
+        runCatching { cm.registerDefaultNetworkCallback(cb) }
+            .onSuccess { networkCallback = cb }
+    }
+
+    private fun notifyNetworkChanged() {
+        val app = application as StadeApplication
+        app.containerFlow.value?.connections?.onNetworkChanged()
     }
 
 
