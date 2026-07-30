@@ -154,7 +154,7 @@ compose.desktop {
         rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { localProps.load(it) }
         javaHome = localProps.getProperty("java.home") ?: System.getProperty("java.home")
         nativeDistributions {
-            targetFormats(TargetFormat.Deb, TargetFormat.AppImage, TargetFormat.Exe, TargetFormat.Dmg)
+            targetFormats(TargetFormat.Deb, TargetFormat.Exe, TargetFormat.Dmg)
             modules(
                 "jdk.unsupported",
                 "java.sql",
