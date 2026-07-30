@@ -186,7 +186,9 @@ compose.desktop {
                 shortcut = true
             }
             macOS {
-                dmgPackageVersion = "1.0.0"
+                iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.icns"))
+                bundleID = "dev.stade.app"
+                packageVersion = "1.0.5"
             }
         }
     }
