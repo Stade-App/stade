@@ -244,7 +244,11 @@ fun GroupChatScreen(
 
     DisposableEffect(groupId) {
         container.groups.markRead(groupId)
-        onDispose { container.groups.markRead(groupId) }
+        container.activeContactId = groupId
+        onDispose {
+            container.groups.markRead(groupId)
+            container.activeContactId = null
+        }
     }
 
     LaunchedEffect(groupId, messages.size) {

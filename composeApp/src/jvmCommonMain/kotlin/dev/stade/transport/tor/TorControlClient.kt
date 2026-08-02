@@ -61,6 +61,10 @@ internal class TorControlClient(host: String, port: Int, connectTimeoutMillis: I
         return OnionInfo(serviceId = sid, privateKey = newKey ?: privateKeyBlob)
     }
 
+    fun delOnion(serviceId: String) {
+        send("DEL_ONION $serviceId").requireOk("DEL_ONION")
+    }
+
     fun subscribeHsDescEvents() {
         send("SETEVENTS HS_DESC").requireOk("SETEVENTS")
     }

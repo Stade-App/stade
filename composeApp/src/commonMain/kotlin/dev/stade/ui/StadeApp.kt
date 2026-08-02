@@ -194,6 +194,15 @@ private fun UnlockedApp(
         }
     }
 
+    val pendingOpenGroupId by container.pendingOpenGroup.collectAsState()
+    LaunchedEffect(pendingOpenGroupId, identity?.id) {
+        val id = pendingOpenGroupId
+        if (id != null && identity != null) {
+            screen = Screen.GroupChat(id)
+            container.pendingOpenGroup.value = null
+        }
+    }
+
     val pendingOpenStadiumId by container.pendingOpenStadium.collectAsState()
     LaunchedEffect(pendingOpenStadiumId, identity?.id) {
         val id = pendingOpenStadiumId
@@ -260,6 +269,7 @@ private fun UnlockedApp(
                 }
                 is dev.stade.sync.SyncEngine.SyncEvent.GroupMessageReceived -> {
                     if (!dev.stade.notification.getNotificationsEnabled().value) return@collect
+                    if (container.isAppInForeground.value && container.activeContactId == event.groupId) return@collect
                     val notifStrings = dev.stade.ui.i18n.I18n.current
                     val group = container.groups.getGroup(event.groupId)
                     val name = group?.name ?: "Stade"

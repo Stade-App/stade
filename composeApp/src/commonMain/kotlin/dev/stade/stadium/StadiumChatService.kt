@@ -3,7 +3,9 @@ package dev.stade.stadium
 import dev.stade.contact.ContactManager
 import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
+import dev.stade.group.GroupManager
 import dev.stade.identity.LocalIdentity
+import dev.stade.message.MessageManager
 import dev.stade.message.encodeImageBody
 import dev.stade.message.encodeVideoBody
 import dev.stade.message.encodeVoiceBody
@@ -19,7 +21,9 @@ class StadiumChatService(
     private val stadiums: StadiumManager,
     private val sync: SyncEngine,
     private val contacts: ContactManager,
-    private val crypto: CryptoApi
+    private val crypto: CryptoApi,
+    private val messages: MessageManager? = null,
+    private val groupManager: GroupManager? = null
 ) {
     fun start(owner: LocalIdentity, scope: CoroutineScope) {
         sync.events.onEach { event ->
@@ -33,9 +37,13 @@ class StadiumChatService(
                 is SyncEngine.SyncEvent.StadiumContactReleased -> {
                     scope.launch {
                         delay(2_000)
-                        val stillUsed = stadiums.getPendingJoinForContact(event.contactId) != null ||
+                        val fresh = contacts.get(event.contactId)
+                        val stillUsed = fresh == null || fresh.kind != 1 ||
+                            stadiums.getPendingJoinForContact(event.contactId) != null ||
                             stadiums.allStadiums(owner.id).any { it.creatorStadeId == event.contactId } ||
-                            stadiums.stadiumsForContact(event.contactId).isNotEmpty()
+                            stadiums.stadiumsForContact(event.contactId).isNotEmpty() ||
+                            (groupManager?.groupsForContact(event.contactId) ?: emptyList()).isNotEmpty() ||
+                            messages?.lastMessage(event.contactId) != null
                         if (!stillUsed) {
                             if (event.forget) sync.forgetContact(event.contactId)
                             else sync.disconnectContact(event.contactId)
@@ -72,6 +80,22 @@ class StadiumChatService(
 
     suspend fun postVideo(owner: LocalIdentity, stadium: StadiumInfo, videoBytes: ByteArray, caption: String = ""): Boolean =
         post(owner, stadium, encodeVideoBody(videoBytes, caption))
+
+    suspend fun deleteAsOwner(owner: LocalIdentity, stadium: StadiumInfo) {
+        if (!stadium.isOwner) return
+        val members = stadiums.getMemberContactIds(stadium.id)
+        val msgId = Encoding.toHex(crypto.randomBytes(16))
+        val timestamp = Clock.System.now().toEpochMilliseconds()
+        val body = "$STD_DELETE_PREFIX${stadium.id}"
+        for (contactId in members) {
+            val contact = contacts.get(contactId) ?: continue
+            val queued = runCatching { sync.queueOutgoing(owner, contact, msgId, body, timestamp) }.isSuccess
+            if (queued && contact.kind == 1) {
+                stadiums.markPendingFarewell(contactId, msgId, forget = false)
+            }
+        }
+        stadiums.deleteStadium(stadium.id)
+    }
 
     suspend fun leave(owner: LocalIdentity, stadium: StadiumInfo): Boolean {
         if (stadium.isOwner) return false

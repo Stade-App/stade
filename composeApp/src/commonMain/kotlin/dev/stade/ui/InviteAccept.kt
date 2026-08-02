@@ -3,11 +3,14 @@ package dev.stade.ui
 import dev.stade.AppContainer
 import dev.stade.contact.InviteParseResult
 import dev.stade.contact.InvitePayload
+import dev.stade.contact.PROMOTE_TO_CONTACT_PREFIX
+import dev.stade.crypto.Encoding
 import dev.stade.identity.LocalIdentity
 import dev.stade.ui.i18n.AppStrings
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.datetime.Clock
 
 private val STADE_ID_REGEX = Regex("^STADE-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}$")
 
@@ -52,7 +55,20 @@ fun AppContainer.beginAcceptInvite(
     if (existing != null) {
         val a = alias.trim()
         if (a.isNotEmpty()) runCatching { contacts.rename(payload.stadeId, a) }
-        if (existing.kind != 0) runCatching { contacts.setKind(existing.id, 0) }
+        if (existing.kind != 0) {
+            runCatching { contacts.setKind(existing.id, 0) }
+            appScope.launch {
+                runCatching {
+                    sync.queueOutgoing(
+                        owner, existing,
+                        Encoding.toHex(crypto.randomBytes(16)),
+                        PROMOTE_TO_CONTACT_PREFIX,
+                        Clock.System.now().toEpochMilliseconds()
+                    )
+                }
+            }
+            return BeginAcceptResult.Error(strings.contactAdded(if (a.isNotEmpty()) a else existing.nickname))
+        }
         return BeginAcceptResult.Error(strings.alreadyAdded(payload.stadeId))
     }
 
@@ -71,6 +87,7 @@ fun AppContainer.beginAcceptInvite(
             true
         } ?: false
         if (added && a.isNotEmpty()) runCatching { contacts.rename(targetId, a) }
+        if (!added) connections.cancelPendingDial(addrs)
     }
     return BeginAcceptResult.Dialing(payload, addrs.size, lanOnly)
 }

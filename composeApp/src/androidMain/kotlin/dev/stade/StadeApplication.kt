@@ -28,6 +28,7 @@ class StadeApplication : Application() {
 
     private var pendingChatAtBoot: String? = null
     private var pendingStadiumAtBoot: String? = null
+    private var pendingGroupAtBoot: String? = null
     private var pendingGoHomeAtBoot: Boolean = false
 
     fun handleOpenChatIntent(contactId: String) {
@@ -38,6 +39,11 @@ class StadeApplication : Application() {
     fun handleOpenStadiumIntent(stadiumId: String) {
         val c = activeContainer
         if (c != null) c.pendingOpenStadium.value = stadiumId else pendingStadiumAtBoot = stadiumId
+    }
+
+    fun handleOpenGroupIntent(groupId: String) {
+        val c = activeContainer
+        if (c != null) c.pendingOpenGroup.value = groupId else pendingGroupAtBoot = groupId
     }
 
     fun handleGoHomeIntent() {
@@ -78,6 +84,8 @@ class StadeApplication : Application() {
                 pendingChatAtBoot = null
                 pendingStadiumAtBoot?.let { c.pendingOpenStadium.value = it }
                 pendingStadiumAtBoot = null
+                pendingGroupAtBoot?.let { c.pendingOpenGroup.value = it }
+                pendingGroupAtBoot = null
                 if (pendingGoHomeAtBoot) {
                     c.pendingGoHome.value = true
                     pendingGoHomeAtBoot = false

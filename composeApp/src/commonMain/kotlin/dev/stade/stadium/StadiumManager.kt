@@ -93,6 +93,14 @@ class StadiumManager(private val db: StadeDb, private val crypto: CryptoApi) {
         }
     }
 
+    fun handleStadiumDeletedByOwner(contactId: String, stadiumId: String): Boolean {
+        val stadium = db.stadeDbQueries.selectStadium(stadiumId).executeAsOneOrNull() ?: return false
+        if (stadium.isOwner == 1L) return false
+        if (stadium.creatorStadeId != contactId) return false
+        leaveStadium(stadiumId)
+        return true
+    }
+
     fun handleLeaveRequest(contactId: String, rawBody: String): String? {
         val stadiumId = rawBody.removePrefix(STD_LEAVE_PREFIX)
         val stadium = db.stadeDbQueries.selectStadium(stadiumId).executeAsOneOrNull() ?: return null
@@ -184,17 +192,22 @@ class StadiumManager(private val db: StadeDb, private val crypto: CryptoApi) {
     fun stadiumsForContact(contactId: String): List<String> =
         db.stadeDbQueries.memberStadiumIds(contactId).executeAsList()
 
-    fun markPendingFarewell(contactId: String, messageId: String) {
-        runCatching { db.stadeDbQueries.putKv("std.farewell.$contactId", messageId.encodeToByteArray()) }
+    fun markPendingFarewell(contactId: String, messageId: String, forget: Boolean = true) {
+        val value = "$messageId|${if (forget) 1 else 0}"
+        runCatching { db.stadeDbQueries.putKv("std.farewell.$contactId", value.encodeToByteArray()) }
     }
 
-    fun takeFarewellIfMatches(contactId: String, messageId: String): Boolean {
+    fun takeFarewellIfMatches(contactId: String, messageId: String): Boolean? {
         val raw = runCatching {
             db.stadeDbQueries.getKv("std.farewell.$contactId").executeAsOneOrNull()
-        }.getOrNull() ?: return false
-        if (raw.decodeToString() != messageId) return false
+        }.getOrNull() ?: return null
+        val text = raw.decodeToString()
+        val sep = text.indexOf('|')
+        val storedMessageId = if (sep >= 0) text.substring(0, sep) else text
+        if (storedMessageId != messageId) return null
+        val forget = if (sep >= 0) text.substring(sep + 1) == "1" else true
         runCatching { db.stadeDbQueries.deleteKv("std.farewell.$contactId") }
-        return true
+        return forget
     }
 
     fun buildInviteLink(handshakeInvite: String, stadium: StadiumInfo): String {

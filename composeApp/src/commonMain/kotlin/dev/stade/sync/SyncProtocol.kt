@@ -50,7 +50,9 @@ data class HelloPayload(
 data class AuthPayload(
     val stadeId: String,
     val edSignature: ByteArray,
-    val mldsaSignature: ByteArray
+    val mldsaSignature: ByteArray,
+    val isStadiumJoin: Boolean = false,
+    val noExistingContact: Boolean = false
 )
 
 @Serializable

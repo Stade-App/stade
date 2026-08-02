@@ -41,7 +41,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +51,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.contact.InviteParseResult
+import dev.stade.contact.PROMOTE_TO_CONTACT_PREFIX
+import dev.stade.crypto.Encoding
 import dev.stade.identity.LocalIdentity
 import dev.stade.transport.TransportType
 import dev.stade.ui.i18n.LocalStrings
@@ -59,12 +60,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.datetime.Clock
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -> Unit) {
     val strings = LocalStrings.current
-    val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
 
     val torPlugin = remember { container.transports.get(TransportType.TOR) }
@@ -198,7 +199,7 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
                     onClick = {
-                        scope.launch {
+                        container.appScope.launch {
                             try {
                                 val trimmed = pastedCode.trim()
                                 val looksLikeStadeId = Regex("^STADE-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}$")
@@ -257,8 +258,20 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                 }
                                 val existingContact = container.contacts.findByStadeId(parsed.stadeId)
                                 if (existingContact != null) {
-                                    if (existingContact.kind != 0) runCatching { container.contacts.setKind(existingContact.id, 0) }
-                                    status = strings.alreadyAdded(parsed.stadeId)
+                                    status = if (existingContact.kind != 0) {
+                                        runCatching { container.contacts.setKind(existingContact.id, 0) }
+                                        runCatching {
+                                            container.sync.queueOutgoing(
+                                                owner, existingContact,
+                                                Encoding.toHex(container.crypto.randomBytes(16)),
+                                                PROMOTE_TO_CONTACT_PREFIX,
+                                                Clock.System.now().toEpochMilliseconds()
+                                            )
+                                        }
+                                        strings.contactAdded(existingContact.nickname)
+                                    } else {
+                                        strings.alreadyAdded(parsed.stadeId)
+                                    }
                                     return@launch
                                 }
                                 container.sync.unforget(parsed.stadeId)
@@ -294,6 +307,7 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                         statusSticky = true
                                         dialingTargetAddrs = emptySet()
                                     } else {
+                                        container.connections.cancelPendingDial(addrs)
                                         status = strings.connectionTimeout
                                         statusSticky = true
                                     }

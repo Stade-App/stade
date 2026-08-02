@@ -44,7 +44,7 @@ import dev.stade.ui.components.BrandMark
 import dev.stade.ui.components.PlatformVerticalScrollbar
 import dev.stade.ui.i18n.LocalStrings
 
-private const val APP_VERSION = "0.1.4"
+private const val APP_VERSION = "0.1.6"
 
 private data class SocialLink(
     val label: String,
@@ -55,7 +55,7 @@ private data class SocialLink(
 
 private val socialLinks = listOf(
     SocialLink("X", "@stadeapp", BrandIcons.X, "https://x.com/stadeapp"),
-    SocialLink("Instagram", "", BrandIcons.Instagram, ""),
+    SocialLink("Instagram", "@stade.dev", BrandIcons.Instagram, "https://instagram.com/stade.dev"),
     SocialLink("GitHub", "Stade-App", BrandIcons.GitHub, "https://github.com/Stade-App"),
     SocialLink("Discord", "", BrandIcons.Discord, ""),
     SocialLink("Website", "stade.dev", Icons.Default.Public, "https://stade.dev"),

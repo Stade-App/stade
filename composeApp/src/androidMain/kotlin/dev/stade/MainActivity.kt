@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
         val app = application as StadeApplication
         intent?.getStringExtra(EXTRA_OPEN_CHAT_ID)?.let { app.handleOpenChatIntent(it) }
         intent?.getStringExtra(EXTRA_OPEN_STADIUM_ID)?.let { app.handleOpenStadiumIntent(it) }
+        intent?.getStringExtra(EXTRA_OPEN_GROUP_ID)?.let { app.handleOpenGroupIntent(it) }
         if (intent?.getBooleanExtra(EXTRA_GO_HOME, false) == true) app.handleGoHomeIntent()
     }
 
@@ -107,6 +108,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_OPEN_CHAT_ID = "open_chat_contact_id"
         const val EXTRA_OPEN_STADIUM_ID = "open_stadium_id"
+        const val EXTRA_OPEN_GROUP_ID = "open_group_id"
         const val EXTRA_GO_HOME = "go_home"
     }
 }

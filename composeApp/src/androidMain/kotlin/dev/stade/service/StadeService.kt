@@ -145,6 +145,15 @@ class StadeService : Service() {
                                     showMessageNotification(event.contactId, senderName, preview)
                                 }
                             }
+                            is SyncEngine.SyncEvent.GroupMessageReceived -> {
+                                if (!getNotificationsEnabled().value) return@collect
+                                val group = container.groups.getGroup(event.groupId) ?: return@collect
+                                if (container.isAppInForeground.value && container.activeContactId == event.groupId) return@collect
+                                val preview = container.groups.lastMessage(event.groupId)?.body
+                                    ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage, dev.stade.ui.i18n.I18n.current.voiceMessage, dev.stade.ui.i18n.I18n.current.videoMessage) }
+                                    ?: dev.stade.ui.i18n.I18n.current.notifNewMessageFallback
+                                showMessageNotification(event.groupId, group.name, preview, isGroup = true)
+                            }
                             is SyncEngine.SyncEvent.StadiumMessageReceived -> {
                                 if (!getNotificationsEnabled().value) return@collect
                                 val stadium = container.stadiums.getStadium(event.stadiumId)
@@ -197,15 +206,25 @@ class StadeService : Service() {
 
 
 
-    private fun showMessageNotification(contactId: String, senderName: String, preview: String, isStadium: Boolean = false) {
+    private fun showMessageNotification(
+        contactId: String,
+        senderName: String,
+        preview: String,
+        isStadium: Boolean = false,
+        isGroup: Boolean = false
+    ) {
         val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val extraKey = when {
+            isStadium -> MainActivity.EXTRA_OPEN_STADIUM_ID
+            isGroup -> MainActivity.EXTRA_OPEN_GROUP_ID
+            else -> MainActivity.EXTRA_OPEN_CHAT_ID
+        }
         val openIntent = PendingIntent.getActivity(
             this,
             contactId.hashCode(),
             Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                if (isStadium) putExtra(MainActivity.EXTRA_OPEN_STADIUM_ID, contactId)
-                else putExtra(MainActivity.EXTRA_OPEN_CHAT_ID, contactId)
+                putExtra(extraKey, contactId)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -218,12 +237,11 @@ class StadeService : Service() {
             .build()
         val userPerson = Person.Builder().setName("Me").build()
 
-        val shortcutId = "${if (isStadium) "stadium" else "contact"}_$contactId"
+        val shortcutId = "${if (isStadium) "stadium" else if (isGroup) "group" else "contact"}_$contactId"
         runCatching {
             val shortcutIntent = Intent(this, MainActivity::class.java).apply {
                 action = Intent.ACTION_VIEW
-                if (isStadium) putExtra(MainActivity.EXTRA_OPEN_STADIUM_ID, contactId)
-                else putExtra(MainActivity.EXTRA_OPEN_CHAT_ID, contactId)
+                putExtra(extraKey, contactId)
             }
             val shortcut = ShortcutInfoCompat.Builder(this, shortcutId)
                 .setShortLabel(senderName)

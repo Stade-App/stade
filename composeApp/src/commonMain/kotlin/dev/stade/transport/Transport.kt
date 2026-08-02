@@ -35,6 +35,8 @@ interface TransportPlugin {
     fun selfAddresses(): List<String> = listOfNotNull(selfAddress())
 
     suspend fun reload() {}
+
+    suspend fun refreshReachability(): Boolean = false
 }
 
 interface DiscoverableTransport {

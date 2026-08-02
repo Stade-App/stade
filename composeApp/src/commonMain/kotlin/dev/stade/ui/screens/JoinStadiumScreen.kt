@@ -23,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -47,7 +46,6 @@ fun JoinStadiumScreen(
     onJoined: (String) -> Unit = {}
 ) {
     val strings = LocalStrings.current
-    val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     var pastedCode by remember { mutableStateOf("") }
     var status by remember { mutableStateOf<String?>(null) }
@@ -94,7 +92,7 @@ fun JoinStadiumScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium,
                 onClick = {
-                    scope.launch {
+                    container.appScope.launch {
                         val trimmed = pastedCode.trim()
                         val split = container.stadiums.splitInviteLink(trimmed)
                         if (split == null) {
@@ -135,7 +133,7 @@ fun JoinStadiumScreen(
                             container.connections.queueDial(addrs)
                         }
 
-                        val joined = withTimeoutOrNull(60_000L) {
+                        val joined = withTimeoutOrNull(5 * 60_000L) {
                             container.stadiums.observeStadiums(owner.id).first { list ->
                                 list.any { it.id == stadiumData.stadiumId }
                             }
@@ -145,6 +143,8 @@ fun JoinStadiumScreen(
                             onJoined(stadiumData.stadiumId)
                             strings.stadiumJoined(stadiumData.stadiumName)
                         } else {
+                            runCatching { container.stadiums.clearPendingJoin(payload.stadeId) }
+                            if (existingContact == null) container.connections.cancelPendingDial(addrs)
                             strings.connectionTimeout
                         }
                     }

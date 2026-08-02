@@ -67,6 +67,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -202,6 +203,19 @@ fun StadiumScreen(
             pendingVoiceClip = null
             isRecording = true
             recorder.start()
+        }
+    }
+
+    DisposableEffect(stadiumId) {
+        container.activeContactId = stadiumId
+        onDispose { container.activeContactId = null }
+    }
+
+    LaunchedEffect(stadiumId) {
+        container.sync.events.collect { event ->
+            if (event is dev.stade.sync.SyncEngine.SyncEvent.StadiumDeleted && event.stadiumId == stadiumId) {
+                onBack()
+            }
         }
     }
 

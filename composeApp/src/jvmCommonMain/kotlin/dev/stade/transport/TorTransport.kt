@@ -38,6 +38,7 @@ class TorTransport(
     @Volatile private var inboundServer: ServerSocket? = null
     @Volatile private var socksHost: String = defaultSocksHost
     @Volatile private var socksPort: Int = defaultSocksPort
+    @Volatile private var lastRepublishAt: Long = 0L
 
     override suspend fun start(handler: suspend (Connection) -> Unit) {
         if (embedded != null) {
@@ -226,6 +227,27 @@ class TorTransport(
 
     override suspend fun reload() {
         embedded?.invalidate()
+    }
+
+    override suspend fun refreshReachability(): Boolean {
+        val emb = embedded ?: return false
+        val now = System.currentTimeMillis()
+        if (now - lastRepublishAt < 300_000) return false
+        lastRepublishAt = now
+        val ok = runCatching { emb.republishOnion() }.getOrDefault(false)
+        val current = (emb.statusFlow.value as? TorStatus.Ready)?.onion
+        if (current != null) inboundOnion = current
+        onionPublished = ok
+        state.value = state.value.copy(
+            message = buildString {
+                append("SOCKS5 ✓ ($socksHost:$socksPort)")
+                if (inboundOnion != null) {
+                    if (ok) append(" · onion :$inboundPort ✓")
+                    else append(" · onion :$inboundPort (republishing…)")
+                }
+            }
+        )
+        return ok
     }
 
     override suspend fun connect(address: String): Connection? {

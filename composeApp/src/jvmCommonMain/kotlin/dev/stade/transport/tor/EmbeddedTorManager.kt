@@ -30,9 +30,17 @@ class EmbeddedTorManager(
     @Volatile private var controlPort: Int = 0
     @Volatile private var socksPort: Int = 0
     @Volatile private var controlClient: TorControlClient? = null
+    @Volatile private var cookieHexCached: String? = null
 
     override suspend fun ensureReady(localPort: Int, bridges: TorBridgeConfig): TorReady = mutex.withLock {
-        ready?.let { return@withLock it }
+        ready?.let { cur ->
+            if (localPort <= 0 || cur.onionLocalPort == localPort) return@withLock cur
+            val remapped = runCatching {
+                withContext(Dispatchers.IO) { remapOnion(cur, localPort) }
+            }.getOrNull()
+            if (remapped != null) return@withLock remapped
+            invalidate()
+        }
         try {
             withContext(Dispatchers.IO) { bootInternal(localPort, bridges) }
         } catch (t: Throwable) {
@@ -64,10 +72,8 @@ class EmbeddedTorManager(
                 appendLine("ControlPort 127.0.0.1:$ctrl")
                 appendLine("CookieAuthentication 1")
                 appendLine("CookieAuthFile ${cookieFile.absolutePath}")
-                appendLine("SafeLogging 0")
+                appendLine("SafeLogging 1")
                 appendLine("Log notice stdout")
-                appendLine("Log [handshake,rend,circ,dir]info stdout")
-                appendLine("CircuitBuildTimeout 60")
                 val ownerPid = pidProvider()
                 if (ownerPid > 0) appendLine("__OwningControllerProcess $ownerPid")
                 layout.geoipFile?.let { appendLine("GeoIPFile ${it.absolutePath}") }
@@ -93,11 +99,17 @@ class EmbeddedTorManager(
             runCatching {
                 proc.inputStream.bufferedReader().use { reader ->
                     logFile.bufferedWriter().use { writer ->
+                        var written = 0L
                         reader.forEachLine { line ->
                             runCatching {
+                                if (written > MAX_LOG_BYTES) {
+                                    writer.flush()
+                                    return@runCatching
+                                }
                                 writer.write(line)
                                 writer.newLine()
                                 writer.flush()
+                                written += line.length + 1
                             }
                         }
                     }
@@ -107,6 +119,7 @@ class EmbeddedTorManager(
         Runtime.getRuntime().addShutdownHook(Thread { runCatching { proc.destroy() } })
 
         val cookieHex = waitForCookie(cookieFile)
+        cookieHexCached = cookieHex
         val client = waitForControl(ctrl)
         var keepClient = false
         try {
@@ -157,6 +170,47 @@ class EmbeddedTorManager(
             return result
         } finally {
             if (!keepClient) runCatching { client.close() }
+        }
+    }
+
+    override suspend fun republishOnion(): Boolean = mutex.withLock {
+        val cur = ready ?: return@withLock false
+        val result = runCatching {
+            withContext(Dispatchers.IO) { remapOnion(cur, cur.onionLocalPort) }
+        }.getOrNull()
+        result != null && result.onionPublished
+    }
+
+    private fun remapOnion(cur: TorReady, newLocalPort: Int): TorReady? {
+        val proc = process ?: return null
+        if (!proc.isAlive) return null
+        val ctrl = controlPort
+        val cookie = cookieHexCached
+        val hostname = cur.onionHostname
+        if (ctrl <= 0 || cookie == null || hostname == null) return null
+        TorControlClient("127.0.0.1", ctrl, connectTimeoutMillis = 2_000).use { client ->
+            client.authenticate(cookie)
+            client.subscribeHsDescEvents()
+            runCatching { client.delOnion(hostname.removeSuffix(".onion")) }
+            val keyStore = File(appRoot, "tor/onion.key")
+            val existingKey = keyStore.takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotEmpty() }
+            val onion = client.addOnion(existingKey, virtualPort, newLocalPort)
+            if (existingKey == null && onion.privateKey != null) {
+                keyStore.parentFile?.mkdirs()
+                keyStore.writeText(onion.privateKey)
+            }
+            val published = runCatching {
+                client.waitForOnionPublished(onion.serviceId, timeoutMillis = 45_000)
+            }.getOrDefault(false)
+            runCatching { client.unsubscribeEvents() }
+            val result = cur.copy(
+                onionHostname = "${onion.serviceId}.onion",
+                onionLocalPort = newLocalPort,
+                onionPublished = published
+            )
+            ready = result
+            status.value = TorStatus.Ready(result.onionHostname, published = result.onionPublished)
+            return result
         }
     }
 
@@ -222,6 +276,10 @@ class EmbeddedTorManager(
 
     private fun pickFreePort(): Int {
         ServerSocket(0).use { return it.localPort }
+    }
+
+    private companion object {
+        const val MAX_LOG_BYTES = 2L * 1024 * 1024
     }
 }
 

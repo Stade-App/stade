@@ -32,6 +32,7 @@ internal object TorBinaryLoader {
                     runCatching { out.setExecutable(true, false) }
                 }
             }
+            adhocSignMacBinaries(torRunDir)
             markerVersionFile.writeText(expectedMarker)
         }
 
@@ -51,6 +52,21 @@ internal object TorBinaryLoader {
         val obfs4Exe = locateObfs4Executable(torRunDir)
         runCatching { obfs4Exe?.setExecutable(true, false) }
         return TorLayout(torRunDir, torExe, dataDir, geoip, geoip6, obfs4Exe)
+    }
+
+    private fun adhocSignMacBinaries(dir: File) {
+        val os = System.getProperty("os.name").lowercase(Locale.ROOT)
+        if (!os.contains("mac") && !os.contains("darwin")) return
+        dir.walkTopDown()
+            .filter { it.isFile && (it.name == "tor" || it.name == "lyrebird" || it.extension == "dylib") }
+            .forEach { f ->
+                runCatching {
+                    ProcessBuilder("codesign", "-s", "-", "-f", f.absolutePath)
+                        .redirectErrorStream(true)
+                        .start()
+                        .waitFor()
+                }
+            }
     }
 
     private fun locateObfs4Executable(dir: File): File? {

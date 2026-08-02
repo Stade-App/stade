@@ -4,6 +4,7 @@ import dev.stade.contact.Contact
 import dev.stade.contact.ContactManager
 import dev.stade.contact.HandshakeService
 import dev.stade.contact.InvitePayload
+import dev.stade.contact.PROMOTE_TO_CONTACT_PREFIX
 import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
 import dev.stade.crypto.PqCrypto
@@ -21,6 +22,7 @@ import dev.stade.identity.StadeId
 import dev.stade.message.MessageManager
 import dev.stade.message.REACTION_BODY_PREFIX
 import dev.stade.message.parseReactionWrapper
+import dev.stade.stadium.STD_DELETE_PREFIX
 import dev.stade.stadium.STD_JOIN_PREFIX
 import dev.stade.stadium.STD_LEAVE_PREFIX
 import dev.stade.stadium.STD_MSG_PREFIX
@@ -29,6 +31,7 @@ import dev.stade.stadium.StadiumManager
 import dev.stade.transport.Connection
 import dev.stade.ui.i18n.I18n
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -68,6 +71,8 @@ class SyncEngine(
     val connectedContacts: StateFlow<Set<String>> = _connected.asStateFlow()
     @Volatile var selfAddressesProvider: () -> List<String> = { emptyList() }
     @Volatile private var forgottenIds = emptySet<String>()
+    private val pendingHandshakes = mutableMapOf<String, CompletableDeferred<Pair<Contact, Boolean>?>>()
+    private val pendingHandshakesLock = Mutex()
 
     sealed interface SyncEvent {
         data class ContactConnected(val contactId: String, val isNew: Boolean) : SyncEvent
@@ -83,6 +88,7 @@ class SyncEngine(
         data class ReactionUpdated(val messageId: String) : SyncEvent
         data class StadiumMessageReceived(val stadiumId: String) : SyncEvent
         data class StadiumContactReleased(val contactId: String, val forget: Boolean) : SyncEvent
+        data class StadiumDeleted(val stadiumId: String) : SyncEvent
     }
 
     suspend fun queueOutgoing(owner: LocalIdentity, contact: Contact, messageId: String, body: String, timestamp: Long) {
@@ -208,10 +214,18 @@ class SyncEngine(
             return null
         }
 
+        val existingBeforeAuth = contacts.findByStadeId(peerHello.stadeId)
+            ?: contacts.findByPublicKey(peerHello.signingPublicKey)
+
         val authMessage = AUTH_PREFIX + peerHello.nonce + ourTc + peerHello.transcriptCommitment
         val ourEdSig = crypto.sign(owner.privateSigningKey, authMessage)
         val ourDsaSig = pq.signMlDsa(owner.privateMlDsaKey, owner.publicMlDsaKey, authMessage)
-        val ourAuth = AuthPayload(owner.stadeId, ourEdSig, ourDsaSig)
+        val weAreStadiumJoining = stadiumManager?.getPendingJoinForContact(peerHello.stadeId) != null
+        val ourAuth = AuthPayload(
+            owner.stadeId, ourEdSig, ourDsaSig,
+            isStadiumJoin = weAreStadiumJoining,
+            noExistingContact = existingBeforeAuth == null
+        )
         runCatching {
             connection.send(FrameCodec.encode(SyncRecord(RecordType.AUTH, json.encodeToString(AuthPayload.serializer(), ourAuth).encodeToByteArray())))
         }.getOrElse { return null }
@@ -239,9 +253,8 @@ class SyncEngine(
             return null
         }
 
-        val existing = contacts.findByStadeId(peerHello.stadeId)
-            ?: contacts.findByPublicKey(peerHello.signingPublicKey)
-        if (existing != null) {
+        val existing = existingBeforeAuth
+        if (existing != null && !peerAuth.noExistingContact) {
             if (existing.ownerId != owner.id) return null
             if (peerHello.addresses.isNotEmpty()) {
                 val nonLan = (existing.addresses + peerHello.addresses).filter { !it.startsWith("lan://") }
@@ -254,6 +267,52 @@ class SyncEngine(
             return existing to false
         }
 
+        if (existing != null && peerAuth.noExistingContact) {
+            if (existing.ownerId != owner.id) return null
+            runCatching { ratchet.forget(existing.id) }
+            runCatching { contacts.delete(existing.id) }
+        }
+
+        return gatedNewContactHandshake(owner, connection, peerHello, peerAuth.isStadiumJoin)
+    }
+
+    private suspend fun gatedNewContactHandshake(
+        owner: LocalIdentity,
+        connection: Connection,
+        peerHello: HelloPayload,
+        peerClaimsStadiumJoin: Boolean
+    ): Pair<Contact, Boolean>? {
+        val gateKey = peerHello.stadeId
+        val (isLeader, gate) = pendingHandshakesLock.withLock {
+            pendingHandshakes[gateKey]?.let { false to it }
+                ?: CompletableDeferred<Pair<Contact, Boolean>?>().also { pendingHandshakes[gateKey] = it }.let { true to it }
+        }
+        if (!isLeader) {
+            return withTimeoutOrNull(50_000) { gate.await() }
+        }
+        try {
+            val result = performNewContactHandshake(owner, connection, peerHello, peerClaimsStadiumJoin)
+            gate.complete(result)
+            return result
+        } catch (e: CancellationException) {
+            gate.complete(null)
+            throw e
+        } catch (e: Throwable) {
+            gate.complete(null)
+            return null
+        } finally {
+            pendingHandshakesLock.withLock {
+                if (pendingHandshakes[gateKey] === gate) pendingHandshakes.remove(gateKey)
+            }
+        }
+    }
+
+    private suspend fun performNewContactHandshake(
+        owner: LocalIdentity,
+        connection: Connection,
+        peerHello: HelloPayload,
+        peerClaimsStadiumJoin: Boolean
+    ): Pair<Contact, Boolean>? {
         val invite = InvitePayload(
             stadeId = peerHello.stadeId,
             nickname = peerHello.nickname.ifBlank { I18n.current.unknownNickname },
@@ -292,6 +351,8 @@ class SyncEngine(
         }.getOrNull() ?: return null
 
         val nickname = peerHello.nickname.ifBlank { I18n.current.contactNameFallback(peerHello.stadeId.takeLast(4)) }
+        val weAreStadiumJoining = stadiumManager?.getPendingJoinForContact(peerHello.stadeId) != null
+        val stadiumKind = if (weAreStadiumJoining || peerClaimsStadiumJoin) 1 else 0
         val newContact = runCatching {
             contacts.addFromHandshake(
                 owner = owner,
@@ -302,7 +363,8 @@ class SyncEngine(
                 peerMlDsaKey = peerHello.mldsaPublicKey,
                 rootKey = rootKey,
                 isAlice = isAlice,
-                addresses = peerHello.addresses
+                addresses = peerHello.addresses,
+                kind = stadiumKind
             )
         }.getOrNull() ?: contacts.findByStadeId(peerHello.stadeId) ?: return null
         return newContact to true
@@ -454,6 +516,12 @@ class SyncEngine(
                     val bodyStr = plain.decodeToString()
 
                     when {
+                        bodyStr == PROMOTE_TO_CONTACT_PREFIX -> {
+                            runCatching {
+                                val fresh = contacts.get(contact.id)
+                                if (fresh != null && fresh.kind != 0) contacts.setKind(contact.id, 0)
+                            }
+                        }
                         bodyStr.startsWith(REACTION_BODY_PREFIX) -> {
                             val wrapper = if ((contacts.get(contact.id)?.kind ?: 0) == 0) parseReactionWrapper(bodyStr) else null
                             if (wrapper != null) {
@@ -549,13 +617,6 @@ class SyncEngine(
                                     outbox.enqueue(contact.id, msgId, frame)
                                     outboxSignal.tryEmit(Unit)
                                 }
-                                runCatching {
-                                    val fresh = contacts.get(contact.id)
-                                    if (fresh != null && fresh.kind == 0 &&
-                                        messages.lastMessage(contact.id) == null &&
-                                        (groupManager?.groupsForContact(contact.id) ?: emptyList()).isEmpty()
-                                    ) contacts.setKind(contact.id, 1)
-                                }
                             }
                         }
                         stadiumManager != null && bodyStr.startsWith(STD_WELCOME_PREFIX) -> {
@@ -564,6 +625,22 @@ class SyncEngine(
                         stadiumManager != null && bodyStr.startsWith(STD_LEAVE_PREFIX) -> {
                             val leftStadiumId = stadiumManager.handleLeaveRequest(contact.id, bodyStr)
                             if (leftStadiumId != null) {
+                                val fresh = contacts.get(contact.id)
+                                if (fresh != null && fresh.kind == 1 &&
+                                    stadiumManager.stadiumsForContact(contact.id).isEmpty() &&
+                                    stadiumManager.allStadiums(owner.id).none { it.creatorStadeId == contact.id } &&
+                                    (groupManager?.groupsForContact(contact.id) ?: emptyList()).isEmpty() &&
+                                    messages.lastMessage(contact.id) == null
+                                ) {
+                                    _events.tryEmit(SyncEvent.StadiumContactReleased(contact.id, forget = false))
+                                }
+                            }
+                        }
+                        stadiumManager != null && bodyStr.startsWith(STD_DELETE_PREFIX) -> {
+                            val stadiumId = bodyStr.removePrefix(STD_DELETE_PREFIX)
+                            val released = stadiumManager.handleStadiumDeletedByOwner(contact.id, stadiumId)
+                            if (released) {
+                                _events.tryEmit(SyncEvent.StadiumDeleted(stadiumId))
                                 val fresh = contacts.get(contact.id)
                                 if (fresh != null && fresh.kind == 1 &&
                                     stadiumManager.stadiumsForContact(contact.id).isEmpty() &&
@@ -615,8 +692,9 @@ class SyncEngine(
                     }.getOrNull() ?: return
                     messages.markDelivered(ack.messageId, contact.id)
                     outbox.removeForMessage(ack.messageId, contact.id)
-                    if (stadiumManager != null && stadiumManager.takeFarewellIfMatches(contact.id, ack.messageId)) {
-                        _events.tryEmit(SyncEvent.StadiumContactReleased(contact.id, forget = true))
+                    val farewellForget = stadiumManager?.takeFarewellIfMatches(contact.id, ack.messageId)
+                    if (farewellForget != null) {
+                        _events.tryEmit(SyncEvent.StadiumContactReleased(contact.id, forget = farewellForget))
                     }
                 }
                 RecordType.PING -> { }

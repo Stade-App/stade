@@ -45,6 +45,7 @@ class ConnectionManager(
     private val dialing = mutableSetOf<String>()
     private val pendingDial = mutableSetOf<String>()
     private val pendingAttempts = mutableMapOf<String, Int>()
+    private val pendingQueuedAt = mutableMapOf<String, Long>()
     private val pendingWake = Channel<Unit>(capacity = Channel.CONFLATED)
     private val dialerWake = Channel<Unit>(capacity = Channel.CONFLATED)
 
@@ -90,12 +91,17 @@ class ConnectionManager(
                 if (a.isNotBlank() && a !in selfSet) {
                     pendingDial.add(a)
                     pendingAttempts.remove(a)
+                    pendingQueuedAt[a] = nowMs()
                     recordPending(DialAttempt(a, nowMs(), DialAttempt.Status.TRYING, I18n.current.dialQueued))
                 }
             }
         }
         clearBackoffWithPrefix("pending|")
         pendingWake.trySend(Unit)
+    }
+
+    fun cancelPendingDial(addresses: List<String>) {
+        for (a in addresses) consumePendingAddress(a)
     }
 
     private fun snapshotPendingAddresses(): List<String> =
@@ -105,8 +111,10 @@ class ConnectionManager(
         synchronized(pendingDial) {
             pendingDial.remove(addr)
             pendingAttempts.remove(addr)
+            pendingQueuedAt.remove(addr)
         }
         clearPending(addr)
+        removeBackoff("pending|$addr")
     }
 
     private fun nextPendingAttempt(addr: String): Int = synchronized(pendingDial) {
@@ -164,13 +172,22 @@ class ConnectionManager(
         tasks += scope.launch { pendingDialLoop(owner) }
         tasks += scope.launch {
             sync.events.collect { event ->
-                if (event is SyncEngine.SyncEvent.ContactDisconnected) {
-                    scope.launch {
-                        delay(1_000)
-                        removeBackoff(event.contactId)
-                        clearBackoffWithPrefix("${event.contactId}|")
-                        dialerWake.trySend(Unit)
+                when (event) {
+                    is SyncEngine.SyncEvent.ContactDisconnected -> {
+                        scope.launch {
+                            delay(1_000)
+                            removeBackoff(event.contactId)
+                            clearBackoffWithPrefix("${event.contactId}|")
+                            dialerWake.trySend(Unit)
+                        }
                     }
+                    is SyncEngine.SyncEvent.ContactConnected -> {
+                        val siblingAddrs = runCatching { contacts.get(event.contactId)?.addresses }.getOrNull()
+                        if (!siblingAddrs.isNullOrEmpty()) {
+                            for (addr in siblingAddrs) consumePendingAddress(addr)
+                        }
+                    }
+                    else -> Unit
                 }
             }
         }
@@ -283,6 +300,12 @@ class ConnectionManager(
                 consumePendingAddress(addr)
                 continue
             }
+            val queuedAt = synchronized(pendingDial) { pendingQueuedAt[addr] }
+            if (queuedAt != null && now - queuedAt > MAX_PENDING_AGE_MS) {
+                recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, I18n.current.dialUnreachableTimeout))
+                consumePendingAddress(addr)
+                continue
+            }
             val key = "pending|$addr"
             if (backoffUntil(key) > now) continue
             val plugin = pluginForAddress(addr)
@@ -311,9 +334,11 @@ class ConnectionManager(
                     val err = connResult.exceptionOrNull()?.message?.take(120) ?: I18n.current.dialUnreachableTimeout
                     recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, I18n.current.dialConnectFailedRetry(err)))
                     setBackoff(key, nowMs() + nextPendingBackoffMs(attemptIdx))
+                    noteDialOutcome(addr, connected = false)
                     pendingWake.trySend(Unit)
                     return@launch
                 }
+                noteDialOutcome(addr, connected = true)
                 recordPending(DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, I18n.current.dialHandshaking))
                 val sessionConnected = runCatching { sync.handleConnection(owner, conn, outbound = true) }.getOrDefault(false)
                 if (sessionConnected) {
@@ -324,6 +349,19 @@ class ConnectionManager(
                     setBackoff(key, nowMs() + nextPendingBackoffMs(attemptIdx))
                     pendingWake.trySend(Unit)
                 }
+            }
+        }
+    }
+
+    private fun noteDialOutcome(address: String, connected: Boolean) {
+        if (!address.startsWith("tor://") || connected) return
+        val plugin = registry.get(TransportType.TOR) ?: return
+        scope.launch {
+            val healed = runCatching { plugin.refreshReachability() }.getOrDefault(false)
+            if (healed) {
+                clearAllBackoff()
+                dialerWake.trySend(Unit)
+                pendingWake.trySend(Unit)
             }
         }
     }
@@ -363,8 +401,10 @@ class ConnectionManager(
                 val err = conn.exceptionOrNull()?.message?.take(80) ?: I18n.current.dialUnreachableTimeout
                 recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, err))
                 setBackoff(key, nowMs() + 30_000L)
+                noteDialOutcome(addr, connected = false)
                 continue
             }
+            noteDialOutcome(addr, connected = true)
             recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_OK, I18n.current.dialHandshaking))
             scope.launch {
                 try {
@@ -415,4 +455,8 @@ class ConnectionManager(
     }
 
     private fun nowMs(): Long = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+
+    private companion object {
+        const val MAX_PENDING_AGE_MS = 10 * 60_000L
+    }
 }

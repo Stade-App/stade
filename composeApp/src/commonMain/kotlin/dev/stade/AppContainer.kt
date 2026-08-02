@@ -138,7 +138,7 @@ class AppContainer(
     val sync = SyncEngine(crypto, pq, contacts, messages, ratchet, outbox, handshake, groups, stadiums)
     val chat = ChatService(messages, sync)
     val groupChat = GroupChatService(groups, sync, contacts, crypto)
-    val stadiumChat = StadiumChatService(stadiums, sync, contacts, crypto)
+    val stadiumChat = StadiumChatService(stadiums, sync, contacts, crypto, messages, groups)
     val transports = ConnectionRegistry().also { reg ->
         transportFactory(db).forEach { reg.register(it) }
     }
@@ -161,6 +161,8 @@ class AppContainer(
     val pendingOpenChat = MutableStateFlow<String?>(null)
 
     val pendingOpenStadium = MutableStateFlow<String?>(null)
+
+    val pendingOpenGroup = MutableStateFlow<String?>(null)
 
     val pendingGoHome = MutableStateFlow(false)
 

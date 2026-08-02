@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.identity.LocalIdentity
 import dev.stade.ui.i18n.LocalStrings
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,7 +71,7 @@ fun ManageStadiumScreen(
             text = { Text(strings.deleteStadiumConfirmBody) },
             confirmButton = {
                 TextButton(onClick = {
-                    container.stadiums.deleteStadium(stadium.id)
+                    container.appScope.launch { container.stadiumChat.deleteAsOwner(owner, stadium) }
                     showDeleteDialog = false
                     onDeleted()
                 }) { Text(strings.deleteStadiumAction) }

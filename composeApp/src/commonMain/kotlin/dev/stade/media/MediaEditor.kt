@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -98,6 +100,7 @@ fun MediaEditorDialog(
     var currentColor by remember { mutableStateOf(Color.Red) }
     var saving by remember { mutableStateOf(false) }
     var boxSizePx by remember { mutableStateOf(IntSize.Zero) }
+    var controlsHeight by remember { mutableStateOf(80.dp) }
 
     val aspect = bitmap.width.toFloat() / bitmap.height.toFloat()
 
@@ -106,6 +109,7 @@ fun MediaEditorDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         ForceFullScreenDialogWindow()
+        val density = LocalDensity.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -167,173 +171,186 @@ fun MediaEditorDialog(
                 contentAlignment = Alignment.Center
             ) {
                 val availW = maxWidth * 0.94f
-                val availH = maxHeight * 0.94f
+                val availH = (maxHeight - controlsHeight).coerceAtLeast(40.dp) * 0.94f
                 val fitsByWidth = (availW / aspect) <= availH
                 val targetW = if (fitsByWidth) availW else availH * aspect
                 val targetH = if (fitsByWidth) availW / aspect else availH
 
-                Box(
-                    modifier = Modifier
-                        .width(targetW)
-                        .height(targetH)
-                        .onSizeChanged { boxSizePx = it }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    androidx.compose.foundation.Image(
-                        bitmap = bitmap,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit
-                    )
-
-                    Canvas(
+                    Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInput(mode) {
-                                if (mode == EditorMode.DRAW) {
-                                    detectDragGestures(
-                                        onDragStart = { offset ->
-                                            val w = size.width.toFloat().coerceAtLeast(1f)
-                                            val h = size.height.toFloat().coerceAtLeast(1f)
-                                            val frac = Offset(offset.x / w, offset.y / h)
-                                            strokes = strokes + EditStroke(listOf(frac), currentColor, 0.012f)
-                                        },
-                                        onDrag = { change, _ ->
-                                            change.consume()
-                                            val w = size.width.toFloat().coerceAtLeast(1f)
-                                            val h = size.height.toFloat().coerceAtLeast(1f)
-                                            val frac = Offset(change.position.x / w, change.position.y / h)
-                                            val last = strokes.lastOrNull()
-                                            if (last != null) {
-                                                strokes = strokes.dropLast(1) + last.copy(points = last.points + frac)
-                                            }
-                                        }
-                                    )
-                                }
-                            }
+                            .width(targetW)
+                            .height(targetH)
+                            .onSizeChanged { boxSizePx = it }
                     ) {
-                        val w = size.width
-                        val h = size.height
+                        androidx.compose.foundation.Image(
+                            bitmap = bitmap,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
 
-                        strokes.forEach { stroke ->
-                            if (stroke.points.size >= 2) {
-                                for (i in 0 until stroke.points.size - 1) {
-                                    drawLine(
-                                        color = stroke.color,
-                                        start = Offset(stroke.points[i].x * w, stroke.points[i].y * h),
-                                        end = Offset(stroke.points[i + 1].x * w, stroke.points[i + 1].y * h),
-                                        strokeWidth = stroke.widthFraction * w,
-                                        cap = StrokeCap.Round
-                                    )
-                                }
-                            } else if (stroke.points.size == 1) {
-                                drawCircle(
-                                    color = stroke.color,
-                                    radius = stroke.widthFraction * w / 2f,
-                                    center = Offset(stroke.points[0].x * w, stroke.points[0].y * h)
-                                )
-                            }
-                        }
-
-                        if (mode == EditorMode.CROP) {
-                            val scrim = Color.Black.copy(alpha = 0.55f)
-                            val l = crop.left * w
-                            val t = crop.top * h
-                            val r = crop.right * w
-                            val b = crop.bottom * h
-                            drawRect(color = scrim, topLeft = Offset(0f, 0f), size = Size(w, t))
-                            drawRect(color = scrim, topLeft = Offset(0f, b), size = Size(w, h - b))
-                            drawRect(color = scrim, topLeft = Offset(0f, t), size = Size(l, b - t))
-                            drawRect(color = scrim, topLeft = Offset(r, t), size = Size(w - r, b - t))
-                            drawRect(
-                                color = Color.White,
-                                topLeft = Offset(l, t),
-                                size = Size(r - l, b - t),
-                                style = Stroke(width = 2.dp.toPx())
-                            )
-                        }
-                    }
-
-                    if (mode == EditorMode.CROP && boxSizePx.width > 0 && boxSizePx.height > 0) {
-                        val bw = boxSizePx.width.toFloat()
-                        val bh = boxSizePx.height.toFloat()
-
-                        Box(
+                        Canvas(
                             modifier = Modifier
-                                .offset { IntOffset((crop.left * bw).toInt(), (crop.top * bh).toInt()) }
-                                .size(
-                                    width = with(androidx.compose.ui.platform.LocalDensity.current) { ((crop.right - crop.left) * bw).toDp() },
-                                    height = with(androidx.compose.ui.platform.LocalDensity.current) { ((crop.bottom - crop.top) * bh).toDp() }
-                                )
-                                .pointerInput(boxSizePx) {
-                                    detectDragGestures { change, dragAmount ->
-                                        change.consume()
-                                        val dxFrac = dragAmount.x / bw
-                                        val dyFrac = dragAmount.y / bh
-                                        val width = crop.right - crop.left
-                                        val height = crop.bottom - crop.top
-                                        val newLeft = (crop.left + dxFrac).coerceIn(0f, 1f - width)
-                                        val newTop = (crop.top + dyFrac).coerceIn(0f, 1f - height)
-                                        crop = CropRect(newLeft, newTop, newLeft + width, newTop + height)
+                                .fillMaxSize()
+                                .pointerInput(mode) {
+                                    if (mode == EditorMode.DRAW) {
+                                        detectDragGestures(
+                                            onDragStart = { offset ->
+                                                val w = size.width.toFloat().coerceAtLeast(1f)
+                                                val h = size.height.toFloat().coerceAtLeast(1f)
+                                                val frac = Offset(offset.x / w, offset.y / h)
+                                                strokes = strokes + EditStroke(listOf(frac), currentColor, 0.012f)
+                                            },
+                                            onDrag = { change, _ ->
+                                                change.consume()
+                                                val w = size.width.toFloat().coerceAtLeast(1f)
+                                                val h = size.height.toFloat().coerceAtLeast(1f)
+                                                val frac = Offset(change.position.x / w, change.position.y / h)
+                                                val last = strokes.lastOrNull()
+                                                if (last != null) {
+                                                    strokes = strokes.dropLast(1) + last.copy(points = last.points + frac)
+                                                }
+                                            }
+                                        )
                                     }
                                 }
-                        )
+                        ) {
+                            val w = size.width
+                            val h = size.height
 
-                        val handleSize = 24.dp
-                        CropHandle(handleSize, boxSizePx, crop.left, crop.top) { dxFrac, dyFrac ->
-                            crop = crop.copy(
-                                left = (crop.left + dxFrac).coerceIn(0f, crop.right - MIN_CROP_SIZE),
-                                top = (crop.top + dyFrac).coerceIn(0f, crop.bottom - MIN_CROP_SIZE)
-                            )
+                            strokes.forEach { stroke ->
+                                if (stroke.points.size >= 2) {
+                                    for (i in 0 until stroke.points.size - 1) {
+                                        drawLine(
+                                            color = stroke.color,
+                                            start = Offset(stroke.points[i].x * w, stroke.points[i].y * h),
+                                            end = Offset(stroke.points[i + 1].x * w, stroke.points[i + 1].y * h),
+                                            strokeWidth = stroke.widthFraction * w,
+                                            cap = StrokeCap.Round
+                                        )
+                                    }
+                                } else if (stroke.points.size == 1) {
+                                    drawCircle(
+                                        color = stroke.color,
+                                        radius = stroke.widthFraction * w / 2f,
+                                        center = Offset(stroke.points[0].x * w, stroke.points[0].y * h)
+                                    )
+                                }
+                            }
+
+                            if (mode == EditorMode.CROP) {
+                                val scrim = Color.Black.copy(alpha = 0.55f)
+                                val l = crop.left * w
+                                val t = crop.top * h
+                                val r = crop.right * w
+                                val b = crop.bottom * h
+                                drawRect(color = scrim, topLeft = Offset(0f, 0f), size = Size(w, t))
+                                drawRect(color = scrim, topLeft = Offset(0f, b), size = Size(w, h - b))
+                                drawRect(color = scrim, topLeft = Offset(0f, t), size = Size(l, b - t))
+                                drawRect(color = scrim, topLeft = Offset(r, t), size = Size(w - r, b - t))
+                                drawRect(
+                                    color = Color.White,
+                                    topLeft = Offset(l, t),
+                                    size = Size(r - l, b - t),
+                                    style = Stroke(width = 2.dp.toPx())
+                                )
+                            }
                         }
-                        CropHandle(handleSize, boxSizePx, crop.right, crop.top) { dxFrac, dyFrac ->
-                            crop = crop.copy(
-                                right = (crop.right + dxFrac).coerceIn(crop.left + MIN_CROP_SIZE, 1f),
-                                top = (crop.top + dyFrac).coerceIn(0f, crop.bottom - MIN_CROP_SIZE)
+
+                        if (mode == EditorMode.CROP && boxSizePx.width > 0 && boxSizePx.height > 0) {
+                            val bw = boxSizePx.width.toFloat()
+                            val bh = boxSizePx.height.toFloat()
+
+                            Box(
+                                modifier = Modifier
+                                    .offset { IntOffset((crop.left * bw).toInt(), (crop.top * bh).toInt()) }
+                                    .size(
+                                        width = with(androidx.compose.ui.platform.LocalDensity.current) { ((crop.right - crop.left) * bw).toDp() },
+                                        height = with(androidx.compose.ui.platform.LocalDensity.current) { ((crop.bottom - crop.top) * bh).toDp() }
+                                    )
+                                    .pointerInput(boxSizePx) {
+                                        detectDragGestures { change, dragAmount ->
+                                            change.consume()
+                                            val dxFrac = dragAmount.x / bw
+                                            val dyFrac = dragAmount.y / bh
+                                            val width = crop.right - crop.left
+                                            val height = crop.bottom - crop.top
+                                            val newLeft = (crop.left + dxFrac).coerceIn(0f, 1f - width)
+                                            val newTop = (crop.top + dyFrac).coerceIn(0f, 1f - height)
+                                            crop = CropRect(newLeft, newTop, newLeft + width, newTop + height)
+                                        }
+                                    }
                             )
-                        }
-                        CropHandle(handleSize, boxSizePx, crop.left, crop.bottom) { dxFrac, dyFrac ->
-                            crop = crop.copy(
-                                left = (crop.left + dxFrac).coerceIn(0f, crop.right - MIN_CROP_SIZE),
-                                bottom = (crop.bottom + dyFrac).coerceIn(crop.top + MIN_CROP_SIZE, 1f)
-                            )
-                        }
-                        CropHandle(handleSize, boxSizePx, crop.right, crop.bottom) { dxFrac, dyFrac ->
-                            crop = crop.copy(
-                                right = (crop.right + dxFrac).coerceIn(crop.left + MIN_CROP_SIZE, 1f),
-                                bottom = (crop.bottom + dyFrac).coerceIn(crop.top + MIN_CROP_SIZE, 1f)
-                            )
+
+                            val handleSize = 24.dp
+                            CropHandle(handleSize, boxSizePx, crop.left, crop.top) { dxFrac, dyFrac ->
+                                crop = crop.copy(
+                                    left = (crop.left + dxFrac).coerceIn(0f, crop.right - MIN_CROP_SIZE),
+                                    top = (crop.top + dyFrac).coerceIn(0f, crop.bottom - MIN_CROP_SIZE)
+                                )
+                            }
+                            CropHandle(handleSize, boxSizePx, crop.right, crop.top) { dxFrac, dyFrac ->
+                                crop = crop.copy(
+                                    right = (crop.right + dxFrac).coerceIn(crop.left + MIN_CROP_SIZE, 1f),
+                                    top = (crop.top + dyFrac).coerceIn(0f, crop.bottom - MIN_CROP_SIZE)
+                                )
+                            }
+                            CropHandle(handleSize, boxSizePx, crop.left, crop.bottom) { dxFrac, dyFrac ->
+                                crop = crop.copy(
+                                    left = (crop.left + dxFrac).coerceIn(0f, crop.right - MIN_CROP_SIZE),
+                                    bottom = (crop.bottom + dyFrac).coerceIn(crop.top + MIN_CROP_SIZE, 1f)
+                                )
+                            }
+                            CropHandle(handleSize, boxSizePx, crop.right, crop.bottom) { dxFrac, dyFrac ->
+                                crop = crop.copy(
+                                    right = (crop.right + dxFrac).coerceIn(crop.left + MIN_CROP_SIZE, 1f),
+                                    bottom = (crop.bottom + dyFrac).coerceIn(crop.top + MIN_CROP_SIZE, 1f)
+                                )
+                            }
                         }
                     }
-                }
-            }
 
-            if (mode == EditorMode.DRAW) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    swatchColors.forEach { c ->
-                        Box(
+                    if (mode == EditorMode.DRAW) {
+                        Row(
                             modifier = Modifier
-                                .size(if (c == currentColor) 32.dp else 26.dp)
-                                .clip(CircleShape)
-                                .background(c)
-                                .clickable { currentColor = c }
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(onClick = { if (strokes.isNotEmpty()) strokes = strokes.dropLast(1) }) {
-                        Icon(Icons.Default.Undo, contentDescription = strings.undoAction, tint = Color.White)
-                    }
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    TextButton(onClick = { crop = CropRect(0f, 0f, 1f, 1f) }) {
-                        Text(strings.resetCropAction, color = Color.White)
+                                .fillMaxWidth()
+                                .windowInsetsPadding(WindowInsets.navigationBars)
+                                .onSizeChanged { controlsHeight = with(density) { it.height.toDp() } }
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            swatchColors.forEach { c ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (c == currentColor) 32.dp else 26.dp)
+                                        .clip(CircleShape)
+                                        .background(c)
+                                        .clickable { currentColor = c }
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            IconButton(onClick = { if (strokes.isNotEmpty()) strokes = strokes.dropLast(1) }) {
+                                Icon(Icons.Default.Undo, contentDescription = strings.undoAction, tint = Color.White)
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .windowInsetsPadding(WindowInsets.navigationBars)
+                                .onSizeChanged { controlsHeight = with(density) { it.height.toDp() } }
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            TextButton(onClick = { crop = CropRect(0f, 0f, 1f, 1f) }) {
+                                Text(strings.resetCropAction, color = Color.White)
+                            }
+                        }
                     }
                 }
             }

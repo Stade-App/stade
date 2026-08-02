@@ -108,7 +108,7 @@ selectContactByStadeId:
 SELECT * FROM Contact WHERE id = ?;
 
 insertContact:
-INSERT INTO Contact(id, ownerId, nickname, publicKey, handshakePublicKey, mlkemPublicKey, mldsaPublicKey, rootKey, ratchetState, isAlice, verified, lastSeen, createdAt, addresses) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO Contact(id, ownerId, nickname, publicKey, handshakePublicKey, mlkemPublicKey, mldsaPublicKey, rootKey, ratchetState, isAlice, verified, lastSeen, createdAt, addresses, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 setContactVerified:
 UPDATE Contact SET verified = 1 WHERE id = ?;

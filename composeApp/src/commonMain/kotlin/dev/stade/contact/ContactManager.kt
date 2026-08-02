@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 
+const val PROMOTE_TO_CONTACT_PREFIX = "CTUP:"
+
 class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
 
     fun observeContacts(ownerId: String): Flow<List<Contact>> =
@@ -44,7 +46,8 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         peerMlDsaKey: ByteArray,
         rootKey: ByteArray,
         isAlice: Boolean,
-        addresses: List<String> = emptyList()
+        addresses: List<String> = emptyList(),
+        kind: Int = 0
     ): Contact = withContext(Dispatchers.Default) {
         val id = StadeId.derive(peerSigningKey, peerMlDsaKey, crypto::hash)
         val now = Clock.System.now().toEpochMilliseconds()
@@ -52,7 +55,7 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.insertContact(
             id, owner.id, nickname, peerSigningKey, peerHandshakeKey,
             peerMlKemKey, peerMlDsaKey,
-            rootKey, null, if (isAlice) 1 else 0, 0, 0L, now, addrJoined
+            rootKey, null, if (isAlice) 1 else 0, 0, 0L, now, addrJoined, kind.toLong()
         )
         Contact(
             id = id,
@@ -68,7 +71,8 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
             verified = false,
             lastSeen = 0L,
             createdAt = now,
-            addresses = addrJoined.split("\n").filter { it.isNotBlank() }
+            addresses = addrJoined.split("\n").filter { it.isNotBlank() },
+            kind = kind
         )
     }
 

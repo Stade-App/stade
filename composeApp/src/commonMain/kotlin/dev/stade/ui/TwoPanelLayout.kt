@@ -447,6 +447,16 @@ fun TwoPanelLayout(
                                     Spacer(Modifier.width(8.dp))
                                     Text(strings.addContactAction)
                                 }
+                                FilledTonalButton(onClick = { right = PanelRight.CreateStadium }) {
+                                    Icon(Icons.Default.Podcasts, null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(strings.createStadiumAction)
+                                }
+                                FilledTonalButton(onClick = { right = PanelRight.JoinStadium }) {
+                                    Icon(Icons.Default.Podcasts, null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(strings.joinStadiumAction)
+                                }
                             }
                         }
                     } else {
