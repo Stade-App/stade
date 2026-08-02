@@ -174,8 +174,7 @@ object TurkishStrings : AppStrings() {
     override val addContactTitle = "Kişi ekle"
     override val step1Title = "Kendi davetini paylaş"
     override val step1Description =
-        "Bağlantı kurmak için aşağıdaki butona basıp davet kodunu paylaş. " +
-        "Stade ID sadece kimlik etiketidir — davet kodunun yerine geçmez."
+        "Bağlantı kurmak için aşağıdaki butona basıp davet kodunu paylaş. "
     override fun copyInviteCode(length: Int) = "Davet kodunu kopyala ($length karakter)"
     override fun inviteCodeCopied(length: Int) =
         "Davet kodu kopyalandı ($length karakter) — karşı tarafa gönder"
@@ -188,7 +187,7 @@ object TurkishStrings : AppStrings() {
     override val pendingInviteOpened =
         "Davet dosyası açıldı — bu kişiye bir isim ver ve \"Daveti kabul et\""
     override val inviteCodeIsStadeId =
-        "Bu bir Stade ID (kimlik etiketi), davet kodu değil. Karşı tarafın 'Davet kodunu kopyala' " +
+        "Bu bir eski Stade ID (kimlik etiketi), davet kodu değil. Karşı tarafın 'Davet kodunu kopyala' " +
         "butonuna basıp gönderdiği uzun bloğu (STADE2-… ~10500 karakter) yapıştır."
     override fun inviteMissingPrefix(first: String) =
         "Davet 'STADE2-' ile başlamıyor (ilk: '$first')"

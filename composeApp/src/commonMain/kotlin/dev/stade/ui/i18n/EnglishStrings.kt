@@ -174,8 +174,7 @@ object EnglishStrings : AppStrings() {
     override val addContactTitle = "Add contact"
     override val step1Title = "Share your own invite"
     override val step1Description =
-        "Press the button below and share the invite code to establish a connection. " +
-        "Stade ID is only an identity label — it doesn't replace the invite code."
+        "Press the button below and share the invite code to establish a connection. "
     override fun copyInviteCode(length: Int) = "Copy invite code ($length characters)"
     override fun inviteCodeCopied(length: Int) =
         "Invite code copied ($length characters) — send to the other party"
@@ -188,7 +187,7 @@ object EnglishStrings : AppStrings() {
     override val pendingInviteOpened =
         "Invite file opened — give this person a name and tap \"Accept invite\""
     override val inviteCodeIsStadeId =
-        "This is a Stade ID (identity label), not an invite code. " +
+        "This is a old Stade ID (identity label), not an invite code. " +
         "The other party should tap 'Copy invite code' and send you the long block (STADE2-… ~10500 characters)."
     override fun inviteMissingPrefix(first: String) =
         "Invite does not start with 'STADE2-' (first: '$first')"
