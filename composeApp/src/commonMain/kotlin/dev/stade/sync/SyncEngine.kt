@@ -100,6 +100,10 @@ class SyncEngine(
         }
         val payload = MessagePayload(messageId, timestamp, sealed)
         val frame = json.encodeToString(MessagePayload.serializer(), payload).encodeToByteArray()
+        if (frame.size > FrameCodec.MAX_LEN) {
+            _events.tryEmit(SyncEvent.SendFailed(contact.id, "message too large to send"))
+            return
+        }
         outbox.enqueue(contact.id, messageId, frame)
         sessionsLock.withLock { sessions[contact.id] }?.notifyOutbox()
     }
@@ -440,6 +444,11 @@ class SyncEngine(
             val pending = runCatching { outbox.pending(contact.id) }.getOrNull() ?: return true
             for (item in pending) {
                 if (!scope.isActive) return false
+                if (item.payload.size > FrameCodec.MAX_LEN) {
+                    outbox.remove(item.id)
+                    _events.tryEmit(SyncEvent.SendFailed(contact.id, "message too large to send"))
+                    continue
+                }
                 val ok = runCatching {
                     connection.send(FrameCodec.encode(SyncRecord(RecordType.MESSAGE, item.payload)))
                 }.isSuccess

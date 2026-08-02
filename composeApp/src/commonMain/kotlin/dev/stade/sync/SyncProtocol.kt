@@ -82,7 +82,7 @@ data class SyncRecord(
 }
 
 object FrameCodec {
-    private const val MAX_LEN = 4 * 1024 * 1024
+    const val MAX_LEN = 4 * 1024 * 1024
 
     fun encode(record: SyncRecord): ByteArray {
         val len = record.payload.size
