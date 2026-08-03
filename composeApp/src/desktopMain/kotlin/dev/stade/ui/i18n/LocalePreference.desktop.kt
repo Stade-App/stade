@@ -6,9 +6,17 @@ import java.util.prefs.Preferences
 
 private val javaPrefs = Preferences.userRoot().node("dev/stade")
 
+actual fun getSystemLocale(): AppLocale =
+    AppLocale.entries.firstOrNull { it.code == java.util.Locale.getDefault().language } ?: AppLocale.English
+
 private val _localePreference by lazy {
-    val code = javaPrefs.get("locale", AppLocale.English.code)
-    mutableStateOf(AppLocale.entries.firstOrNull { it.code == code } ?: AppLocale.English)
+    val stored = javaPrefs.get("locale", null)
+    val resolved = stored?.let { code -> AppLocale.entries.firstOrNull { it.code == code } } ?: getSystemLocale()
+    if (stored == null) {
+        javaPrefs.put("locale", resolved.code)
+        runCatching { javaPrefs.flush() }
+    }
+    mutableStateOf(resolved)
 }
 
 actual fun getLocalePreference(): State<AppLocale> = _localePreference

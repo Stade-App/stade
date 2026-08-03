@@ -28,6 +28,7 @@ CREATE TABLE Contact (
     createdAt INTEGER NOT NULL,
     addresses TEXT NOT NULL DEFAULT '',
     kind INTEGER NOT NULL DEFAULT 0,
+    muted INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(ownerId) REFERENCES LocalIdentity(id)
 );
 
@@ -127,6 +128,9 @@ UPDATE Contact SET nickname = ? WHERE id = ?;
 
 setContactKind:
 UPDATE Contact SET kind = ? WHERE id = ?;
+
+setContactMuted:
+UPDATE Contact SET muted = ? WHERE id = ?;
 
 deleteContact:
 DELETE FROM Contact WHERE id = ?;
@@ -260,7 +264,8 @@ CREATE TABLE StadeGroup (
     name TEXT NOT NULL,
     inviteToken TEXT NOT NULL,
     createdAt INTEGER NOT NULL,
-    creatorStadeId TEXT NOT NULL DEFAULT ''
+    creatorStadeId TEXT NOT NULL DEFAULT '',
+    muted INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE GroupMember (
@@ -296,6 +301,9 @@ SELECT * FROM StadeGroup WHERE inviteToken = ?;
 
 deleteGroup:
 DELETE FROM StadeGroup WHERE id = ?;
+
+setGroupMuted:
+UPDATE StadeGroup SET muted = ? WHERE id = ?;
 
 insertGroupMember:
 INSERT OR IGNORE INTO GroupMember(groupId, contactId, joinedAt) VALUES (?, ?, ?);
@@ -475,6 +483,9 @@ SELECT COUNT(*) FROM StadiumMessage WHERE id = ?;
 
 deleteStadiumMessages:
 DELETE FROM StadiumMessage WHERE stadiumId = ?;
+
+deleteStadiumMessage:
+DELETE FROM StadiumMessage WHERE id = ?;
 
 wipeStadiums:
 DELETE FROM Stadium;

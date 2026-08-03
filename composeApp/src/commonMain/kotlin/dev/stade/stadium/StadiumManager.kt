@@ -93,6 +93,18 @@ class StadiumManager(private val db: StadeDb, private val crypto: CryptoApi) {
         }
     }
 
+    fun deleteMessage(messageId: String) {
+        db.stadeDbQueries.deleteStadiumMessage(messageId)
+    }
+
+    fun handleMessageDeletedByOwner(contactId: String, stadiumId: String, messageId: String): Boolean {
+        val stadium = db.stadeDbQueries.selectStadium(stadiumId).executeAsOneOrNull() ?: return false
+        if (stadium.isOwner == 1L) return false
+        if (stadium.creatorStadeId != contactId) return false
+        db.stadeDbQueries.deleteStadiumMessage(messageId)
+        return true
+    }
+
     fun handleStadiumDeletedByOwner(contactId: String, stadiumId: String): Boolean {
         val stadium = db.stadeDbQueries.selectStadium(stadiumId).executeAsOneOrNull() ?: return false
         if (stadium.isOwner == 1L) return false

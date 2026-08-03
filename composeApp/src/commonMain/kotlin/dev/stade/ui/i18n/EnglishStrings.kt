@@ -14,6 +14,7 @@ object EnglishStrings : AppStrings() {
         "Choose a nickname to get started — a permanent Stade ID will be assigned."
     override val nicknamePlaceholder = "Nickname"
     override val createIdentity = "Create identity"
+    override val continueAction = "Continue"
 
     override val unlockTitle = "Unlock"
     override val unlockSubtitle = "Enter your PIN to continue."
@@ -45,6 +46,11 @@ object EnglishStrings : AppStrings() {
     override val pinChangeFailed = "Failed to change PIN"
     override val confirmAction = "Confirm"
     override val backspaceAction = "Backspace"
+    override val onboardingPinTip = "You can set up a Duress PIN and other privacy tools later in Settings → Security"
+    override val setDuressPinTitle = "Set duress PIN"
+    override val confirmDuressPinTitle = "Confirm duress PIN"
+    override val setDuressPinSubtitle = "Entering this PIN instead of your real one will instantly and permanently wipe this device"
+    override val duressPinMatchesRealPin = "Duress PIN can't match your real PIN"
 
     override val appTitle = "Stade"
     override val searchContactsPlaceholder = "Search contacts…"
@@ -82,6 +88,8 @@ object EnglishStrings : AppStrings() {
     override val connectionFailed = "Connection failed"
     override val collapseAction = "Collapse"
     override val expandAction = "Expand"
+    override val viewDetailsAction = "View details"
+    override val closeAction = "Close"
     override val noConnectionInfo =
         "No connection info for this contact. Request a new invite code and paste below."
     override val connectionChannels = "Connection channels"
@@ -305,6 +313,12 @@ object EnglishStrings : AppStrings() {
     override val screenshotBlockingOffSubtitle = "App content visible in recent apps"
     override val linkPreviewsSettingTitle = "Link previews"
     override val linkPreviewsSettingSubtitle = "Fetch a title and description for links you receive, always routed through Tor"
+    override val transportsLockTitle = "Lock transport layers"
+    override val transportsLockSubtitle = "Require your PIN to open the Transport layers page"
+    override val duressPinTitle = "Duress PIN"
+    override val duressPinSetSubtitle = "Set — entering it instead of your PIN wipes this device"
+    override val duressPinNotSetSubtitle = "Not set"
+    override val clearDuressPinAction = "Remove duress PIN"
 
     override val autoLockNeverInfoTitle = "About the 'Never' Option"
     override val autoLockNeverInfoBody =
@@ -358,6 +372,7 @@ object EnglishStrings : AppStrings() {
     override val selectContactHint = "Select a contact from the left panel to start a new conversation."
 
     override val attachPhoto = "Attach photo"
+    override val attachMediaAction = "Attach photo or video"
     override val selectMediaTitle = "Select Media"
     override val photoMessage = "📷 Photo"
     override val photoSendFailed = "Failed to load photo"
@@ -388,6 +403,7 @@ object EnglishStrings : AppStrings() {
     override val videoTooBig = "Video is too large (max 1.8 MB) — clips take a while to send as-is, so keep them short"
     override val videoAttached = "Video attached"
     override val tapToPlayVideo = "Tap to play"
+    override val vlcNotFoundHint = "Install VLC to play videos in-app"
     override val videoOpenFailed = "Couldn't open a video player for this file"
 
     override val replyAction = "Reply"
@@ -431,6 +447,7 @@ object EnglishStrings : AppStrings() {
     override val copyMessage = "Copy message"
     override val deleteMessageForMe = "Delete for me"
     override val deleteMessagesForMe = "Delete selected messages"
+    override val deleteMessageAction = "Delete message"
     override fun selectedCount(count: Int) = "$count selected"
     override val messageCopied = "Message copied"
     override val cancelSelection = "Cancel selection"
@@ -452,6 +469,11 @@ object EnglishStrings : AppStrings() {
     override val stadiumInviteLabel = "Invite link"
     override val stadiumInviteHint = "Anyone with this link can join your Stadium. Share it publicly — it never reveals who else has joined."
     override val copyStadiumInviteAction = "Copy invite link"
+    override val stadiumInviteDialogTitle = "Invite to Stadium"
+    override val shareInviteAction = "Share via apps"
+    override val sendInviteToContactAction = "Send to a contact"
+    override val sendAction = "Send"
+    override val inviteAction = "Invite"
     override val stadiumRenamed = "Stadium renamed"
     override val deleteStadiumAction = "Delete Stadium"
     override val deleteStadiumConfirmTitle = "Delete this Stadium?"
@@ -470,5 +492,7 @@ object EnglishStrings : AppStrings() {
     override fun stadiumJoined(name: String) = "✓ Joined \"$name\""
     override val muteStadiumAction = "Mute Stadium"
     override val unmuteStadiumAction = "Unmute Stadium"
+    override val muteChatAction = "Mute"
+    override val unmuteChatAction = "Unmute"
 }
 

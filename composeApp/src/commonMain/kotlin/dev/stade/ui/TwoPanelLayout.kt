@@ -96,6 +96,7 @@ import dev.stade.message.SearchResult
 import dev.stade.message.previewBody
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.BrandMark
+import dev.stade.ui.components.ChatListFabMenu
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.screens.AboutScreen
 import dev.stade.ui.screens.AddContactScreen
@@ -136,7 +137,7 @@ private sealed class PanelRight {
     data object About : PanelRight()
     data object AddContact : PanelRight()
     data class Verify(val contactId: String, val from: PanelRight = Chat(contactId)) : PanelRight()
-    data class PinSetup(val requireCurrent: Boolean, val ret: PanelRight) : PanelRight()
+    data class PinSetup(val requireCurrent: Boolean, val ret: PanelRight, val mode: dev.stade.ui.screens.PinSetupMode = dev.stade.ui.screens.PinSetupMode.Primary) : PanelRight()
 }
 
 private sealed class PanelChatItem {
@@ -185,7 +186,6 @@ fun TwoPanelLayout(
         .collectAsState(initial = remember(owner.id) { container.pinnedChats.pinned(owner.id) })
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
     var query by remember { mutableStateOf("") }
-    var isFabExpanded by remember { mutableStateOf(false) }
     val settingsListState = rememberLazyListState()
 
     val contactLastMessages by remember(contacts) {
@@ -498,6 +498,9 @@ fun TwoPanelLayout(
                                                 },
                                                 onTogglePin = {
                                                     container.pinnedChats.setPinned(owner.id, item.key, item.pinnedAt == null)
+                                                },
+                                                onToggleMute = {
+                                                    container.contacts.setMuted(contact.id, !contact.muted)
                                                 }
                                             )
                                         }
@@ -529,6 +532,9 @@ fun TwoPanelLayout(
                                                 onClick = { right = PanelRight.GroupChat(group.id) },
                                                 onTogglePin = {
                                                     container.pinnedChats.setPinned(owner.id, item.key, item.pinnedAt == null)
+                                                },
+                                                onToggleMute = {
+                                                    container.groups.setMuted(group.id, !group.muted)
                                                 }
                                             )
                                         }
@@ -597,139 +603,17 @@ fun TwoPanelLayout(
                                 item { Spacer(Modifier.height(80.dp)) }
                             }
 
-                            Column(
+                            Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .padding(16.dp),
-                                horizontalAlignment = Alignment.End,
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    .padding(16.dp)
                             ) {
-                                AnimatedVisibility(
-                                    visible = isFabExpanded,
-                                    enter = fadeIn() + expandVertically(),
-                                    exit = fadeOut() + shrinkVertically()
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.End,
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Surface(
-                                            onClick = {
-                                                isFabExpanded = false
-                                                right = PanelRight.CreateGroup
-                                            },
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            shadowElevation = 6.dp
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                Text(
-                                                    text = strings.createGroupTitle,
-                                                    style = MaterialTheme.typography.labelLarge
-                                                )
-                                                Icon(Icons.Default.Group, contentDescription = null)
-                                            }
-                                        }
-                                        Surface(
-                                            onClick = {
-                                                isFabExpanded = false
-                                                right = PanelRight.CreateStadium
-                                            },
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                                            shadowElevation = 6.dp
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                Text(
-                                                    text = strings.createStadiumAction,
-                                                    style = MaterialTheme.typography.labelLarge
-                                                )
-                                                Icon(Icons.Default.Podcasts, contentDescription = null)
-                                            }
-                                        }
-                                        Surface(
-                                            onClick = {
-                                                isFabExpanded = false
-                                                right = PanelRight.JoinStadium
-                                            },
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                                            shadowElevation = 6.dp
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                Text(
-                                                    text = strings.joinStadiumAction,
-                                                    style = MaterialTheme.typography.labelLarge
-                                                )
-                                                Icon(Icons.Default.Podcasts, contentDescription = null)
-                                            }
-                                        }
-                                        Surface(
-                                            onClick = {
-                                                isFabExpanded = false
-                                                right = PanelRight.AddContact
-                                            },
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.primaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            shadowElevation = 6.dp
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                Text(
-                                                    text = strings.addContactAction,
-                                                    style = MaterialTheme.typography.labelLarge
-                                                )
-                                                Icon(Icons.Default.PersonAdd, contentDescription = null)
-                                            }
-                                        }
-                                    }
-                                }
-
-                                val fabCornerRadius by animateDpAsState(
-                                    targetValue = if (isFabExpanded) 28.dp else 16.dp,
-                                    animationSpec = tween(280, easing = FastOutSlowInEasing)
+                                ChatListFabMenu(
+                                    onAddContact = { right = PanelRight.AddContact },
+                                    onCreateGroup = { right = PanelRight.CreateGroup },
+                                    onCreateStadium = { right = PanelRight.CreateStadium },
+                                    onJoinStadium = { right = PanelRight.JoinStadium }
                                 )
-                                val fabIconRotation by animateFloatAsState(
-                                    targetValue = if (isFabExpanded) 45f else 0f,
-                                    animationSpec = tween(280, easing = FastOutSlowInEasing)
-                                )
-                                val fabContainerColor by animateColorAsState(
-                                    if (isFabExpanded) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primary
-                                )
-                                val fabContentColor by animateColorAsState(
-                                    if (isFabExpanded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
-                                )
-                                FloatingActionButton(
-                                    onClick = { isFabExpanded = !isFabExpanded },
-                                    shape = RoundedCornerShape(fabCornerRadius),
-                                    containerColor = fabContainerColor,
-                                    contentColor = fabContentColor
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = if (isFabExpanded) strings.cancel else null,
-                                        modifier = Modifier.rotate(fabIconRotation)
-                                    )
-                                }
                             }
                         }
                     }
@@ -799,12 +683,16 @@ fun TwoPanelLayout(
                     onBack = { right = PanelRight.Settings },
                     onOpenPinSetup = { requireCurrent ->
                         right = PanelRight.PinSetup(requireCurrent, PanelRight.Security)
+                    },
+                    onOpenDuressPinSetup = {
+                        right = PanelRight.PinSetup(true, PanelRight.Security, dev.stade.ui.screens.PinSetupMode.Duress)
                     }
                 )
 
                 is PanelRight.PinSetup -> PinSetupScreen(
                     vault = container.vault,
                     requireCurrent = rp.requireCurrent,
+                    mode = rp.mode,
                     onDone = { right = rp.ret },
                     onCancel = { right = rp.ret }
                 )
@@ -905,24 +793,15 @@ private fun PanelMessageSearchRow(result: SearchResult, onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (result.isGroup) {
-            Box(
-                Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.tertiaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Group,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.size(18.dp)
-                )
+        Avatar(
+            name = result.title,
+            size = 36.dp,
+            icon = when {
+                result.isStadium -> Icons.Default.Podcasts
+                result.isGroup -> Icons.Default.Group
+                else -> null
             }
-        } else {
-            Avatar(result.title, size = 36.dp)
-        }
+        )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -960,7 +839,8 @@ private fun PanelContactRow(
     onClick: () -> Unit,
     onVerifyRequest: () -> Unit,
     onDeleteRequest: () -> Unit,
-    onTogglePin: () -> Unit
+    onTogglePin: () -> Unit,
+    onToggleMute: () -> Unit
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
     val strings = LocalStrings.current
@@ -1121,6 +1001,20 @@ private fun PanelContactRow(
                     onTogglePin()
                 }
             )
+            DropdownMenuItem(
+                text = { Text(if (contact.muted) strings.unmuteChatAction else strings.muteChatAction) },
+                leadingIcon = {
+                    Icon(
+                        if (contact.muted) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onToggleMute()
+                }
+            )
             HorizontalDivider()
             DropdownMenuItem(
                 text = { Text(strings.viewProfileAction) },
@@ -1167,7 +1061,8 @@ private fun PanelGroupRow(
     lastMessageTs: Long?,
     unread: Long,
     onClick: () -> Unit,
-    onTogglePin: () -> Unit
+    onTogglePin: () -> Unit,
+    onToggleMute: () -> Unit
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
     val strings = LocalStrings.current
@@ -1218,20 +1113,7 @@ private fun PanelGroupRow(
             )
             Spacer(Modifier.width(8.dp))
 
-            Box(
-                Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.tertiaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Group,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+            Avatar(name = group.name, size = 44.dp, icon = Icons.Default.Group)
 
             Spacer(Modifier.width(12.dp))
 
@@ -1316,6 +1198,20 @@ private fun PanelGroupRow(
                     onTogglePin()
                 }
             )
+            DropdownMenuItem(
+                text = { Text(if (group.muted) strings.unmuteChatAction else strings.muteChatAction) },
+                leadingIcon = {
+                    Icon(
+                        if (group.muted) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onToggleMute()
+                }
+            )
         }
     }
 }
@@ -1377,20 +1273,7 @@ private fun PanelStadiumRow(
             )
             Spacer(Modifier.width(8.dp))
 
-            Box(
-                Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.tertiaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Podcasts,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+            Avatar(name = stadium.name, size = 44.dp, icon = Icons.Default.Podcasts)
 
             Spacer(Modifier.width(12.dp))
 

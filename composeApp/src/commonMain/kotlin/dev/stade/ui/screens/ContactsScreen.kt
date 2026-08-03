@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import dev.stade.ui.components.Avatar
+import dev.stade.ui.components.ChatListFabMenu
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -185,7 +186,6 @@ fun ContactsScreen(
 
     var searchActive by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    var isFabExpanded by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
     var actionItem by remember { mutableStateOf<ChatListItem?>(null) }
@@ -203,34 +203,8 @@ fun ContactsScreen(
             icon = {
                 when (item) {
                     is ChatListItem.ContactItem -> Avatar(item.contact.nickname, size = 56.dp)
-                    is ChatListItem.GroupItem -> Box(
-                        Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.tertiaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Group,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                    is ChatListItem.StadiumItem -> Box(
-                        Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.tertiaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Podcasts,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
+                    is ChatListItem.GroupItem -> Avatar(item.group.name, size = 56.dp, icon = Icons.Default.Group)
+                    is ChatListItem.StadiumItem -> Avatar(item.stadium.name, size = 56.dp, icon = Icons.Default.Podcasts)
                 }
             },
 
@@ -267,23 +241,30 @@ fun ContactsScreen(
                         Text(if (itemPinned) strings.unpinChatAction else strings.pinChatAction)
                     }
 
-                    if (item is ChatListItem.StadiumItem) {
-                        FilledTonalButton(
-                            onClick = {
-                                container.stadiums.setMuted(item.stadium.id, !item.stadium.muted)
-                                actionItem = null
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(vertical = 12.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (item.stadium.muted) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(if (item.stadium.muted) strings.unmuteStadiumAction else strings.muteStadiumAction)
-                        }
+                    val itemMuted = when (item) {
+                        is ChatListItem.ContactItem -> item.contact.muted
+                        is ChatListItem.GroupItem -> item.group.muted
+                        is ChatListItem.StadiumItem -> item.stadium.muted
+                    }
+                    FilledTonalButton(
+                        onClick = {
+                            when (item) {
+                                is ChatListItem.ContactItem -> container.contacts.setMuted(item.contact.id, !itemMuted)
+                                is ChatListItem.GroupItem -> container.groups.setMuted(item.group.id, !itemMuted)
+                                is ChatListItem.StadiumItem -> container.stadiums.setMuted(item.stadium.id, !itemMuted)
+                            }
+                            actionItem = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (itemMuted) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (itemMuted) strings.unmuteChatAction else strings.muteChatAction)
                     }
 
                     if (item is ChatListItem.ContactItem) {
@@ -550,137 +531,12 @@ fun ContactsScreen(
             )
         },
         floatingActionButton = {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                AnimatedVisibility(
-                    visible = isFabExpanded,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Surface(
-                            onClick = {
-                                isFabExpanded = false
-                                onCreateGroup()
-                            },
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            shadowElevation = 6.dp
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Text(
-                                    text = strings.createGroupAction,
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                                Icon(Icons.Default.GroupAdd, contentDescription = null)
-                            }
-                        }
-                        Surface(
-                            onClick = {
-                                isFabExpanded = false
-                                onCreateStadium()
-                            },
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                            shadowElevation = 6.dp
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Text(
-                                    text = strings.createStadiumAction,
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                                Icon(Icons.Default.Podcasts, contentDescription = null)
-                            }
-                        }
-                        Surface(
-                            onClick = {
-                                isFabExpanded = false
-                                onJoinStadium()
-                            },
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                            shadowElevation = 6.dp
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Text(
-                                    text = strings.joinStadiumAction,
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                                Icon(Icons.Default.Podcasts, contentDescription = null)
-                            }
-                        }
-                        Surface(
-                            onClick = {
-                                isFabExpanded = false
-                                onAddContact()
-                            },
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            shadowElevation = 6.dp
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Text(
-                                    text = strings.addContactAction,
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                                Icon(Icons.Default.PersonAdd, contentDescription = null)
-                            }
-                        }
-                    }
-                }
-
-                val fabCornerRadius by animateDpAsState(
-                    targetValue = if (isFabExpanded) 28.dp else 16.dp,
-                    animationSpec = tween(280, easing = FastOutSlowInEasing)
-                )
-                val fabIconRotation by animateFloatAsState(
-                    targetValue = if (isFabExpanded) 45f else 0f,
-                    animationSpec = tween(280, easing = FastOutSlowInEasing)
-                )
-                val fabContainerColor by animateColorAsState(
-                    if (isFabExpanded) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primary
-                )
-                val fabContentColor by animateColorAsState(
-                    if (isFabExpanded) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
-                )
-                FloatingActionButton(
-                    onClick = { isFabExpanded = !isFabExpanded },
-                    shape = RoundedCornerShape(fabCornerRadius),
-                    containerColor = fabContainerColor,
-                    contentColor = fabContentColor
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = if (isFabExpanded) strings.cancel else null,
-                        modifier = Modifier.rotate(fabIconRotation)
-                    )
-                }
-            }
+            ChatListFabMenu(
+                onAddContact = onAddContact,
+                onCreateGroup = onCreateGroup,
+                onCreateStadium = onCreateStadium,
+                onJoinStadium = onJoinStadium
+            )
         }
     ) { padding ->
         if (contacts.isEmpty() && groups.isEmpty() && stadiums.isEmpty()) {
@@ -792,24 +648,15 @@ private fun MessageSearchRow(result: SearchResult, onClick: () -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (result.isGroup) {
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.tertiaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Group,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.size(20.dp)
-                    )
+            Avatar(
+                name = result.title,
+                size = 40.dp,
+                icon = when {
+                    result.isStadium -> Icons.Default.Podcasts
+                    result.isGroup -> Icons.Default.Group
+                    else -> null
                 }
-            } else {
-                Avatar(result.title, size = 40.dp)
-            }
+            )
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -1003,20 +850,7 @@ private fun GroupRow(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.tertiaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Group,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.size(26.dp)
-                )
-            }
+            Avatar(name = group.name, size = 52.dp, icon = Icons.Default.Group)
 
             Spacer(Modifier.width(16.dp))
 
@@ -1093,20 +927,7 @@ private fun StadiumRow(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.tertiaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Podcasts,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.size(26.dp)
-                )
-            }
+            Avatar(name = stadium.name, size = 52.dp, icon = Icons.Default.Podcasts)
 
             Spacer(Modifier.width(16.dp))
 

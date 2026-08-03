@@ -13,60 +13,56 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import javax.imageio.ImageIO
 
-actual class ImagePickerLauncher(private val doLaunch: () -> Unit) {
+actual class MediaPickerLauncher(private val doLaunch: () -> Unit) {
     actual fun launch() = doLaunch()
 }
 
 private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "bmp", "webp")
+private val VIDEO_EXTS = setOf("mp4")
 
-private fun openNativeImageDialog(title: String, multiSelect: Boolean): Array<File> {
+private fun openNativeMediaDialog(title: String): Array<File> {
     val dialog = FileDialog(null as Frame?, title, FileDialog.LOAD)
-    dialog.isMultipleMode = multiSelect
+    dialog.isMultipleMode = true
     dialog.setFilenameFilter { _, name ->
         val ext = name.substringAfterLast('.', "").lowercase()
-        ext in IMAGE_EXTS
+        ext in IMAGE_EXTS || ext in VIDEO_EXTS
     }
     dialog.isVisible = true
-    val files = dialog.files
-    return files ?: emptyArray()
+    return dialog.files ?: emptyArray()
 }
 
 @Composable
-actual fun rememberImagePickerLauncher(onImage: (ByteArray) -> Unit): ImagePickerLauncher {
+actual fun rememberMediaPickerLauncher(
+    onImages: (List<ByteArray>) -> Unit,
+    onVideo: (ByteArray) -> Unit
+): MediaPickerLauncher {
     val scope = rememberCoroutineScope()
     val title = LocalStrings.current.selectMediaTitle
     return remember(title) {
-        ImagePickerLauncher {
+        MediaPickerLauncher {
             scope.launch(Dispatchers.IO) {
-                val files = openNativeImageDialog(title, multiSelect = false)
-                val file = files.firstOrNull() ?: return@launch
-                runCatching {
-                    onImage(compressImageDesktop(file.readBytes()))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-actual fun rememberMultiImagePickerLauncher(onImages: (List<ByteArray>) -> Unit): ImagePickerLauncher {
-    val scope = rememberCoroutineScope()
-    val title = LocalStrings.current.selectMediaTitle
-    return remember(title) {
-        ImagePickerLauncher {
-            scope.launch(Dispatchers.IO) {
-                val files = openNativeImageDialog(title, multiSelect = true)
+                val files = openNativeMediaDialog(title)
                 if (files.isEmpty()) return@launch
-                val results = files.mapNotNull { f ->
-                    runCatching { compressImageDesktop(f.readBytes()) }.getOrNull()
+                val images = mutableListOf<ByteArray>()
+                var video: ByteArray? = null
+                for (file in files) {
+                    val ext = file.name.substringAfterLast('.', "").lowercase()
+                    if (ext in VIDEO_EXTS) {
+                        if (video == null) {
+                            video = runCatching { file.readBytes() }.getOrNull()
+                        }
+                    } else {
+                        runCatching { compressImageForAttach(file.readBytes()) }.getOrNull()?.let { images.add(it) }
+                    }
                 }
-                if (results.isNotEmpty()) onImages(results)
+                if (images.isNotEmpty()) onImages(images)
+                video?.let { onVideo(it) }
             }
         }
     }
 }
 
-private fun compressImageDesktop(bytes: ByteArray): ByteArray {
+private fun compressImageForAttach(bytes: ByteArray): ByteArray {
     val img: BufferedImage = ImageIO.read(bytes.inputStream()) ?: return bytes
     val maxDim = 1280
     val scaled = if (img.width > maxDim || img.height > maxDim) {
@@ -86,4 +82,3 @@ private fun compressImageDesktop(bytes: ByteArray): ByteArray {
     ImageIO.write(scaled, "jpeg", out)
     return out.toByteArray()
 }
-

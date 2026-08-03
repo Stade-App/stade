@@ -17,6 +17,7 @@ import dev.stade.AppContainer
 import dev.stade.BootContext
 import dev.stade.identity.LocalIdentity
 import dev.stade.security.SessionTimeout
+import dev.stade.ui.beginAcceptStadiumInvite
 import dev.stade.ui.screens.AboutScreen
 import dev.stade.ui.screens.AddContactScreen
 import dev.stade.ui.screens.ChatScreen
@@ -29,12 +30,14 @@ import dev.stade.ui.screens.JoinStadiumScreen
 import dev.stade.ui.screens.LockScreen
 import dev.stade.ui.screens.ManageStadiumScreen
 import dev.stade.ui.screens.OnboardingScreen
+import dev.stade.ui.screens.PinSetupMode
 import dev.stade.ui.screens.PinSetupScreen
 import dev.stade.ui.screens.SecuritySettingsScreen
 import dev.stade.ui.screens.SettingsScreen
 import dev.stade.ui.screens.StadiumScreen
 import dev.stade.ui.screens.TransportsScreen
 import dev.stade.ui.screens.VerifyContactScreen
+import dev.stade.ui.screens.WelcomeUsernameScreen
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.i18n.getLocalePreference
 import dev.stade.ui.i18n.localeToStrings
@@ -62,7 +65,7 @@ sealed interface Screen {
     data object Transports : Screen
     data object About : Screen
     data object AddContact : Screen
-    data class PinSetup(val requireCurrent: Boolean, val returnTo: Screen) : Screen
+    data class PinSetup(val requireCurrent: Boolean, val returnTo: Screen, val mode: PinSetupMode = PinSetupMode.Primary) : Screen
 }
 
 @Composable
@@ -79,6 +82,7 @@ fun StadeApp(boot: BootContext) {
             var unlocked by remember { mutableStateOf(vault.isUnlocked()) }
             var autoUnlockTried by remember { mutableStateOf(false) }
             var container by remember { mutableStateOf<AppContainer?>(null) }
+            var pendingNickname by remember { mutableStateOf<String?>(null) }
             val scope = rememberCoroutineScope()
 
             LaunchedEffect(initialized) {
@@ -90,15 +94,23 @@ fun StadeApp(boot: BootContext) {
             }
 
             when {
-                !initialized -> PinSetupScreen(
-                    vault = vault,
-                    requireCurrent = false,
-                    onDone = {
-                        initialized = true
-                        unlocked = true
-                    },
-                    onCancel = { }
-                )
+                !initialized -> {
+                    val nickname = pendingNickname
+                    if (nickname == null) {
+                        WelcomeUsernameScreen(onNext = { pendingNickname = it })
+                    } else {
+                        PinSetupScreen(
+                            vault = vault,
+                            requireCurrent = false,
+                            tip = activeStrings.onboardingPinTip,
+                            onDone = {
+                                initialized = true
+                                unlocked = true
+                            },
+                            onCancel = { pendingNickname = null }
+                        )
+                    }
+                }
                 !unlocked -> {
                     LockScreen(
                         vault = vault,
@@ -110,6 +122,16 @@ fun StadeApp(boot: BootContext) {
                         onForgotPin = {
                             initialized = vault.isInitialized()
                             autoUnlockTried = true
+                            pendingNickname = null
+                        },
+                        onDuressTriggered = {
+                            (container ?: boot.activeContainer())?.let { runCatching { it.close() } }
+                            container = null
+                            unlocked = false
+                            runCatching { vault.wipe() }
+                            initialized = vault.isInitialized()
+                            autoUnlockTried = true
+                            pendingNickname = null
                         }
                     )
                 }
@@ -117,6 +139,7 @@ fun StadeApp(boot: BootContext) {
                     val active = container ?: remember { boot.buildContainer() }.also { container = it }
                     UnlockedApp(
                         container = active,
+                        presetNickname = pendingNickname,
                         onLockRequested = {
                             scope.launch {
                                 withContext(Dispatchers.Default) { vault.flushAndKeep() }
@@ -134,6 +157,7 @@ fun StadeApp(boot: BootContext) {
                                 }
                                 initialized = vault.isInitialized()
                                 autoUnlockTried = false
+                                pendingNickname = null
                             }
                         }
                     )
@@ -147,6 +171,7 @@ fun StadeApp(boot: BootContext) {
 @Composable
 private fun UnlockedApp(
     container: AppContainer,
+    presetNickname: String?,
     onLockRequested: () -> Unit,
     onWipeRequested: () -> Unit
 ) {
@@ -285,6 +310,9 @@ private fun UnlockedApp(
                         unreadTotal = 0
                     )
                 }
+                is dev.stade.sync.SyncEngine.SyncEvent.StadiumInviteReceived -> {
+                    identity?.let { container.beginAcceptStadiumInvite(it, event.code, dev.stade.ui.i18n.I18n.current) }
+                }
                 else -> Unit
             }
         }
@@ -329,12 +357,14 @@ private fun UnlockedApp(
                 PinSetupScreen(
                     vault = container.vault,
                     requireCurrent = s.requireCurrent,
+                    mode = s.mode,
                     onDone = { screen = s.returnTo },
                     onCancel = { screen = s.returnTo }
                 )
             }
             screen == Screen.Onboarding -> OnboardingScreen(
                 container = container,
+                presetNickname = presetNickname,
                 onReady = { identity = it; screen = Screen.Contacts }
             )
             showTwoPanel -> TwoPanelLayout(
@@ -367,6 +397,9 @@ private fun UnlockedApp(
                 onBack = { screen = Screen.Settings },
                 onOpenPinSetup = { requireCurrent ->
                     screen = Screen.PinSetup(requireCurrent, Screen.Security)
+                },
+                onOpenDuressPinSetup = {
+                    screen = Screen.PinSetup(true, Screen.Security, PinSetupMode.Duress)
                 }
             )
             screen == Screen.Transports -> TransportsScreen(

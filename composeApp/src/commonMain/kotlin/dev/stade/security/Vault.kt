@@ -7,6 +7,10 @@ interface Vault {
     fun unlock(password: String): UnlockOutcome
     fun tryAutoUnlock(): Boolean
     fun changePassword(currentPassword: String, newPassword: String): Boolean
+    fun hasDuressPin(): Boolean
+    fun setDuressPin(pin: String)
+    fun isDuressPin(candidate: String): Boolean
+    fun clearDuressPin()
     fun flushAndKeep()
     fun flushAndClose()
     fun wipe()

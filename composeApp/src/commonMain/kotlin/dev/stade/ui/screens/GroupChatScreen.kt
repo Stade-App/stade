@@ -137,14 +137,14 @@ import dev.stade.message.MessageType
 import dev.stade.message.previewBody
 import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.Avatar
+import dev.stade.ui.components.ChatComposerBar
+import dev.stade.ui.components.ChatComposerReplyPreview
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.i18n.LocalStrings
-import dev.stade.ui.openVideoExternally
-import dev.stade.ui.rememberMultiImagePickerLauncher
-import dev.stade.ui.rememberVideoPickerLauncher
+import dev.stade.ui.rememberMediaPickerLauncher
 import dev.stade.ui.saveImageToGallery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -284,25 +284,26 @@ fun GroupChatScreen(
 
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
     var editingImageIndex by remember { mutableStateOf<Int?>(null) }
-
-    val imagePicker = rememberMultiImagePickerLauncher { imagesList ->
-        val accepted = imagesList.filter { it.size <= MAX_ATTACHMENT_BYTES }
-        if (accepted.size != imagesList.size) {
-            notify(strings.photoTooBig, GroupBannerKind.Error)
-        }
-        if (accepted.isNotEmpty()) {
-            pendingImages = pendingImages + accepted
-        }
-    }
-
     var pendingVideo by remember { mutableStateOf<ByteArray?>(null) }
-    val videoPicker = rememberVideoPickerLauncher { bytes ->
-        if (bytes.size <= MAX_ATTACHMENT_BYTES) {
-            pendingVideo = bytes
-        } else {
-            notify(strings.videoTooBig, GroupBannerKind.Error)
+
+    val mediaPicker = rememberMediaPickerLauncher(
+        onImages = { imagesList ->
+            val accepted = imagesList.filter { it.size <= MAX_ATTACHMENT_BYTES }
+            if (accepted.size != imagesList.size) {
+                notify(strings.photoTooBig, GroupBannerKind.Error)
+            }
+            if (accepted.isNotEmpty()) {
+                pendingImages = pendingImages + accepted
+            }
+        },
+        onVideo = { bytes ->
+            if (bytes.size <= MAX_ATTACHMENT_BYTES) {
+                pendingVideo = bytes
+            } else {
+                notify(strings.videoTooBig, GroupBannerKind.Error)
+            }
         }
-    }
+    )
 
     var pendingVoiceClip by remember { mutableStateOf<RecordedClip?>(null) }
     var isRecording by remember { mutableStateOf(false) }
@@ -567,23 +568,13 @@ fun GroupChatScreen(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = if (onOpenMembers != null && group != null) {
-                                Modifier.clickable { onOpenMembers() }
+                                Modifier
+                                    .clip(MaterialTheme.shapes.medium)
+                                    .clickable { onOpenMembers() }
+                                    .padding(vertical = 6.dp, horizontal = 8.dp)
                             } else Modifier
                         ) {
-                            Box(
-                                Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.tertiaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Default.Group,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+                            Avatar(name = group?.name ?: groupId, size = 36.dp, icon = Icons.Default.Group)
                             Spacer(Modifier.size(10.dp))
                             Column {
                                 Text(
@@ -827,13 +818,7 @@ fun GroupChatScreen(
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             toggleSelection(msg.id)
                                         },
-                                        onDoubleTap = { toggleReaction(msg.id, reactions) },
-                                        onPlayVideo = { bytes ->
-                                            scope.launch {
-                                                val ok = openVideoExternally(bytes)
-                                                if (!ok) notify(strings.videoOpenFailed, GroupBannerKind.Error)
-                                            }
-                                        }
+                                        onDoubleTap = { toggleReaction(msg.id, reactions) }
                                     )
                                 } else {
                                     GroupTextBubble(
@@ -860,7 +845,7 @@ fun GroupChatScreen(
                     }
                 }
 
-                GroupComposer(
+                ChatComposerBar(
                     draft = draft,
                     pendingImages = pendingImages,
                     pendingVideo = pendingVideo,
@@ -869,10 +854,9 @@ fun GroupChatScreen(
                     replyPreview = replyTarget?.let { target ->
                         val targetSenderName = if (target.isOwn) owner.nickname
                             else container.contacts.get(target.senderId)?.nickname ?: target.senderId.takeLast(6)
-                        GroupReplyQuoteInfo(
+                        ChatComposerReplyPreview(
                             senderLabel = targetSenderName,
-                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage),
-                            onClick = {}
+                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage)
                         )
                     },
                     onChange = { draft = it },
@@ -889,7 +873,7 @@ fun GroupChatScreen(
                         val video = pendingVideo
                         val voiceClip = pendingVoiceClip
                         val replyId = replyTarget?.id
-                        if (text.isEmpty() && images.isEmpty() && video == null && voiceClip == null) return@GroupComposer
+                        if (text.isEmpty() && images.isEmpty() && video == null && voiceClip == null) return@ChatComposerBar
                         draft = TextFieldValue("")
                         pendingImages = emptyList()
                         pendingVideo = null
@@ -915,8 +899,7 @@ fun GroupChatScreen(
                             }
                         }
                     },
-                    onPickImage = { imagePicker.launch() },
-                    onPickVideo = { videoPicker.launch() },
+                    onPickMedia = { mediaPicker.launch() },
                     onToggleRecording = { toggleRecording() }
                 )
             }
@@ -1669,8 +1652,7 @@ private fun GroupVideoBubble(
     reactions: List<dev.stade.db.MessageReaction>,
     onShortClick: () -> Unit,
     onLongClick: () -> Unit,
-    onDoubleTap: () -> Unit,
-    onPlayVideo: (ByteArray) -> Unit
+    onDoubleTap: () -> Unit
 ) {
     val strings = LocalStrings.current
     val outgoing = msg.isOwn
@@ -1687,6 +1669,7 @@ private fun GroupVideoBubble(
 
     var videoBytes by remember(msg.id) { mutableStateOf<ByteArray?>(null) }
     var decodeDone by remember(msg.id) { mutableStateOf(false) }
+    var expanded by remember(msg.id) { mutableStateOf(false) }
     LaunchedEffect(msg.id) {
         val bytes = withContext(Dispatchers.Default) { runCatching { msg.videoBytes() }.getOrNull() }
         videoBytes = bytes
@@ -1743,30 +1726,40 @@ private fun GroupVideoBubble(
                 if (quoted != null) {
                     GroupReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 4.dp))
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(enabled = currentBytes != null) { currentBytes?.let(onPlayVideo) }
-                        .padding(vertical = 2.dp)
-                ) {
-                    Box(
+                if (expanded && currentBytes != null) {
+                    dev.stade.ui.video.VideoPlayerView(
+                        bytes = currentBytes,
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(fg.copy(alpha = 0.14f)),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .heightIn(min = 160.dp, max = 220.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                    )
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable(enabled = currentBytes != null) { expanded = true }
+                            .padding(vertical = 2.dp)
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = strings.tapToPlayVideo, tint = fg)
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text(strings.videoMessage, color = fg, style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            if (currentBytes == null && decodeDone) "" else strings.tapToPlayVideo,
-                            color = sub,
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(fg.copy(alpha = 0.14f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = strings.tapToPlayVideo, tint = fg)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(strings.videoMessage, color = fg, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                if (currentBytes == null && decodeDone) "" else strings.tapToPlayVideo,
+                                color = sub,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
                     }
                 }
                 if (msg.caption.isNotEmpty()) {
@@ -1785,350 +1778,4 @@ private fun GroupVideoBubble(
         GroupReactionPill(reactions)
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun GroupComposer(
-    draft: TextFieldValue,
-    pendingImages: List<ByteArray>,
-    pendingVideo: ByteArray?,
-    pendingVoiceClip: RecordedClip?,
-    isRecording: Boolean,
-    replyPreview: GroupReplyQuoteInfo?,
-    onChange: (TextFieldValue) -> Unit,
-    onRemoveImage: (Int) -> Unit,
-    onEditImage: (Int) -> Unit,
-    onRemoveVideo: () -> Unit,
-    onRemoveVoiceClip: () -> Unit,
-    onCancelReply: () -> Unit,
-    onSend: () -> Unit,
-    onPickImage: () -> Unit,
-    onPickVideo: () -> Unit,
-    onToggleRecording: () -> Unit
-) {
-    val strings = LocalStrings.current
-    val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty() || pendingVideo != null || pendingVoiceClip != null
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-    ) {
-        AnimatedVisibility(
-            visible = replyPreview != null,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it }
-        ) {
-            if (replyPreview != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            strings.replyingToLabel(replyPreview.senderLabel),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            replyPreview.snippet,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    IconButton(onClick = onCancelReply) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = strings.cancelReply,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = pendingImages.isNotEmpty(),
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it }
-        ) {
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                itemsIndexed(pendingImages) { idx, bytes ->
-                    val bitmap = remember(bytes) {
-                        runCatching { bytes.decodeToImageBitmap() }.getOrNull()
-                    }
-                    Box(modifier = Modifier.size(72.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                .clickable { onEditImage(idx) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (bitmap != null) {
-                                androidx.compose.foundation.Image(
-                                    bitmap = bitmap,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Icon(
-                                    Icons.Default.BrokenImage,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.errorContainer)
-                                .clickable { onRemoveImage(idx) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = pendingVideo != null,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it }
-        ) {
-            val video = pendingVideo
-            if (video != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, top = 8.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Default.Videocam, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Text(
-                        strings.videoAttached,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = onRemoveVideo) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = strings.removeAttachment,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = pendingVoiceClip != null,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it }
-        ) {
-            val clip = pendingVoiceClip
-            if (clip != null) {
-                val player = rememberAudioPlayer()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, top = 8.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    IconButton(onClick = {
-                        if (player.isPlaying) player.pause() else player.play(clip.opusBytes)
-                    }) {
-                        Icon(
-                            if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Text(
-                        formatVoiceDuration(clip.durationMs),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = {
-                        player.stop()
-                        onRemoveVoiceClip()
-                    }) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = strings.removeAttachment,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            androidx.compose.foundation.text.BasicTextField(
-                value = draft,
-                onValueChange = onChange,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(54.dp)
-                    .onPreviewKeyEvent { keyEvent ->
-                        if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Enter) {
-                            if (keyEvent.isShiftPressed) {
-                                val cursor = draft.selection.end
-                                val newText = draft.text.substring(0, cursor) + "\n" + draft.text.substring(cursor)
-                                onChange(TextFieldValue(text = newText, selection = TextRange(cursor + 1)))
-                            } else {
-                                onSend()
-                            }
-                            true
-                        } else {
-                            false
-                        }
-                    },
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                maxLines = 5,
-                decorationBox = { innerTextField ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                shape = RoundedCornerShape(54.dp)
-                            )
-                            .padding(start = 18.dp, end = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            if (draft.text.isEmpty()) {
-                                Text(
-                                    text = strings.typeMessagePlaceholder,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            innerTextField()
-                        }
-                        IconButton(
-                            onClick = onPickVideo,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Videocam,
-                                contentDescription = strings.attachVideo,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        IconButton(
-                            onClick = onPickImage,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Attachment,
-                                contentDescription = strings.attachPhoto,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .rotate(270f)
-                            )
-                        }
-                    }
-                }
-            )
-
-            val voiceButtonMode = when {
-                isRecording -> GroupVoiceButtonMode.STOP
-                canSend -> GroupVoiceButtonMode.SEND
-                else -> GroupVoiceButtonMode.MIC
-            }
-            val buttonContainerColor by animateColorAsState(
-                targetValue = if (voiceButtonMode == GroupVoiceButtonMode.SEND) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                animationSpec = tween(220),
-                label = "voiceSendContainer"
-            )
-            val buttonContentColor by animateColorAsState(
-                targetValue = when (voiceButtonMode) {
-                    GroupVoiceButtonMode.SEND -> MaterialTheme.colorScheme.onPrimary
-                    GroupVoiceButtonMode.STOP -> MaterialTheme.colorScheme.error
-                    GroupVoiceButtonMode.MIC -> MaterialTheme.colorScheme.primary
-                },
-                animationSpec = tween(220),
-                label = "voiceSendContent"
-            )
-            Box(
-                modifier = Modifier
-                    .size(54.dp)
-                    .clip(CircleShape)
-                    .background(buttonContainerColor)
-                    .clickable {
-                        if (voiceButtonMode == GroupVoiceButtonMode.SEND) onSend() else onToggleRecording()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                AnimatedContent(
-                    targetState = voiceButtonMode,
-                    transitionSpec = {
-                        (scaleIn(initialScale = 0.5f) + fadeIn(tween(150))) togetherWith
-                            (scaleOut(targetScale = 0.5f) + fadeOut(tween(150)))
-                    },
-                    label = "voiceSendIcon"
-                ) { mode ->
-                    Icon(
-                        imageVector = when (mode) {
-                            GroupVoiceButtonMode.SEND -> Icons.AutoMirrored.Filled.Send
-                            GroupVoiceButtonMode.STOP -> Icons.Default.Stop
-                            GroupVoiceButtonMode.MIC -> Icons.Default.Mic
-                        },
-                        contentDescription = when (mode) {
-                            GroupVoiceButtonMode.SEND -> strings.sendButton
-                            GroupVoiceButtonMode.STOP -> strings.stopRecording
-                            GroupVoiceButtonMode.MIC -> strings.recordVoice
-                        },
-                        tint = buttonContentColor,
-                        modifier = Modifier.size(if (mode == GroupVoiceButtonMode.SEND) 24.dp else 26.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-private enum class GroupVoiceButtonMode { MIC, STOP, SEND }
 

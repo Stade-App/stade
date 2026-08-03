@@ -12,6 +12,7 @@ abstract class AppStrings {
     abstract val welcomeDescription: String
     abstract val nicknamePlaceholder: String
     abstract val createIdentity: String
+    abstract val continueAction: String
 
     abstract val unlockTitle: String
     abstract val unlockSubtitle: String
@@ -38,6 +39,11 @@ abstract class AppStrings {
     abstract val pinChangeFailed: String
     abstract val confirmAction: String
     abstract val backspaceAction: String
+    abstract val onboardingPinTip: String
+    abstract val setDuressPinTitle: String
+    abstract val confirmDuressPinTitle: String
+    abstract val setDuressPinSubtitle: String
+    abstract val duressPinMatchesRealPin: String
 
     abstract val appTitle: String
     abstract val searchContactsPlaceholder: String
@@ -71,6 +77,8 @@ abstract class AppStrings {
     abstract val connectionFailed: String
     abstract val collapseAction: String
     abstract val expandAction: String
+    abstract val viewDetailsAction: String
+    abstract val closeAction: String
     abstract val noConnectionInfo: String
     abstract val connectionChannels: String
     abstract val trying: String
@@ -259,6 +267,12 @@ abstract class AppStrings {
     abstract val screenshotBlockingOffSubtitle: String
     abstract val linkPreviewsSettingTitle: String
     abstract val linkPreviewsSettingSubtitle: String
+    abstract val transportsLockTitle: String
+    abstract val transportsLockSubtitle: String
+    abstract val duressPinTitle: String
+    abstract val duressPinSetSubtitle: String
+    abstract val duressPinNotSetSubtitle: String
+    abstract val clearDuressPinAction: String
 
     abstract val transportsTitle: String
     abstract val notRegistered: String
@@ -297,6 +311,7 @@ abstract class AppStrings {
 
     abstract val selectContactHint: String
     abstract val attachPhoto: String
+    abstract val attachMediaAction: String
     abstract val selectMediaTitle: String
     abstract val photoMessage: String
     abstract val photoSendFailed: String
@@ -327,6 +342,7 @@ abstract class AppStrings {
     abstract val videoTooBig: String
     abstract val videoAttached: String
     abstract val tapToPlayVideo: String
+    abstract val vlcNotFoundHint: String
     abstract val videoOpenFailed: String
 
     abstract val replyAction: String
@@ -370,6 +386,7 @@ abstract class AppStrings {
     abstract val copyMessage: String
     abstract val deleteMessageForMe: String
     abstract val deleteMessagesForMe: String
+    abstract val deleteMessageAction: String
     abstract fun selectedCount(count: Int): String
     abstract val messageCopied: String
     abstract val cancelSelection: String
@@ -391,6 +408,11 @@ abstract class AppStrings {
     abstract val stadiumInviteLabel: String
     abstract val stadiumInviteHint: String
     abstract val copyStadiumInviteAction: String
+    abstract val stadiumInviteDialogTitle: String
+    abstract val shareInviteAction: String
+    abstract val sendInviteToContactAction: String
+    abstract val sendAction: String
+    abstract val inviteAction: String
     abstract val stadiumRenamed: String
     abstract val deleteStadiumAction: String
     abstract val deleteStadiumConfirmTitle: String
@@ -409,6 +431,8 @@ abstract class AppStrings {
     abstract fun stadiumJoined(name: String): String
     abstract val muteStadiumAction: String
     abstract val unmuteStadiumAction: String
+    abstract val muteChatAction: String
+    abstract val unmuteChatAction: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

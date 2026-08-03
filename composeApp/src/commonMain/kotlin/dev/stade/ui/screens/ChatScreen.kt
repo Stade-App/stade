@@ -18,6 +18,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +54,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Attachment
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -145,15 +148,15 @@ import dev.stade.sync.SyncEngine
 import dev.stade.transport.DialAttempt
 import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.Avatar
+import dev.stade.ui.components.ChatComposerBar
+import dev.stade.ui.components.ChatComposerReplyPreview
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.components.maskAddress
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.i18n.LocalStrings
-import dev.stade.ui.openVideoExternally
-import dev.stade.ui.rememberMultiImagePickerLauncher
-import dev.stade.ui.rememberVideoPickerLauncher
+import dev.stade.ui.rememberMediaPickerLauncher
 import dev.stade.ui.saveImageToGallery
 import dev.stade.ui.theme.StadeColors
 import kotlinx.coroutines.Dispatchers
@@ -191,7 +194,7 @@ fun ChatScreen(
     var draft by remember { mutableStateOf(TextFieldValue("")) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
-    var diagnosticsExpanded by remember(contactId) { mutableStateOf(false) }
+    var showDiagnosticsDialog by remember(contactId) { mutableStateOf(false) }
     var showClearAddressesDialog by remember { mutableStateOf(false) }
 
     var selectedMessageIds by remember(contactId) { mutableStateOf<Set<String>>(emptySet()) }
@@ -298,25 +301,26 @@ fun ChatScreen(
 
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
     var editingImageIndex by remember { mutableStateOf<Int?>(null) }
-
-    val imagePicker = rememberMultiImagePickerLauncher { imagesList ->
-        val accepted = imagesList.filter { it.size <= MAX_ATTACHMENT_BYTES }
-        if (accepted.size != imagesList.size) {
-            showNotification(strings.photoTooBig, NotificationKind.Error)
-        }
-        if (accepted.isNotEmpty()) {
-            pendingImages = pendingImages + accepted
-        }
-    }
-
     var pendingVideo by remember { mutableStateOf<ByteArray?>(null) }
-    val videoPicker = rememberVideoPickerLauncher { bytes ->
-        if (bytes.size <= MAX_ATTACHMENT_BYTES) {
-            pendingVideo = bytes
-        } else {
-            showNotification(strings.videoTooBig, NotificationKind.Error)
+
+    val mediaPicker = rememberMediaPickerLauncher(
+        onImages = { imagesList ->
+            val accepted = imagesList.filter { it.size <= MAX_ATTACHMENT_BYTES }
+            if (accepted.size != imagesList.size) {
+                showNotification(strings.photoTooBig, NotificationKind.Error)
+            }
+            if (accepted.isNotEmpty()) {
+                pendingImages = pendingImages + accepted
+            }
+        },
+        onVideo = { bytes ->
+            if (bytes.size <= MAX_ATTACHMENT_BYTES) {
+                pendingVideo = bytes
+            } else {
+                showNotification(strings.videoTooBig, NotificationKind.Error)
+            }
         }
-    }
+    )
 
     var pendingVoiceClip by remember { mutableStateOf<RecordedClip?>(null) }
     var isRecording by remember { mutableStateOf(false) }
@@ -436,6 +440,42 @@ fun ChatScreen(
         )
     }
 
+    if (showDiagnosticsDialog && contact != null) {
+        DiagnosticsDialog(
+            addresses = contact.addresses,
+            perAddr = diagnostics[contactId].orEmpty(),
+            onApplyInvite = { code ->
+                scope.launch {
+                    try {
+                        val parsed = container.handshake.parseInvite(code.trim())
+                        when {
+                            parsed == null ->
+                                showNotification(strings.invalidInvite, NotificationKind.Error)
+                            !parsed.signingPublicKey.contentEquals(contact.publicSigningKey) ->
+                                showNotification(strings.inviteBelongsToDifferent, NotificationKind.Error)
+                            parsed.addresses.isEmpty() ->
+                                showNotification(strings.noConnectionInInvite, NotificationKind.Error)
+                            else -> {
+                                container.sync.unforget(contact.id)
+                                container.contacts.setAddresses(contact.id, parsed.addresses)
+                                container.connections.queueDial(parsed.addresses)
+                                showNotification(strings.connectionInfoUpdated, NotificationKind.Success)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        showNotification(strings.diagnosticError(e.message ?: ""), NotificationKind.Error)
+                    }
+                }
+            },
+            onRetry = {
+                container.connections.retryContact(contact.id)
+                showNotification(strings.retryingConnection, NotificationKind.Info)
+            },
+            onClear = { showClearAddressesDialog = true },
+            onDismiss = { showDiagnosticsDialog = false }
+        )
+    }
+
     PlatformBackHandler(enabled = inSelectionMode) { clearSelection() }
 
     Scaffold(
@@ -488,7 +528,10 @@ fun ChatScreen(
                     title = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable { onOpenProfile() }
+                            modifier = Modifier
+                                .clip(MaterialTheme.shapes.medium)
+                                .clickable { onOpenProfile() }
+                                .padding(vertical = 6.dp, horizontal = 8.dp)
                         ) {
                             Avatar(name = contact?.nickname ?: "?", size = 36.dp)
                             Spacer(Modifier.size(10.dp))
@@ -565,40 +608,7 @@ fun ChatScreen(
                     }
             ) {
                 if (!isOnline && contact != null) {
-                    DiagnosticsCard(
-                        addresses = contact.addresses,
-                        perAddr = diagnostics[contactId].orEmpty(),
-                        expanded = diagnosticsExpanded,
-                        onToggleExpanded = { diagnosticsExpanded = !diagnosticsExpanded },
-                        onApplyInvite = { code ->
-                            scope.launch {
-                                try {
-                                    val parsed = container.handshake.parseInvite(code.trim())
-                                    when {
-                                        parsed == null ->
-                                            showNotification(strings.invalidInvite, NotificationKind.Error)
-                                        !parsed.signingPublicKey.contentEquals(contact.publicSigningKey) ->
-                                            showNotification(strings.inviteBelongsToDifferent, NotificationKind.Error)
-                                        parsed.addresses.isEmpty() ->
-                                            showNotification(strings.noConnectionInInvite, NotificationKind.Error)
-                                        else -> {
-                                            container.sync.unforget(contact.id)
-                                            container.contacts.setAddresses(contact.id, parsed.addresses)
-                                            container.connections.queueDial(parsed.addresses)
-                                            showNotification(strings.connectionInfoUpdated, NotificationKind.Success)
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    showNotification(strings.diagnosticError(e.message ?: ""), NotificationKind.Error)
-                                }
-                            }
-                        },
-                        onRetry = {
-                            container.connections.retryContact(contact.id)
-                            showNotification(strings.retryingConnection, NotificationKind.Info)
-                        },
-                        onClear = { showClearAddressesDialog = true }
-                    )
+                    DiagnosticsCard(onOpenDetails = { showDiagnosticsDialog = true })
                 }
 
                 if (rawMessages == null) {
@@ -733,13 +743,7 @@ fun ChatScreen(
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             toggleSelection(msg.id)
                                         },
-                                        onDoubleTap = { toggleReaction(msg.id, reactions) },
-                                        onPlayVideo = { bytes ->
-                                            scope.launch {
-                                                val ok = openVideoExternally(bytes)
-                                                if (!ok) showNotification(strings.videoOpenFailed, NotificationKind.Error)
-                                            }
-                                        }
+                                        onDoubleTap = { toggleReaction(msg.id, reactions) }
                                     )
                                 } else {
                                     Bubble(
@@ -765,17 +769,16 @@ fun ChatScreen(
                     }
                 }
 
-                Composer(
+                ChatComposerBar(
                     draft = draft,
                     pendingImages = pendingImages,
                     pendingVideo = pendingVideo,
                     pendingVoiceClip = pendingVoiceClip,
                     isRecording = isRecording,
                     replyPreview = replyTarget?.let { target ->
-                        ReplyQuoteInfo(
+                        ChatComposerReplyPreview(
                             senderLabel = if (target.direction == MessageDirection.OUT) strings.youLabel else (contact?.nickname ?: ""),
-                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage),
-                            onClick = {}
+                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage)
                         )
                     },
                     onChange = { draft = it },
@@ -787,13 +790,13 @@ fun ChatScreen(
                     onRemoveVoiceClip = { pendingVoiceClip = null },
                     onCancelReply = { replyTarget = null },
                     onSend = {
-                        val c = contact ?: return@Composer
+                        val c = contact ?: return@ChatComposerBar
                         val text = draft.text.trim()
                         val images = pendingImages
                         val video = pendingVideo
                         val voiceClip = pendingVoiceClip
                         val replyId = replyTarget?.id
-                        if (text.isEmpty() && images.isEmpty() && video == null && voiceClip == null) return@Composer
+                        if (text.isEmpty() && images.isEmpty() && video == null && voiceClip == null) return@ChatComposerBar
                         draft = TextFieldValue("")
                         pendingImages = emptyList()
                         pendingVideo = null
@@ -819,8 +822,7 @@ fun ChatScreen(
                             }
                         }
                     },
-                    onPickImage = { imagePicker.launch() },
-                    onPickVideo = { videoPicker.launch() },
+                    onPickMedia = { mediaPicker.launch() },
                     onToggleRecording = { toggleRecording() }
                 )
             }
@@ -918,21 +920,12 @@ private fun TopNotificationBanner(
 
 @Composable
 private fun DiagnosticsCard(
-    addresses: List<String>,
-    perAddr: Map<String, DialAttempt>,
-    onApplyInvite: (String) -> Unit,
-    onRetry: () -> Unit,
-    onClear: () -> Unit,
-    expanded: Boolean,
-    onToggleExpanded: () -> Unit,
+    onOpenDetails: () -> Unit,
 ) {
     val strings = LocalStrings.current
-    var refreshLink by remember { mutableStateOf("") }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -942,7 +935,7 @@ private fun DiagnosticsCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onToggleExpanded() }
+                .clickable { onOpenDetails() }
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -960,20 +953,58 @@ private fun DiagnosticsCard(
                 modifier = Modifier.weight(1f)
             )
             Icon(
-                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = if (expanded) strings.collapseAction else strings.expandAction,
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = strings.viewDetailsAction,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
         }
+    }
+}
 
-        if (expanded) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+@Composable
+private fun DiagnosticsDialog(
+    addresses: List<String>,
+    perAddr: Map<String, DialAttempt>,
+    onApplyInvite: (String) -> Unit,
+    onRetry: () -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val strings = LocalStrings.current
+    var refreshLink by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp)
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.error)
+                    )
+                    Text(
+                        strings.connectionFailed,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
                 if (addresses.isEmpty()) {
                     Text(
                         strings.noConnectionInfo,
@@ -1056,357 +1087,14 @@ private fun DiagnosticsCard(
                         onClick = onClear
                     ) { Text(strings.clearAddresses) }
                 }
-            }
-        }
-    }
-}
-
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun Composer(
-    draft: TextFieldValue,
-    pendingImages: List<ByteArray>,
-    pendingVideo: ByteArray?,
-    pendingVoiceClip: RecordedClip?,
-    isRecording: Boolean,
-    replyPreview: ReplyQuoteInfo?,
-    onChange: (TextFieldValue) -> Unit,
-    onRemoveImage: (Int) -> Unit,
-    onEditImage: (Int) -> Unit,
-    onRemoveVideo: () -> Unit,
-    onRemoveVoiceClip: () -> Unit,
-    onCancelReply: () -> Unit,
-    onSend: () -> Unit,
-    onPickImage: () -> Unit,
-    onPickVideo: () -> Unit,
-    onToggleRecording: () -> Unit
-) {
-    val strings = LocalStrings.current
-    val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty() || pendingVideo != null || pendingVoiceClip != null
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-    ) {
-        AnimatedVisibility(
-            visible = replyPreview != null,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it }
-        ) {
-            if (replyPreview != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            strings.replyingToLabel(replyPreview.senderLabel),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            replyPreview.snippet,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    IconButton(onClick = onCancelReply) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = strings.cancelReply,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = pendingImages.isNotEmpty(),
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it }
-        ) {
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 12.dp, end = 12.dp, top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                itemsIndexed(pendingImages) { idx, bytes ->
-                    val bitmap = remember(bytes) {
-                        runCatching { bytes.decodeToImageBitmap() }.getOrNull()
-                    }
-                    Box(modifier = Modifier.size(72.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                .clickable { onEditImage(idx) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (bitmap != null) {
-                                androidx.compose.foundation.Image(
-                                    bitmap = bitmap,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Icon(
-                                    Icons.Default.BrokenImage,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.errorContainer)
-                                .clickable { onRemoveImage(idx) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = pendingVideo != null,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it }
-        ) {
-            val video = pendingVideo
-            if (video != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, top = 8.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Default.Videocam, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Text(
-                        strings.videoAttached,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = onRemoveVideo) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = strings.removeAttachment,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = pendingVoiceClip != null,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it }
-        ) {
-            val clip = pendingVoiceClip
-            if (clip != null) {
-                val player = rememberAudioPlayer()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, top = 8.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    IconButton(onClick = {
-                        if (player.isPlaying) player.pause() else player.play(clip.opusBytes)
-                    }) {
-                        Icon(
-                            if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Text(
-                        formatVoiceDuration(clip.durationMs),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = {
-                        player.stop()
-                        onRemoveVoiceClip()
-                    }) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = strings.removeAttachment,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            androidx.compose.foundation.text.BasicTextField(
-                value = draft,
-                onValueChange = onChange,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(54.dp)
-                    .onPreviewKeyEvent { keyEvent ->
-                        if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Enter) {
-                            if (keyEvent.isShiftPressed) {
-                                val cursor = draft.selection.end
-                                val newText = draft.text.substring(0, cursor) + "\n" + draft.text.substring(cursor)
-                                onChange(TextFieldValue(text = newText, selection = TextRange(cursor + 1)))
-                            } else {
-                                onSend()
-                            }
-                            true
-                        } else {
-                            false
-                        }
-                    },
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                maxLines = 5,
-                decorationBox = { innerTextField ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                shape = RoundedCornerShape(54.dp)
-                            )
-                            .padding(start = 18.dp, end = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(modifier = Modifier.weight(1f)) {
-                            if (draft.text.isEmpty()) {
-                                Text(
-                                    text = strings.typeMessagePlaceholder,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            innerTextField()
-                        }
-                        IconButton(
-                            onClick = onPickVideo,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Videocam,
-                                contentDescription = strings.attachVideo,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        IconButton(
-                            onClick = onPickImage,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Attachment,
-                                contentDescription = strings.attachPhoto,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .rotate(270f)
-                            )
-                        }
-                    }
-                }
-            )
-
-            val voiceButtonMode = when {
-                isRecording -> VoiceButtonMode.STOP
-                canSend -> VoiceButtonMode.SEND
-                else -> VoiceButtonMode.MIC
-            }
-            val buttonContainerColor by animateColorAsState(
-                targetValue = if (voiceButtonMode == VoiceButtonMode.SEND) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                animationSpec = tween(220),
-                label = "voiceSendContainer"
-            )
-            val buttonContentColor by animateColorAsState(
-                targetValue = when (voiceButtonMode) {
-                    VoiceButtonMode.SEND -> MaterialTheme.colorScheme.onPrimary
-                    VoiceButtonMode.STOP -> MaterialTheme.colorScheme.error
-                    VoiceButtonMode.MIC -> MaterialTheme.colorScheme.primary
-                },
-                animationSpec = tween(220),
-                label = "voiceSendContent"
-            )
-            Box(
-                modifier = Modifier
-                    .size(54.dp)
-                    .clip(CircleShape)
-                    .background(buttonContainerColor)
-                    .clickable {
-                        if (voiceButtonMode == VoiceButtonMode.SEND) onSend() else onToggleRecording()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                AnimatedContent(
-                    targetState = voiceButtonMode,
-                    transitionSpec = {
-                        (scaleIn(initialScale = 0.5f) + fadeIn(tween(150))) togetherWith
-                            (scaleOut(targetScale = 0.5f) + fadeOut(tween(150)))
-                    },
-                    label = "voiceSendIcon"
-                ) { mode ->
-                    Icon(
-                        imageVector = when (mode) {
-                            VoiceButtonMode.SEND -> Icons.AutoMirrored.Filled.Send
-                            VoiceButtonMode.STOP -> Icons.Default.Stop
-                            VoiceButtonMode.MIC -> Icons.Default.Mic
-                        },
-                        contentDescription = when (mode) {
-                            VoiceButtonMode.SEND -> strings.sendButton
-                            VoiceButtonMode.STOP -> strings.stopRecording
-                            VoiceButtonMode.MIC -> strings.recordVoice
-                        },
-                        tint = buttonContentColor,
-                        modifier = Modifier.size(if (mode == VoiceButtonMode.SEND) 24.dp else 26.dp)
-                    )
+                Spacer(Modifier.height(4.dp))
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
+                    Text(strings.closeAction)
                 }
             }
         }
     }
 }
-
-private enum class VoiceButtonMode { MIC, STOP, SEND }
 
 private data class ReplyQuoteInfo(
     val senderLabel: String,
@@ -2075,8 +1763,7 @@ private fun VideoBubble(
     reactions: List<dev.stade.db.MessageReaction>,
     onShortClick: () -> Unit,
     onLongClick: () -> Unit,
-    onDoubleTap: () -> Unit,
-    onPlayVideo: (ByteArray) -> Unit
+    onDoubleTap: () -> Unit
 ) {
     val strings = LocalStrings.current
     val outgoing = msg.direction == MessageDirection.OUT
@@ -2093,6 +1780,7 @@ private fun VideoBubble(
 
     var videoBytes by remember(msg.id) { mutableStateOf<ByteArray?>(null) }
     var decodeDone by remember(msg.id) { mutableStateOf(false) }
+    var expanded by remember(msg.id) { mutableStateOf(false) }
     LaunchedEffect(msg.id) {
         val bytes = withContext(Dispatchers.Default) { runCatching { msg.videoBytes() }.getOrNull() }
         videoBytes = bytes
@@ -2142,30 +1830,40 @@ private fun VideoBubble(
                 if (quoted != null) {
                     ReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 4.dp))
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(enabled = currentBytes != null) { currentBytes?.let(onPlayVideo) }
-                        .padding(vertical = 2.dp)
-                ) {
-                    Box(
+                if (expanded && currentBytes != null) {
+                    dev.stade.ui.video.VideoPlayerView(
+                        bytes = currentBytes,
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(fg.copy(alpha = 0.14f)),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .heightIn(min = 160.dp, max = 220.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                    )
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable(enabled = currentBytes != null) { expanded = true }
+                            .padding(vertical = 2.dp)
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = strings.tapToPlayVideo, tint = fg)
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text(strings.videoMessage, color = fg, style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            if (currentBytes == null && decodeDone) "" else strings.tapToPlayVideo,
-                            color = sub,
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(fg.copy(alpha = 0.14f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = strings.tapToPlayVideo, tint = fg)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(strings.videoMessage, color = fg, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                if (currentBytes == null && decodeDone) "" else strings.tapToPlayVideo,
+                                color = sub,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
                     }
                 }
                 if (msg.caption.isNotEmpty()) {

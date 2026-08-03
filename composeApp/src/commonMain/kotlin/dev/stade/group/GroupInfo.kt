@@ -15,7 +15,8 @@ data class GroupInfo(
     val inviteToken: String,
     val createdAt: Long,
     val memberIds: List<String> = emptyList(),
-    val creatorStadeId: String = ""
+    val creatorStadeId: String = "",
+    val muted: Boolean = false
 )
 
 data class GroupMessage(

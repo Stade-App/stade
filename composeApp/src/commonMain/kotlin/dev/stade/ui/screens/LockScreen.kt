@@ -85,7 +85,8 @@ fun LockScreen(
     vault: Vault,
     onUnlocked: () -> Unit,
     onForgotPin: () -> Unit = {},
-    onPrepareWipe: (suspend () -> Unit)? = null
+    onPrepareWipe: (suspend () -> Unit)? = null,
+    onDuressTriggered: (suspend () -> Unit)? = null
 ) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -120,6 +121,12 @@ fun LockScreen(
         val currentPin = pin
         isVerifying = true
         scope.launch {
+            val isDuress = withContext(Dispatchers.Default) { vault.isDuressPin(currentPin) }
+            if (isDuress && onDuressTriggered != null) {
+                withContext(Dispatchers.Default) { onDuressTriggered() }
+                isVerifying = false
+                return@launch
+            }
             val outcome = withContext(Dispatchers.Default) { vault.unlock(currentPin) }
             isVerifying = false
             when (outcome) {
@@ -320,10 +327,14 @@ fun LockScreen(
     }
 }
 
+enum class PinSetupMode { Primary, Duress }
+
 @Composable
 fun PinSetupScreen(
     vault: Vault,
     requireCurrent: Boolean = false,
+    mode: PinSetupMode = PinSetupMode.Primary,
+    tip: String? = null,
     onDone: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -376,13 +387,21 @@ fun PinSetupScreen(
 
     LaunchedEffect(confirmPin, phase) {
         if (phase == Phase.Confirm && confirmPin.length == newPin.length) {
-            if (confirmPin == newPin) {
+            if (mode == PinSetupMode.Duress && confirmPin == savedCurrent) {
+                error = strings.duressPinMatchesRealPin
+                launch { shakeOffset.shake() }
+                delay(800)
+                confirmPin = ""
+                error = null
+            } else if (confirmPin == newPin) {
                 isVerifying = true
                 val ok = withContext(Dispatchers.Default) {
-                    if (requireCurrent) {
-                        vault.changePassword(savedCurrent, newPin)
-                    } else {
-                        runCatching { vault.setup(newPin) }.isSuccess
+                    when {
+                        mode == PinSetupMode.Duress -> {
+                            runCatching { vault.setDuressPin(newPin) }.isSuccess
+                        }
+                        requireCurrent -> vault.changePassword(savedCurrent, newPin)
+                        else -> runCatching { vault.setup(newPin) }.isSuccess
                     }
                 }
                 isVerifying = false
@@ -405,15 +424,18 @@ fun PinSetupScreen(
         }
     }
 
-    val heading = when (phase) {
-        Phase.Current -> strings.enterCurrentPinTitle
-        Phase.New -> strings.setNewPinTitle
-        Phase.Confirm -> strings.confirmPinTitle
+    val heading = when {
+        mode == PinSetupMode.Duress && phase == Phase.New -> strings.setDuressPinTitle
+        mode == PinSetupMode.Duress && phase == Phase.Confirm -> strings.confirmDuressPinTitle
+        phase == Phase.Current -> strings.enterCurrentPinTitle
+        phase == Phase.New -> strings.setNewPinTitle
+        else -> strings.confirmPinTitle
     }
-    val sub = when (phase) {
-        Phase.Current -> strings.enterCurrentPinSubtitle
-        Phase.New -> strings.setPinSubtitle(PIN_MIN, PIN_MAX)
-        Phase.Confirm -> strings.confirmPinSubtitle
+    val sub = when {
+        mode == PinSetupMode.Duress && phase == Phase.New -> strings.setDuressPinSubtitle
+        phase == Phase.Current -> strings.enterCurrentPinSubtitle
+        phase == Phase.New -> strings.setPinSubtitle(PIN_MIN, PIN_MAX)
+        else -> strings.confirmPinSubtitle
     }
 
     Scaffold { padding ->
@@ -488,6 +510,16 @@ fun PinSetupScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.widthIn(max = 360.dp)
             )
+            if (tip != null && phase == Phase.New) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    tip,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.widthIn(max = 320.dp)
+                )
+            }
             Spacer(Modifier.height(24.dp))
             Box(modifier = Modifier.height(24.dp), contentAlignment = Alignment.Center) {
                 if (isVerifying) {

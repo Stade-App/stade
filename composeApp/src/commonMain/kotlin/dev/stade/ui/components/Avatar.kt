@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -14,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -36,7 +38,8 @@ fun Avatar(
     name: String,
     modifier: Modifier = Modifier,
     size: Dp = 40.dp,
-    shape: Shape = CircleShape
+    shape: Shape = CircleShape,
+    icon: ImageVector? = null
 ) {
     val seed = name.fold(0) { acc, c -> (acc * 31 + c.code) and 0x7fffffff }
     val (a, b) = palette[seed % palette.size]
@@ -50,16 +53,25 @@ fun Avatar(
             .background(Brush.linearGradient(listOf(a, b))),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = initial,
-            color = Color.White,
-            textAlign = TextAlign.Center,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.offset(y = (0).dp),
-            style = MaterialTheme.typography.titleSmall.copy(
-                fontSize = fontSize,
-                lineHeight = fontSize
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(size * 0.55f)
             )
-        )
+        } else {
+            Text(
+                text = initial,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.offset(y = (0).dp),
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontSize = fontSize,
+                    lineHeight = fontSize
+                )
+            )
+        }
     }
 }

@@ -14,6 +14,7 @@ object TurkishStrings : AppStrings() {
         "Başlamak için bir takma ad seç — kalıcı bir Stade ID atanacak."
     override val nicknamePlaceholder = "Takma ad"
     override val createIdentity = "Kimlik oluştur"
+    override val continueAction = "Devam et"
 
     override val unlockTitle = "Kilidi aç"
     override val unlockSubtitle = "Devam etmek için şifreni gir."
@@ -45,6 +46,11 @@ object TurkishStrings : AppStrings() {
     override val pinChangeFailed = "Şifre değiştirilemedi"
     override val confirmAction = "Onayla"
     override val backspaceAction = "Sil"
+    override val onboardingPinTip = "Tehlike PIN'i ve diğer gizlilik araçlarını daha sonra Ayarlar → Güvenlik'ten kurabilirsiniz"
+    override val setDuressPinTitle = "Tehlike PIN'i belirle"
+    override val confirmDuressPinTitle = "Tehlike PIN'ini onayla"
+    override val setDuressPinSubtitle = "Gerçek PIN'iniz yerine bu PIN'i girmek, bu cihazı anında ve kalıcı olarak siler"
+    override val duressPinMatchesRealPin = "Tehlike PIN'i gerçek PIN'inizle aynı olamaz"
 
     override val appTitle = "Stade"
     override val searchContactsPlaceholder = "Kişi ara…"
@@ -82,6 +88,8 @@ object TurkishStrings : AppStrings() {
     override val connectionFailed = "Bağlantı kurulamadı"
     override val collapseAction = "Daralt"
     override val expandAction = "Genişlet"
+    override val viewDetailsAction = "Ayrıntıları gör"
+    override val closeAction = "Kapat"
     override val noConnectionInfo =
         "Bu kişinin kayıtlı bağlantı bilgisi yok. Karşı taraftan yeni bir davet kodu iste ve aşağıya yapıştır."
     override val connectionChannels = "Bağlantı kanalları"
@@ -306,6 +314,12 @@ object TurkishStrings : AppStrings() {
     override val screenshotBlockingOffSubtitle = "Uygulama içeriği son uygulamalar'da görünür"
     override val linkPreviewsSettingTitle = "Bağlantı önizlemeleri"
     override val linkPreviewsSettingSubtitle = "Aldığınız bağlantılar için başlık ve açıklama getirir, her zaman Tor üzerinden"
+    override val transportsLockTitle = "Taşıma katmanlarını kilitle"
+    override val transportsLockSubtitle = "Taşıma katmanları sayfasını açmak için PIN'inizi isteyin"
+    override val duressPinTitle = "Tehlike PIN'i"
+    override val duressPinSetSubtitle = "Ayarlandı — PIN'iniz yerine girilmesi bu cihazı siler"
+    override val duressPinNotSetSubtitle = "Ayarlanmadı"
+    override val clearDuressPinAction = "Tehlike PIN'ini kaldır"
 
     override val autoLockNeverInfoTitle = "«Asla» Seçeneği Hakkında"
     override val autoLockNeverInfoBody =
@@ -357,6 +371,7 @@ object TurkishStrings : AppStrings() {
     override val selectContactHint = "Yeni bir sohbete başlamak için sol panelden bir kişi seç."
 
     override val attachPhoto = "Fotoğraf ekle"
+    override val attachMediaAction = "Fotoğraf veya video ekle"
     override val selectMediaTitle = "Medya Seç"
     override val photoMessage = "📷 Fotoğraf"
     override val photoSendFailed = "Fotoğraf yüklenemedi"
@@ -387,6 +402,7 @@ object TurkishStrings : AppStrings() {
     override val videoTooBig = "Video çok büyük (maks. 1.8 MB) — bu haliyle gönderimi zaman alır, kısa tutun"
     override val videoAttached = "Video eklendi"
     override val tapToPlayVideo = "Oynatmak için dokun"
+    override val vlcNotFoundHint = "Uygulama içinde oynatmak için VLC kurun"
     override val videoOpenFailed = "Bu dosya için video oynatıcı açılamadı"
 
     override val replyAction = "Yanıtla"
@@ -430,6 +446,7 @@ object TurkishStrings : AppStrings() {
     override val copyMessage = "Mesajı kopyala"
     override val deleteMessageForMe = "Kendinden sil"
     override val deleteMessagesForMe = "Seçili mesajları sil"
+    override val deleteMessageAction = "Mesajı sil"
     override fun selectedCount(count: Int) = "$count seçili"
     override val messageCopied = "Mesaj kopyalandı"
     override val cancelSelection = "Seçimi iptal et"
@@ -451,6 +468,11 @@ object TurkishStrings : AppStrings() {
     override val stadiumInviteLabel = "Davet bağlantısı"
     override val stadiumInviteHint = "Bu bağlantıya sahip olan herkes Stadium'unuza katılabilir. Herkese açık paylaşabilirsiniz — kimlerin katıldığını asla göstermez."
     override val copyStadiumInviteAction = "Davet bağlantısını kopyala"
+    override val stadiumInviteDialogTitle = "Stadium'a davet et"
+    override val shareInviteAction = "Uygulamalarla paylaş"
+    override val sendInviteToContactAction = "Bir kişiye gönder"
+    override val sendAction = "Gönder"
+    override val inviteAction = "Davet et"
     override val stadiumRenamed = "Stadium yeniden adlandırıldı"
     override val deleteStadiumAction = "Stadium'u Sil"
     override val deleteStadiumConfirmTitle = "Bu Stadium silinsin mi?"
@@ -469,5 +491,7 @@ object TurkishStrings : AppStrings() {
     override fun stadiumJoined(name: String) = "✓ \"$name\" adlı Stadium'a katıldınız"
     override val muteStadiumAction = "Stadium'u Sessize Al"
     override val unmuteStadiumAction = "Stadium Sesini Aç"
+    override val muteChatAction = "Sessize Al"
+    override val unmuteChatAction = "Sesi Aç"
 }
 

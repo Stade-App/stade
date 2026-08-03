@@ -49,6 +49,18 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
+    val lockEnabled = remember { container.secrets.isTransportsLockEnabled() }
+    var pinVerified by remember { mutableStateOf(!lockEnabled) }
+
+    if (!pinVerified) {
+        SecurityPinGate(
+            container = container,
+            onVerified = { pinVerified = true },
+            onBack = onBack
+        )
+        return
+    }
+
     val strings = LocalStrings.current
     var configs by remember { mutableStateOf(container.transportSettings.all()) }
     val scope = rememberCoroutineScope()

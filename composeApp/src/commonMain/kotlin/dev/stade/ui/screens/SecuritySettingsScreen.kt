@@ -24,11 +24,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Grid3x3
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -84,7 +86,8 @@ import kotlinx.coroutines.withContext
 fun SecuritySettingsScreen(
     container: AppContainer,
     onBack: () -> Unit,
-    onOpenPinSetup: (requireCurrent: Boolean) -> Unit
+    onOpenPinSetup: (requireCurrent: Boolean) -> Unit,
+    onOpenDuressPinSetup: () -> Unit
 ) {
     val lockEnabled = remember { container.secrets.isLockEnabled() }
     var pinVerified by remember { mutableStateOf(!lockEnabled) }
@@ -101,7 +104,8 @@ fun SecuritySettingsScreen(
     SecuritySettingsContent(
         container = container,
         onBack = onBack,
-        onOpenPinSetup = onOpenPinSetup
+        onOpenPinSetup = onOpenPinSetup,
+        onOpenDuressPinSetup = onOpenDuressPinSetup
     )
 }
 
@@ -110,7 +114,8 @@ fun SecuritySettingsScreen(
 private fun SecuritySettingsContent(
     container: AppContainer,
     onBack: () -> Unit,
-    onOpenPinSetup: (requireCurrent: Boolean) -> Unit
+    onOpenPinSetup: (requireCurrent: Boolean) -> Unit,
+    onOpenDuressPinSetup: () -> Unit
 ) {
     val strings = LocalStrings.current
     var refreshTick by remember { mutableStateOf(0) }
@@ -185,13 +190,11 @@ private fun SecuritySettingsContent(
                 }
 
                 item {
+                    val duressSet = remember(refreshTick) { container.vault.hasDuressPin() }
+                    val transportsLockEnabled = remember(refreshTick) { container.secrets.isTransportsLockEnabled() }
+                    val privacyRowCount = (if (isScreenPrivacySupported) 4 else 3)
                     SecuritySectionLabel(strings.privacySection)
                     SecurityGroup {
-                        val linkPreviewsShape = if (isScreenPrivacySupported) {
-                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
-                        } else {
-                            MaterialTheme.shapes.large
-                        }
                         SecuritySwitchRow(
                             icon = Icons.Default.Link,
                             tint = MaterialTheme.colorScheme.primary,
@@ -202,13 +205,9 @@ private fun SecuritySettingsContent(
                                 dev.stade.link.setLinkPreviewsEnabled(container.db, it)
                                 refreshTick++
                             },
-                            modifier = Modifier
-                                .then(if (isScreenPrivacySupported) Modifier.padding(bottom = 2.dp) else Modifier)
-                                .background(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = linkPreviewsShape)
-                                .clip(linkPreviewsShape)
+                            modifier = privacyGroupRowModifier(0, privacyRowCount)
                         )
                         if (isScreenPrivacySupported) {
-                            val screenshotShape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
                             SecuritySwitchRow(
                                 icon = Icons.Default.VisibilityOff,
                                 tint = MaterialTheme.colorScheme.primary,
@@ -219,11 +218,43 @@ private fun SecuritySettingsContent(
                                     container.secrets.setScreenshotBlockingEnabled(it)
                                     refreshTick++
                                 },
-                                modifier = Modifier
-                                    .background(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = screenshotShape)
-                                    .clip(screenshotShape)
+                                modifier = privacyGroupRowModifier(1, privacyRowCount)
                             )
                         }
+                        SecuritySwitchRow(
+                            icon = Icons.Default.Lock,
+                            tint = MaterialTheme.colorScheme.primary,
+                            title = strings.transportsLockTitle,
+                            subtitle = strings.transportsLockSubtitle,
+                            checked = transportsLockEnabled,
+                            onCheckedChange = {
+                                container.secrets.setTransportsLockEnabled(it)
+                                refreshTick++
+                            },
+                            modifier = privacyGroupRowModifier(privacyRowCount - 2, privacyRowCount)
+                        )
+                        SecurityNavRow(
+                            icon = Icons.Default.ReportProblem,
+                            tint = MaterialTheme.colorScheme.error,
+                            title = strings.duressPinTitle,
+                            subtitle = if (duressSet) strings.duressPinSetSubtitle else strings.duressPinNotSetSubtitle,
+                            onClick = onOpenDuressPinSetup,
+                            modifier = privacyGroupRowModifier(privacyRowCount - 1, privacyRowCount),
+                            trailingContent = if (duressSet) {
+                                {
+                                    IconButton(onClick = {
+                                        container.vault.clearDuressPin()
+                                        refreshTick++
+                                    }) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = strings.clearDuressPinAction,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            } else null
+                        )
                     }
                 }
 
@@ -415,6 +446,20 @@ private fun SecuritySwitchRow(
 
 
 @Composable
+private fun privacyGroupRowModifier(index: Int, count: Int): Modifier {
+    val shape = when {
+        count <= 1 -> MaterialTheme.shapes.large
+        index == 0 -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+        index == count - 1 -> RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+        else -> RoundedCornerShape(4.dp)
+    }
+    return Modifier
+        .then(if (index < count - 1) Modifier.padding(bottom = 2.dp) else Modifier)
+        .background(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = shape)
+        .clip(shape)
+}
+
+@Composable
 private fun SecurityIconBox(icon: ImageVector, tint: Color) {
     Box(
         modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.12f)),
@@ -427,7 +472,7 @@ private fun SecurityIconBox(icon: ImageVector, tint: Color) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SecurityPinGate(
+fun SecurityPinGate(
     container: AppContainer,
     onVerified: () -> Unit,
     onBack: () -> Unit

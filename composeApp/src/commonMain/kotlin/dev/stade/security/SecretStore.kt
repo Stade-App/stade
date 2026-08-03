@@ -3,6 +3,8 @@ package dev.stade.security
 import dev.stade.crypto.CryptoApi
 import dev.stade.db.StadeDb
 
+private const val TRANSPORTS_LOCK_KV_KEY = "security.transportsLockEnabled"
+
 class SecretStore(
     private val db: StadeDb,
     private val crypto: CryptoApi,
@@ -10,6 +12,14 @@ class SecretStore(
     private val onScreenshotSettingChanged: () -> Unit = {}
 ) {
     fun isLockEnabled(): Boolean = vault.isInitialized()
+
+    fun isTransportsLockEnabled(): Boolean =
+        runCatching { db.stadeDbQueries.getKv(TRANSPORTS_LOCK_KV_KEY).executeAsOneOrNull() }
+            .getOrNull()?.decodeToString() == "1"
+
+    fun setTransportsLockEnabled(enabled: Boolean) {
+        db.stadeDbQueries.putKv(TRANSPORTS_LOCK_KV_KEY, (if (enabled) "1" else "0").encodeToByteArray())
+    }
 
     fun verifyPassphrase(passphrase: String): Boolean {
         return when (vault.unlock(passphrase)) {

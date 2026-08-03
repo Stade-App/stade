@@ -9,6 +9,7 @@ enum class AppLocale(val code: String) {
 
 expect fun getLocalePreference(): State<AppLocale>
 expect fun setLocalePreference(locale: AppLocale)
+expect fun getSystemLocale(): AppLocale
 
 fun localeToStrings(locale: AppLocale): AppStrings = when (locale) {
     AppLocale.English -> EnglishStrings

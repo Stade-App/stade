@@ -69,6 +69,8 @@ kotlin {
                 implementation(libs.androidx.core.ktx)
                 implementation(libs.kotlinx.coroutines.android)
                 implementation(libs.sqldelight.android.driver)
+                implementation("androidx.media3:media3-exoplayer:1.4.1")
+                implementation("androidx.media3:media3-ui:1.4.1")
             }
         }
         val desktopMain by getting {
@@ -79,6 +81,7 @@ kotlin {
                 runtimeOnly(libs.slf4j.nop)
                 implementation("net.java.dev.jna:jna:5.14.0")
                 implementation("net.java.dev.jna:jna-platform:5.14.0")
+                implementation("uk.co.caprica:vlcj:4.8.2")
             }
             resources.srcDir(layout.buildDirectory.dir("torBinaries"))
         }
@@ -93,8 +96,8 @@ android {
         applicationId = "dev.stade"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.1.6"
+        versionCode = 8
+        versionName = "0.1.7"
     }
 
     val localProps = Properties().also { props ->
@@ -167,7 +170,7 @@ compose.desktop {
                 "java.desktop"
             )
             packageName = "Stade"
-            packageVersion = "0.1.6"
+            packageVersion = "0.1.7"
             windows {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.ico"))
                 menuGroup = "Stade"
@@ -188,7 +191,7 @@ compose.desktop {
             macOS {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.icns"))
                 bundleID = "dev.stade.app"
-                packageVersion = "1.0.6"
+                packageVersion = "1.0.7"
             }
         }
     }

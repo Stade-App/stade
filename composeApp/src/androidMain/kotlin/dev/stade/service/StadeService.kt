@@ -132,12 +132,13 @@ class StadeService : Service() {
                         when (event) {
                             is SyncEngine.SyncEvent.MessageReceived -> {
                                 if (!getNotificationsEnabled().value) return@collect
+                                val contact = container.contacts.get(event.contactId)
+                                if (contact?.muted == true) return@collect
                                 if (container.isAppInForeground.value && container.activeContactId == event.contactId) return@collect
                                 if (getNotificationPrivacyEnabled().value) {
                                     val total = runCatching { container.messages.totalUnread() }.getOrDefault(0L).toInt()
                                     if (total > 0) showPrivacyNotification(total)
                                 } else {
-                                    val contact = container.contacts.get(event.contactId)
                                     val senderName = contact?.nickname ?: dev.stade.ui.i18n.I18n.current.unknownNickname
                                     val preview = container.messages.lastMessage(event.contactId)?.body
                                         ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage, dev.stade.ui.i18n.I18n.current.voiceMessage, dev.stade.ui.i18n.I18n.current.videoMessage) }
@@ -148,6 +149,7 @@ class StadeService : Service() {
                             is SyncEngine.SyncEvent.GroupMessageReceived -> {
                                 if (!getNotificationsEnabled().value) return@collect
                                 val group = container.groups.getGroup(event.groupId) ?: return@collect
+                                if (group.muted) return@collect
                                 if (container.isAppInForeground.value && container.activeContactId == event.groupId) return@collect
                                 val preview = container.groups.lastMessage(event.groupId)?.body
                                     ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage, dev.stade.ui.i18n.I18n.current.voiceMessage, dev.stade.ui.i18n.I18n.current.videoMessage) }

@@ -23,6 +23,8 @@ import dev.stade.message.MessageManager
 import dev.stade.message.REACTION_BODY_PREFIX
 import dev.stade.message.parseReactionWrapper
 import dev.stade.stadium.STD_DELETE_PREFIX
+import dev.stade.stadium.STD_INV_PREFIX
+import dev.stade.stadium.STD_MSG_DELETE_PREFIX
 import dev.stade.stadium.STD_JOIN_PREFIX
 import dev.stade.stadium.STD_LEAVE_PREFIX
 import dev.stade.stadium.STD_MSG_PREFIX
@@ -89,6 +91,8 @@ class SyncEngine(
         data class StadiumMessageReceived(val stadiumId: String) : SyncEvent
         data class StadiumContactReleased(val contactId: String, val forget: Boolean) : SyncEvent
         data class StadiumDeleted(val stadiumId: String) : SyncEvent
+        data class StadiumMessageDeleted(val stadiumId: String, val messageId: String) : SyncEvent
+        data class StadiumInviteReceived(val code: String) : SyncEvent
     }
 
     suspend fun queueOutgoing(owner: LocalIdentity, contact: Contact, messageId: String, body: String, timestamp: Long) {
@@ -659,6 +663,21 @@ class SyncEngine(
                                 ) {
                                     _events.tryEmit(SyncEvent.StadiumContactReleased(contact.id, forget = false))
                                 }
+                            }
+                        }
+                        stadiumManager != null && bodyStr.startsWith(STD_INV_PREFIX) -> {
+                            if ((contacts.get(contact.id)?.kind ?: 0) == 0) {
+                                _events.tryEmit(SyncEvent.StadiumInviteReceived(bodyStr.removePrefix(STD_INV_PREFIX)))
+                            }
+                        }
+                        stadiumManager != null && bodyStr.startsWith(STD_MSG_DELETE_PREFIX) -> {
+                            val stripped = bodyStr.removePrefix(STD_MSG_DELETE_PREFIX)
+                            val colonIdx = stripped.indexOf(':')
+                            if (colonIdx >= 0) {
+                                val stadiumId = stripped.substring(0, colonIdx)
+                                val deletedMessageId = stripped.substring(colonIdx + 1)
+                                val ok = stadiumManager.handleMessageDeletedByOwner(contact.id, stadiumId, deletedMessageId)
+                                if (ok) _events.tryEmit(SyncEvent.StadiumMessageDeleted(stadiumId, deletedMessageId))
                             }
                         }
                         stadiumManager != null && bodyStr.startsWith(STD_MSG_PREFIX) -> {

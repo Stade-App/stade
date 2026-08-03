@@ -35,7 +35,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
-fun OnboardingScreen(container: AppContainer, onReady: (LocalIdentity) -> Unit) {
+fun OnboardingScreen(container: AppContainer, presetNickname: String? = null, onReady: (LocalIdentity) -> Unit) {
     val scope = rememberCoroutineScope()
     var nickname by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
@@ -43,7 +43,11 @@ fun OnboardingScreen(container: AppContainer, onReady: (LocalIdentity) -> Unit) 
 
     LaunchedEffect(Unit) {
         val list = container.identities.observeIdentities().first()
-        if (list.isNotEmpty()) onReady(list.first()) else loading = false
+        when {
+            list.isNotEmpty() -> onReady(list.first())
+            presetNickname != null -> onReady(container.identities.create(presetNickname.trim()))
+            else -> loading = false
+        }
     }
 
     Scaffold { padding ->

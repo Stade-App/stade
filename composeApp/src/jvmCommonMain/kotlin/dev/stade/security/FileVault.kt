@@ -38,10 +38,15 @@ class FileVault(private val rootDir: File) : Vault {
         var lockoutUntilMillis: Long,
         var scrambleKeypad: Boolean,
         var sessionTimeoutSeconds: Int,
-        var screenshotBlocking: Boolean = true
+        var screenshotBlocking: Boolean = true,
+        var hasDuress: Boolean = false,
+        var duressSalt: ByteArray = ByteArray(SALT_LEN),
+        var duressIterations: Int = 0,
+        var duressVerifierNonce: ByteArray = ByteArray(NONCE_LEN),
+        var duressVerifierCipher: ByteArray = ByteArray(VERIFIER_CT_LEN)
     )
 
-    override fun isInitialized(): Boolean = metaFile.exists() && metaFile.length() >= MIN_META_SIZE
+    override fun isInitialized(): Boolean = metaFile.exists() && metaFile.length() >= MIN_META_SIZE_LEGACY
 
     override fun isUnlocked(): Boolean = unlocked
 
@@ -216,6 +221,52 @@ class FileVault(private val rootDir: File) : Vault {
         return true
     }
 
+    override fun hasDuressPin(): Boolean = (cached ?: readMeta())?.hasDuress ?: false
+
+    override fun setDuressPin(pin: String) {
+        require(pin.isNotEmpty()) { "pin" }
+        val meta = readMeta() ?: return
+        val salt = ByteArray(SALT_LEN).also { rng.nextBytes(it) }
+        val kek = deriveKey(pin, salt, KDF_ITERS)
+        val nonce = ByteArray(NONCE_LEN).also { rng.nextBytes(it) }
+        val ct = gcmEncrypt(kek, nonce, DURESS_VERIFIER_PLAIN)
+        zero(kek)
+        meta.hasDuress = true
+        meta.duressSalt = salt
+        meta.duressIterations = KDF_ITERS
+        meta.duressVerifierNonce = nonce
+        meta.duressVerifierCipher = ct
+        writeMeta(meta)
+        cached = meta
+    }
+
+    override fun isDuressPin(candidate: String): Boolean {
+        val meta = cached ?: readMeta() ?: return false
+        if (!meta.hasDuress) return false
+        val kek = try {
+            deriveKey(candidate, meta.duressSalt, meta.duressIterations)
+        } catch (t: Throwable) {
+            return false
+        }
+        val ok = runCatching {
+            val pt = gcmDecrypt(kek, meta.duressVerifierNonce, meta.duressVerifierCipher)
+            java.security.MessageDigest.isEqual(pt, DURESS_VERIFIER_PLAIN)
+        }.getOrDefault(false)
+        zero(kek)
+        return ok
+    }
+
+    override fun clearDuressPin() {
+        val meta = readMeta() ?: return
+        meta.hasDuress = false
+        meta.duressSalt = ByteArray(SALT_LEN)
+        meta.duressIterations = 0
+        meta.duressVerifierNonce = ByteArray(NONCE_LEN)
+        meta.duressVerifierCipher = ByteArray(VERIFIER_CT_LEN)
+        writeMeta(meta)
+        cached = meta
+    }
+
     override fun flushAndKeep() {
         val key = dek ?: return
         if (!plaintextDb.exists()) return
@@ -248,6 +299,7 @@ class FileVault(private val rootDir: File) : Vault {
         runCatching { if (encryptedDb.exists()) secureDelete(encryptedDb) }
         runCatching { if (metaFile.exists()) secureDelete(metaFile) }
         runCatching { if (sessionFile.exists()) secureDelete(sessionFile) }
+        runCatching { clearTorIdentity() }
     }
 
     override fun isScrambleKeypadEnabled(): Boolean = (cached ?: readMeta())?.scrambleKeypad ?: false
@@ -369,6 +421,24 @@ class FileVault(private val rootDir: File) : Vault {
         val scramble = buf.get() != 0.toByte()
         val timeout = buf.int
         val screenshot = if (buf.hasRemaining()) buf.get() != 0.toByte() else true
+        val hasDuress: Boolean
+        val duressSalt: ByteArray
+        val duressIterations: Int
+        val duressVerifierNonce: ByteArray
+        val duressVerifierCipher: ByteArray
+        if (buf.remaining() >= DURESS_SUFFIX_LEN) {
+            hasDuress = buf.get() != 0.toByte()
+            duressSalt = ByteArray(SALT_LEN).also { buf.get(it) }
+            duressIterations = buf.int
+            duressVerifierNonce = ByteArray(NONCE_LEN).also { buf.get(it) }
+            duressVerifierCipher = ByteArray(VERIFIER_CT_LEN).also { buf.get(it) }
+        } else {
+            hasDuress = false
+            duressSalt = ByteArray(SALT_LEN)
+            duressIterations = 0
+            duressVerifierNonce = ByteArray(NONCE_LEN)
+            duressVerifierCipher = ByteArray(VERIFIER_CT_LEN)
+        }
         return Meta(
             salt = salt,
             iterations = iterations,
@@ -380,7 +450,12 @@ class FileVault(private val rootDir: File) : Vault {
             lockoutUntilMillis = lockoutUntil,
             scrambleKeypad = scramble,
             sessionTimeoutSeconds = timeout,
-            screenshotBlocking = screenshot
+            screenshotBlocking = screenshot,
+            hasDuress = hasDuress,
+            duressSalt = duressSalt,
+            duressIterations = duressIterations,
+            duressVerifierNonce = duressVerifierNonce,
+            duressVerifierCipher = duressVerifierCipher
         )
     }
 
@@ -401,6 +476,11 @@ class FileVault(private val rootDir: File) : Vault {
         buf.put(if (meta.scrambleKeypad) 1.toByte() else 0.toByte())
         buf.putInt(meta.sessionTimeoutSeconds)
         buf.put(if (meta.screenshotBlocking) 1.toByte() else 0.toByte())
+        buf.put(if (meta.hasDuress) 1.toByte() else 0.toByte())
+        buf.put(meta.duressSalt)
+        buf.putInt(meta.duressIterations)
+        buf.put(meta.duressVerifierNonce)
+        buf.put(meta.duressVerifierCipher)
         val tmp = File(metaFile.parentFile, metaFile.name + ".tmp")
         tmp.writeBytes(out)
         if (metaFile.exists()) metaFile.delete()
@@ -467,13 +547,21 @@ class FileVault(private val rootDir: File) : Vault {
         private const val TAG_BITS = 128
         private const val KDF_ITERS = 210_000
         private const val LOCKOUT_THRESHOLD = 5
-        private const val MIN_META_SIZE =
+        private const val DURESS_SUFFIX_LEN = 1 + SALT_LEN + 4 + NONCE_LEN + VERIFIER_CT_LEN
+        private const val MIN_META_SIZE_PRE_DURESS =
             4 + 1 + SALT_LEN + 4 + NONCE_LEN + VERIFIER_CT_LEN + NONCE_LEN + DEK_CT_LEN + 4 + 8 + 1 + 4 + 1
-        private const val MIN_META_SIZE_LEGACY = MIN_META_SIZE - 1
+        private const val MIN_META_SIZE = MIN_META_SIZE_PRE_DURESS + DURESS_SUFFIX_LEN
+        private const val MIN_META_SIZE_LEGACY = MIN_META_SIZE_PRE_DURESS - 1
         private val VERIFIER_PLAIN = byteArrayOf(
             'S'.code.toByte(), 'T'.code.toByte(), 'A'.code.toByte(), 'D'.code.toByte(),
             'E'.code.toByte(), '-'.code.toByte(), 'V'.code.toByte(), 'E'.code.toByte(),
             'R'.code.toByte(), 'I'.code.toByte(), 'F'.code.toByte(), 'Y'.code.toByte(),
+            '-'.code.toByte(), '0'.code.toByte(), '1'.code.toByte(), 0
+        )
+        private val DURESS_VERIFIER_PLAIN = byteArrayOf(
+            'S'.code.toByte(), 'T'.code.toByte(), 'A'.code.toByte(), 'D'.code.toByte(),
+            'E'.code.toByte(), '-'.code.toByte(), 'D'.code.toByte(), 'U'.code.toByte(),
+            'R'.code.toByte(), 'E'.code.toByte(), 'S'.code.toByte(), 'S'.code.toByte(),
             '-'.code.toByte(), '0'.code.toByte(), '1'.code.toByte(), 0
         )
     }

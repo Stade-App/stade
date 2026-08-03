@@ -101,6 +101,10 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.setContactKind(kind.toLong(), contactId)
     }
 
+    fun setMuted(contactId: String, muted: Boolean) {
+        db.stadeDbQueries.setContactMuted(if (muted) 1L else 0L, contactId)
+    }
+
     fun delete(contactId: String) {
         db.stadeDbQueries.deleteContact(contactId)
     }
@@ -129,6 +133,7 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
             lastSeen = lastSeen,
             createdAt = createdAt,
             addresses = addresses.split("\n").filter { it.isNotBlank() },
-            kind = kind.toInt()
+            kind = kind.toInt(),
+            muted = muted == 1L
         )
 }

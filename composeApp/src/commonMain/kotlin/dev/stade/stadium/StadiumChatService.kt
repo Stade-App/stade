@@ -97,6 +97,19 @@ class StadiumChatService(
         stadiums.deleteStadium(stadium.id)
     }
 
+    suspend fun deleteMessageAsOwner(owner: LocalIdentity, stadium: StadiumInfo, messageId: String) {
+        if (!stadium.isOwner) return
+        val members = stadiums.getMemberContactIds(stadium.id)
+        val msgId = Encoding.toHex(crypto.randomBytes(16))
+        val timestamp = Clock.System.now().toEpochMilliseconds()
+        val body = "$STD_MSG_DELETE_PREFIX${stadium.id}:$messageId"
+        members.forEach { contactId ->
+            val contact = contacts.get(contactId) ?: return@forEach
+            runCatching { sync.queueOutgoing(owner, contact, msgId, body, timestamp) }
+        }
+        stadiums.deleteMessage(messageId)
+    }
+
     suspend fun leave(owner: LocalIdentity, stadium: StadiumInfo): Boolean {
         if (stadium.isOwner) return false
         val ownerContact = contacts.get(stadium.creatorStadeId)
@@ -115,6 +128,16 @@ class StadiumChatService(
             stadiums.leaveStadium(stadium.id)
         }
         return true
+    }
+
+    suspend fun sendStadiumInviteToContact(owner: LocalIdentity, contactId: String, inviteCode: String) {
+        val contact = contacts.get(contactId) ?: return
+        val msgId = Encoding.toHex(crypto.randomBytes(16))
+        val timestamp = Clock.System.now().toEpochMilliseconds()
+        val body = "$STD_INV_PREFIX$inviteCode"
+        runCatching {
+            sync.queueOutgoing(owner, contact, msgId, body, timestamp)
+        }
     }
 
     suspend fun sendJoinRequest(owner: LocalIdentity, creatorContactId: String, pending: PendingStadiumJoin) {

@@ -30,7 +30,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
     fun getGroup(groupId: String): GroupInfo? =
         db.stadeDbQueries.selectGroup(groupId).executeAsOneOrNull()?.let {
             val members = db.stadeDbQueries.selectGroupMembers(it.id).executeAsList().map { m -> m.contactId }
-            GroupInfo(it.id, it.ownerId, it.name, it.inviteToken, it.createdAt, members, it.creatorStadeId)
+            GroupInfo(it.id, it.ownerId, it.name, it.inviteToken, it.createdAt, members, it.creatorStadeId, muted = it.muted == 1L)
         }
 
     fun allGroups(ownerId: String): List<GroupInfo> {
@@ -40,7 +40,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
             .executeAsList()
             .groupBy({ it.groupId }, { it.contactId })
         return rows.map { row ->
-            GroupInfo(row.id, row.ownerId, row.name, row.inviteToken, row.createdAt, membersByGroup[row.id].orEmpty(), row.creatorStadeId)
+            GroupInfo(row.id, row.ownerId, row.name, row.inviteToken, row.createdAt, membersByGroup[row.id].orEmpty(), row.creatorStadeId, muted = row.muted == 1L)
         }
     }
 
@@ -54,9 +54,13 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
                     .executeAsList()
                     .groupBy({ it.groupId }, { it.contactId })
                 rows.map { row ->
-                    GroupInfo(row.id, row.ownerId, row.name, row.inviteToken, row.createdAt, membersByGroup[row.id].orEmpty(), row.creatorStadeId)
+                    GroupInfo(row.id, row.ownerId, row.name, row.inviteToken, row.createdAt, membersByGroup[row.id].orEmpty(), row.creatorStadeId, muted = row.muted == 1L)
                 }
             }
+
+    fun setMuted(groupId: String, muted: Boolean) {
+        db.stadeDbQueries.setGroupMuted(if (muted) 1L else 0L, groupId)
+    }
 
     fun addMember(groupId: String, contactId: String) {
         val now = Clock.System.now().toEpochMilliseconds()

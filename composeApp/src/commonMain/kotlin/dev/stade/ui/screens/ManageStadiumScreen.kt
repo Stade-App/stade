@@ -13,7 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -38,8 +37,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.identity.LocalIdentity
@@ -56,7 +53,6 @@ fun ManageStadiumScreen(
     onDeleted: () -> Unit
 ) {
     val strings = LocalStrings.current
-    val clipboard = LocalClipboardManager.current
     val stadiums by remember(owner.id) { container.stadiums.observeStadiums(owner.id) }.collectAsState(initial = emptyList())
     val stadium = stadiums.find { it.id == stadiumId }
     var name by remember(stadium?.id) { mutableStateOf(stadium?.name ?: "") }
@@ -139,42 +135,6 @@ fun ManageStadiumScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium
             ) { Text(strings.saveAction) }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                shape = MaterialTheme.shapes.large
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(strings.stadiumInviteLabel, style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        strings.stadiumInviteHint,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    FilledTonalButton(
-                        onClick = {
-                            val addrs = container.connections.selfAddresses()
-                            if (addrs.none { it.startsWith("tor://") }) {
-                                status = strings.inviteNotReadyForRemote
-                                return@FilledTonalButton
-                            }
-                            val handshakeInvite = container.handshake.createInvite(owner, addrs)
-                            val fullInvite = container.stadiums.buildInviteLink(handshakeInvite.display, stadium)
-                            clipboard.setText(AnnotatedString(fullInvite))
-                            status = strings.inviteCodeCopied(fullInvite.length)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.height(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(strings.copyStadiumInviteAction)
-                    }
-                }
-            }
 
             status?.let {
                 Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)

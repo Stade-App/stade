@@ -116,6 +116,18 @@ class AppContainer(
             runCatching { createdDriver.execute(null, "ALTER TABLE Stadium ADD COLUMN muted INTEGER NOT NULL DEFAULT 0", 0) }
         }
         runCatching {
+            createdDriver.executeQuery(null, "SELECT muted FROM Contact LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "ALTER TABLE Contact ADD COLUMN muted INTEGER NOT NULL DEFAULT 0", 0) }
+        }
+        runCatching {
+            createdDriver.executeQuery(null, "SELECT muted FROM StadeGroup LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "ALTER TABLE StadeGroup ADD COLUMN muted INTEGER NOT NULL DEFAULT 0", 0) }
+        }
+        runCatching {
             createdDriver.executeQuery(null, "SELECT messageId FROM ProcessedEnvelope LIMIT 0",
                 { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
         }.onFailure {

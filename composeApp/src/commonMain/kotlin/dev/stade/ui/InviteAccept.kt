@@ -6,6 +6,7 @@ import dev.stade.contact.InvitePayload
 import dev.stade.contact.PROMOTE_TO_CONTACT_PREFIX
 import dev.stade.crypto.Encoding
 import dev.stade.identity.LocalIdentity
+import dev.stade.stadium.PendingStadiumJoin
 import dev.stade.ui.i18n.AppStrings
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -90,4 +91,56 @@ fun AppContainer.beginAcceptInvite(
         if (!added) connections.cancelPendingDial(addrs)
     }
     return BeginAcceptResult.Dialing(payload, addrs.size, lanOnly)
+}
+
+sealed interface BeginAcceptStadiumResult {
+    data class Error(val message: String) : BeginAcceptStadiumResult
+    data class NoAddress(val stadiumName: String) : BeginAcceptStadiumResult
+    data class Dialing(val stadiumName: String) : BeginAcceptStadiumResult
+}
+
+fun AppContainer.beginAcceptStadiumInvite(
+    owner: LocalIdentity,
+    rawCode: String,
+    strings: AppStrings
+): BeginAcceptStadiumResult {
+    val trimmed = rawCode.trim()
+    val split = stadiums.splitInviteLink(trimmed)
+        ?: return BeginAcceptStadiumResult.Error(strings.notAStadiumInvite)
+    val (handshakePart, stadiumDataPart) = split
+    val stadiumData = stadiums.parseStadiumData(stadiumDataPart)
+        ?: return BeginAcceptStadiumResult.Error(strings.notAStadiumInvite)
+    val parseResult = handshake.parseInviteDetailed(handshakePart)
+    val payload = (parseResult as? InviteParseResult.Ok)?.payload
+        ?: return BeginAcceptStadiumResult.Error(inviteErrorText(parseResult, strings) ?: strings.invalidInvite)
+
+    if (payload.signingPublicKey.contentEquals(owner.publicSigningKey)) {
+        return BeginAcceptStadiumResult.Error(strings.selfInviteError)
+    }
+
+    sync.unforget(payload.stadeId)
+    val addrs = payload.addresses
+    val pending = PendingStadiumJoin(stadiumData.stadiumId, stadiumData.stadiumName, stadiumData.inviteToken)
+    stadiums.storePendingJoin(payload.stadeId, pending)
+
+    val existingContact = contacts.findByStadeId(payload.stadeId)
+    if (existingContact != null) {
+        appScope.launch { stadiumChat.sendJoinRequest(owner, existingContact.id, pending) }
+    } else {
+        if (addrs.isEmpty()) return BeginAcceptStadiumResult.NoAddress(stadiumData.stadiumName)
+        connections.queueDial(addrs)
+    }
+
+    val stadiumId = stadiumData.stadiumId
+    appScope.launch {
+        val joined = withTimeoutOrNull(5 * 60_000L) {
+            stadiums.observeStadiums(owner.id).first { list -> list.any { it.id == stadiumId } }
+            true
+        } ?: false
+        if (!joined) {
+            runCatching { stadiums.clearPendingJoin(payload.stadeId) }
+            if (existingContact == null) connections.cancelPendingDial(addrs)
+        }
+    }
+    return BeginAcceptStadiumResult.Dialing(stadiumData.stadiumName)
 }

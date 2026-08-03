@@ -8,6 +8,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +45,7 @@ import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Info
@@ -56,6 +58,8 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -84,6 +88,10 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -100,11 +108,11 @@ import dev.stade.stadium.StadiumMessage
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.i18n.LocalStrings
+import dev.stade.ui.components.Avatar
+import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
-import dev.stade.ui.openVideoExternally
-import dev.stade.ui.rememberMultiImagePickerLauncher
-import dev.stade.ui.rememberVideoPickerLauncher
+import dev.stade.ui.rememberMediaPickerLauncher
 import dev.stade.ui.saveImageToGallery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -132,12 +140,14 @@ fun StadiumScreen(
     val connected by container.sync.connectedContacts.collectAsState()
     val listState = rememberLazyListState()
 
-    var draft by remember { mutableStateOf("") }
+    var draft by remember { mutableStateOf(TextFieldValue("")) }
     var showLeaveDialog by remember { mutableStateOf(false) }
+    var showInviteDialog by remember { mutableStateOf(false) }
     var leaving by remember { mutableStateOf(false) }
 
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
     var editingImageIndex by remember { mutableStateOf<Int?>(null) }
+    var pendingVideo by remember { mutableStateOf<ByteArray?>(null) }
 
     var banner by remember { mutableStateOf<StadiumBannerData?>(null) }
     var bannerKey by remember { mutableStateOf(0) }
@@ -152,24 +162,24 @@ fun StadiumScreen(
         bannerKey++
     }
 
-    val imagePicker = rememberMultiImagePickerLauncher { imagesList ->
-        val accepted = imagesList.filter { it.size <= MAX_ATTACHMENT_BYTES }
-        if (accepted.size != imagesList.size) {
-            notify(strings.photoTooBig, StadiumBannerKind.Error)
+    val mediaPicker = rememberMediaPickerLauncher(
+        onImages = { imagesList ->
+            val accepted = imagesList.filter { it.size <= MAX_ATTACHMENT_BYTES }
+            if (accepted.size != imagesList.size) {
+                notify(strings.photoTooBig, StadiumBannerKind.Error)
+            }
+            if (accepted.isNotEmpty()) {
+                pendingImages = pendingImages + accepted
+            }
+        },
+        onVideo = { bytes ->
+            if (bytes.size <= MAX_ATTACHMENT_BYTES) {
+                pendingVideo = bytes
+            } else {
+                notify(strings.videoTooBig, StadiumBannerKind.Error)
+            }
         }
-        if (accepted.isNotEmpty()) {
-            pendingImages = pendingImages + accepted
-        }
-    }
-
-    var pendingVideo by remember { mutableStateOf<ByteArray?>(null) }
-    val videoPicker = rememberVideoPickerLauncher { bytes ->
-        if (bytes.size <= MAX_ATTACHMENT_BYTES) {
-            pendingVideo = bytes
-        } else {
-            notify(strings.videoTooBig, StadiumBannerKind.Error)
-        }
-    }
+    )
 
     var pendingVoiceClip by remember { mutableStateOf<RecordedClip?>(null) }
     var isRecording by remember { mutableStateOf(false) }
@@ -264,18 +274,31 @@ fun StadiumScreen(
         )
     }
 
+    if (showInviteDialog && current != null) {
+        StadiumInviteDialog(
+            container = container,
+            owner = owner,
+            stadium = current,
+            onDismiss = { showInviteDialog = false }
+        )
+    }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(current?.name ?: "", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            strings.stadiumSubscriberCount(current?.memberCount ?: 0L),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(name = current?.name ?: "", size = 36.dp, icon = Icons.Default.Podcasts)
+                        Spacer(Modifier.size(10.dp))
+                        Column {
+                            Text(current?.name ?: "", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                strings.stadiumSubscriberCount(current?.memberCount ?: 0L),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
                     }
                 },
                 navigationIcon = {
@@ -285,6 +308,9 @@ fun StadiumScreen(
                 },
                 actions = {
                     if (current?.isOwner == true) {
+                        IconButton(onClick = { showInviteDialog = true }) {
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.inviteAction)
+                        }
                         IconButton(onClick = onManage) {
                             Icon(Icons.Default.Settings, contentDescription = strings.manageStadiumTitle)
                         }
@@ -352,9 +378,14 @@ fun StadiumScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(messages, key = { it.id }) { msg ->
+                            val onDeleteMessage: () -> Unit = {
+                                scope.launch { container.stadiumChat.deleteMessageAsOwner(owner, current, msg.id) }
+                            }
                             when (msg.type) {
                                 MessageType.IMAGE -> StadiumImageBubble(
                                     msg = msg,
+                                    isOwner = current.isOwner,
+                                    onDelete = onDeleteMessage,
                                     onSaveImage = { bytes ->
                                         scope.launch {
                                             val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
@@ -374,22 +405,18 @@ fun StadiumScreen(
                                         }
                                     }
                                 )
-                                MessageType.VOICE -> StadiumVoiceBubble(msg = msg)
+                                MessageType.VOICE -> StadiumVoiceBubble(msg = msg, isOwner = current.isOwner, onDelete = onDeleteMessage)
                                 MessageType.VIDEO -> StadiumVideoBubble(
                                     msg = msg,
-                                    onPlayVideo = { bytes ->
-                                        scope.launch {
-                                            val ok = openVideoExternally(bytes)
-                                            if (!ok) notify(strings.videoOpenFailed, StadiumBannerKind.Error)
-                                        }
-                                    }
+                                    isOwner = current.isOwner,
+                                    onDelete = onDeleteMessage
                                 )
-                                else -> StadiumTextBubble(msg = msg)
+                                else -> StadiumTextBubble(msg = msg, isOwner = current.isOwner, onDelete = onDeleteMessage)
                             }
                         }
                     }
                     if (current.isOwner) {
-                        StadiumComposer(
+                        ChatComposerBar(
                             draft = draft,
                             pendingImages = pendingImages,
                             pendingVideo = pendingVideo,
@@ -403,12 +430,12 @@ fun StadiumScreen(
                             onRemoveVideo = { pendingVideo = null },
                             onRemoveVoiceClip = { pendingVoiceClip = null },
                             onSend = {
-                                val text = draft.trim()
+                                val text = draft.text.trim()
                                 val images = pendingImages
                                 val video = pendingVideo
                                 val voiceClip = pendingVoiceClip
-                                if (text.isEmpty() && images.isEmpty() && video == null && voiceClip == null) return@StadiumComposer
-                                draft = ""
+                                if (text.isEmpty() && images.isEmpty() && video == null && voiceClip == null) return@ChatComposerBar
+                                draft = TextFieldValue("")
                                 pendingImages = emptyList()
                                 pendingVideo = null
                                 pendingVoiceClip = null
@@ -432,8 +459,7 @@ fun StadiumScreen(
                                     }
                                 }
                             },
-                            onPickImage = { imagePicker.launch() },
-                            onPickVideo = { videoPicker.launch() },
+                            onPickMedia = { mediaPicker.launch() },
                             onToggleRecording = { toggleRecording() }
                         )
                     }
@@ -468,17 +494,22 @@ fun StadiumScreen(
 }
 
 @Composable
-private fun StadiumTextBubble(msg: StadiumMessage) {
+private fun StadiumTextBubble(msg: StadiumMessage, isOwner: Boolean, onDelete: () -> Unit) {
     val bubbleColor = if (msg.isOwn) MaterialTheme.colorScheme.primaryContainer
         else MaterialTheme.colorScheme.surfaceContainerHigh
     val textColor = if (msg.isOwn) MaterialTheme.colorScheme.onPrimaryContainer
         else MaterialTheme.colorScheme.onSurface
-    val alignment = if (msg.isOwn) Alignment.CenterEnd else Alignment.CenterStart
-    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = alignment) {
+    val clipboard = LocalClipboardManager.current
+    var showMenu by remember(msg.id) { mutableStateOf(false) }
+    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Surface(
             color = bubbleColor,
             shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.widthIn(max = 340.dp)
+            modifier = Modifier
+                .widthIn(max = 340.dp)
+                .pointerInput(msg.id) {
+                    detectTapGestures(onLongPress = { showMenu = true })
+                }
         ) {
             Text(
                 msg.displayBody,
@@ -488,18 +519,63 @@ private fun StadiumTextBubble(msg: StadiumMessage) {
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
             )
         }
+        StadiumMessageActionMenu(
+            expanded = showMenu,
+            onDismiss = { showMenu = false },
+            showCopy = true,
+            onCopy = { clipboard.setText(AnnotatedString(msg.displayBody)) },
+            showDelete = isOwner,
+            onDelete = onDelete
+        )
+    }
+}
+
+@Composable
+private fun StadiumMessageActionMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    showCopy: Boolean,
+    onCopy: () -> Unit,
+    showDelete: Boolean,
+    onDelete: () -> Unit
+) {
+    val strings = LocalStrings.current
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        if (showCopy) {
+            DropdownMenuItem(
+                text = { Text(strings.copyMessage) },
+                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                onClick = {
+                    onDismiss()
+                    onCopy()
+                }
+            )
+        }
+        if (showDelete) {
+            DropdownMenuItem(
+                text = { Text(strings.deleteMessageAction, color = MaterialTheme.colorScheme.error) },
+                leadingIcon = {
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                },
+                onClick = {
+                    onDismiss()
+                    onDelete()
+                }
+            )
+        }
     }
 }
 
 @Composable
 private fun StadiumImageBubble(
     msg: StadiumMessage,
+    isOwner: Boolean,
+    onDelete: () -> Unit,
     onSaveImage: (ByteArray) -> Unit,
     onCopyImage: (ByteArray) -> Unit
 ) {
     val strings = LocalStrings.current
     val outgoing = msg.isOwn
-    val align = if (outgoing) Alignment.End else Alignment.Start
     val bg = if (outgoing) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
     val sub = MaterialTheme.colorScheme.onSurfaceVariant
 
@@ -516,6 +592,7 @@ private fun StadiumImageBubble(
         decodeDone = true
     }
     var showFullscreen by remember { mutableStateOf(false) }
+    var showMenu by remember(msg.id) { mutableStateOf(false) }
     val currentBitmap = bitmap
     val currentBytes = imageBytes
     val currentOnTap by rememberUpdatedState { if (bitmap != null) showFullscreen = true }
@@ -524,15 +601,28 @@ private fun StadiumImageBubble(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 6.dp),
-        horizontalAlignment = align
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             Modifier.widthIn(max = 240.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(bg)
-                .clickable { currentOnTap() }
+                .pointerInput(msg.id) {
+                    detectTapGestures(
+                        onTap = { currentOnTap() },
+                        onLongPress = { showMenu = true }
+                    )
+                }
                 .padding(4.dp)
         ) {
+            StadiumMessageActionMenu(
+                expanded = showMenu,
+                onDismiss = { showMenu = false },
+                showCopy = false,
+                onCopy = {},
+                showDelete = isOwner,
+                onDelete = onDelete
+            )
             Column {
                 if (currentBitmap != null) {
                     androidx.compose.foundation.Image(
@@ -616,9 +706,8 @@ private fun StadiumImageBubble(
 }
 
 @Composable
-private fun StadiumVoiceBubble(msg: StadiumMessage) {
+private fun StadiumVoiceBubble(msg: StadiumMessage, isOwner: Boolean, onDelete: () -> Unit) {
     val outgoing = msg.isOwn
-    val align = if (outgoing) Alignment.End else Alignment.Start
     val bg = if (outgoing) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
     val fg = if (outgoing) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
     val sub = fg.copy(alpha = 0.6f)
@@ -638,14 +727,26 @@ private fun StadiumVoiceBubble(msg: StadiumMessage) {
     }
     val player = rememberAudioPlayer()
     val currentBytes = opusBytes
+    var showMenu by remember(msg.id) { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = align) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.widthIn(max = 260.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(bg)
+                .pointerInput(msg.id) {
+                    detectTapGestures(onLongPress = { showMenu = true })
+                }
                 .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
+            StadiumMessageActionMenu(
+                expanded = showMenu,
+                onDismiss = { showMenu = false },
+                showCopy = false,
+                onCopy = {},
+                showDelete = isOwner,
+                onDelete = onDelete
+            )
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
@@ -695,55 +796,79 @@ private fun StadiumVoiceBubble(msg: StadiumMessage) {
 }
 
 @Composable
-private fun StadiumVideoBubble(msg: StadiumMessage, onPlayVideo: (ByteArray) -> Unit) {
+private fun StadiumVideoBubble(msg: StadiumMessage, isOwner: Boolean, onDelete: () -> Unit) {
     val strings = LocalStrings.current
     val outgoing = msg.isOwn
-    val align = if (outgoing) Alignment.End else Alignment.Start
     val bg = if (outgoing) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
     val fg = if (outgoing) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
     val sub = fg.copy(alpha = 0.6f)
 
     var videoBytes by remember(msg.id) { mutableStateOf<ByteArray?>(null) }
     var decodeDone by remember(msg.id) { mutableStateOf(false) }
+    var expanded by remember(msg.id) { mutableStateOf(false) }
     LaunchedEffect(msg.id) {
         val bytes = withContext(Dispatchers.Default) { runCatching { msg.videoBytes() }.getOrNull() }
         videoBytes = bytes
         decodeDone = true
     }
     val currentBytes = videoBytes
+    var showMenu by remember(msg.id) { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = align) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.widthIn(max = 260.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(bg)
                 .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
+            StadiumMessageActionMenu(
+                expanded = showMenu,
+                onDismiss = { showMenu = false },
+                showCopy = false,
+                onCopy = {},
+                showDelete = isOwner,
+                onDelete = onDelete
+            )
             Column {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(enabled = currentBytes != null) { currentBytes?.let(onPlayVideo) }
-                        .padding(vertical = 2.dp)
-                ) {
-                    Box(
+                if (expanded && currentBytes != null) {
+                    dev.stade.ui.video.VideoPlayerView(
+                        bytes = currentBytes,
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(fg.copy(alpha = 0.14f)),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .heightIn(min = 160.dp, max = 220.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                    )
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .pointerInput(msg.id, currentBytes) {
+                                detectTapGestures(
+                                    onTap = { if (currentBytes != null) expanded = true },
+                                    onLongPress = { showMenu = true }
+                                )
+                            }
+                            .padding(vertical = 2.dp)
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = strings.tapToPlayVideo, tint = fg)
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text(strings.videoMessage, color = fg, style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            if (currentBytes == null && decodeDone) "" else strings.tapToPlayVideo,
-                            color = sub,
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(fg.copy(alpha = 0.14f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = strings.tapToPlayVideo, tint = fg)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(strings.videoMessage, color = fg, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                if (currentBytes == null && decodeDone) "" else strings.tapToPlayVideo,
+                                color = sub,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
                     }
                 }
                 if (msg.caption.isNotEmpty()) {
@@ -761,245 +886,6 @@ private fun StadiumVideoBubble(msg: StadiumMessage, onPlayVideo: (ByteArray) -> 
         }
     }
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun StadiumComposer(
-    draft: String,
-    pendingImages: List<ByteArray>,
-    pendingVideo: ByteArray?,
-    pendingVoiceClip: RecordedClip?,
-    isRecording: Boolean,
-    onChange: (String) -> Unit,
-    onRemoveImage: (Int) -> Unit,
-    onEditImage: (Int) -> Unit,
-    onRemoveVideo: () -> Unit,
-    onRemoveVoiceClip: () -> Unit,
-    onSend: () -> Unit,
-    onPickImage: () -> Unit,
-    onPickVideo: () -> Unit,
-    onToggleRecording: () -> Unit
-) {
-    val strings = LocalStrings.current
-    val canSend = draft.isNotBlank() || pendingImages.isNotEmpty() || pendingVideo != null || pendingVoiceClip != null
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
-    ) {
-        AnimatedVisibility(
-            visible = pendingImages.isNotEmpty(),
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it }
-        ) {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                itemsIndexed(pendingImages) { idx, bytes ->
-                    val bitmap = remember(bytes) { runCatching { bytes.decodeToImageBitmap() }.getOrNull() }
-                    Box(modifier = Modifier.size(72.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                                .clickable { onEditImage(idx) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (bitmap != null) {
-                                androidx.compose.foundation.Image(
-                                    bitmap = bitmap,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Icon(
-                                    Icons.Default.BrokenImage,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.errorContainer)
-                                .clickable { onRemoveImage(idx) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = pendingVideo != null,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it }
-        ) {
-            val video = pendingVideo
-            if (video != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, top = 8.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Default.Videocam, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Text(
-                        strings.videoAttached,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = onRemoveVideo) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = strings.removeAttachment,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
-        AnimatedVisibility(
-            visible = pendingVoiceClip != null,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it }
-        ) {
-            val clip = pendingVoiceClip
-            if (clip != null) {
-                val player = rememberAudioPlayer()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 12.dp, end = 12.dp, top = 8.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    IconButton(onClick = { if (player.isPlaying) player.pause() else player.play(clip.opusBytes) }) {
-                        Icon(
-                            if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Text(
-                        formatVoiceDuration(clip.durationMs),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = { player.stop(); onRemoveVoiceClip() }) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = strings.removeAttachment,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            androidx.compose.material3.OutlinedTextField(
-                value = draft,
-                onValueChange = onChange,
-                placeholder = { Text(strings.typeMessagePlaceholder) },
-                modifier = Modifier.weight(1f),
-                shape = MaterialTheme.shapes.large,
-                trailingIcon = {
-                    Row {
-                        IconButton(onClick = onPickVideo) {
-                            Icon(
-                                Icons.Default.Videocam,
-                                contentDescription = strings.attachVideo,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        IconButton(onClick = onPickImage) {
-                            Icon(
-                                Icons.Default.Attachment,
-                                contentDescription = strings.attachPhoto,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.rotate(270f)
-                            )
-                        }
-                    }
-                }
-            )
-
-            val voiceButtonMode = when {
-                isRecording -> StadiumVoiceButtonMode.STOP
-                canSend -> StadiumVoiceButtonMode.SEND
-                else -> StadiumVoiceButtonMode.MIC
-            }
-            val buttonContainerColor by animateColorAsState(
-                targetValue = if (voiceButtonMode == StadiumVoiceButtonMode.SEND) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
-            )
-            val buttonContentColor by animateColorAsState(
-                targetValue = when (voiceButtonMode) {
-                    StadiumVoiceButtonMode.SEND -> MaterialTheme.colorScheme.onPrimary
-                    StadiumVoiceButtonMode.STOP -> MaterialTheme.colorScheme.error
-                    StadiumVoiceButtonMode.MIC -> MaterialTheme.colorScheme.primary
-                }
-            )
-            Box(
-                modifier = Modifier
-                    .size(54.dp)
-                    .clip(CircleShape)
-                    .background(buttonContainerColor)
-                    .clickable {
-                        if (voiceButtonMode == StadiumVoiceButtonMode.SEND) onSend() else onToggleRecording()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = when (voiceButtonMode) {
-                        StadiumVoiceButtonMode.SEND -> Icons.AutoMirrored.Filled.Send
-                        StadiumVoiceButtonMode.STOP -> Icons.Default.Stop
-                        StadiumVoiceButtonMode.MIC -> Icons.Default.Mic
-                    },
-                    contentDescription = when (voiceButtonMode) {
-                        StadiumVoiceButtonMode.SEND -> strings.sendButton
-                        StadiumVoiceButtonMode.STOP -> strings.stopRecording
-                        StadiumVoiceButtonMode.MIC -> strings.recordVoice
-                    },
-                    tint = buttonContentColor,
-                    modifier = Modifier.size(if (voiceButtonMode == StadiumVoiceButtonMode.SEND) 24.dp else 26.dp)
-                )
-            }
-        }
-    }
-}
-
-private enum class StadiumVoiceButtonMode { MIC, STOP, SEND }
-
 @Composable
 private fun StadiumTopBanner(
     data: StadiumBannerData?,
