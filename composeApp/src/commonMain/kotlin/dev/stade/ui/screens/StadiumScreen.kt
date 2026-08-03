@@ -58,8 +58,6 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -74,6 +72,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -108,6 +107,7 @@ import dev.stade.stadium.StadiumMessage
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.i18n.LocalStrings
+import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.formatChatTime
@@ -139,11 +139,27 @@ fun StadiumScreen(
     val messages = rawMessages ?: emptyList()
     val connected by container.sync.connectedContacts.collectAsState()
     val listState = rememberLazyListState()
+    val clipboard = LocalClipboardManager.current
 
     var draft by remember { mutableStateOf(TextFieldValue("")) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var leaving by remember { mutableStateOf(false) }
+
+    var selectedMessageIds by remember(stadiumId) { mutableStateOf<Set<String>>(emptySet()) }
+    val inSelectionMode by remember { derivedStateOf { selectedMessageIds.isNotEmpty() } }
+
+    fun clearSelection() {
+        selectedMessageIds = emptySet()
+    }
+
+    fun toggleSelection(id: String) {
+        selectedMessageIds = if (selectedMessageIds.contains(id)) {
+            selectedMessageIds - id
+        } else {
+            selectedMessageIds + id
+        }
+    }
 
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
     var editingImageIndex by remember { mutableStateOf<Int?>(null) }
@@ -283,49 +299,103 @@ fun StadiumScreen(
         )
     }
 
+    PlatformBackHandler(enabled = inSelectionMode) { clearSelection() }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(name = current?.name ?: "", size = 36.dp, icon = Icons.Default.Podcasts)
-                        Spacer(Modifier.size(10.dp))
-                        Column {
-                            Text(current?.name ?: "", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                strings.stadiumSubscriberCount(current?.memberCount ?: 0L),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            )
+            if (inSelectionMode) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    title = {
+                        Text(
+                            strings.selectedCount(selectedMessageIds.size),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { clearSelection() }) {
+                            Icon(Icons.Default.Close, contentDescription = strings.cancelSelection)
+                        }
+                    },
+                    actions = {
+                        val singleSelectedTextMsg = remember(selectedMessageIds, messages) {
+                            if (selectedMessageIds.size != 1) null
+                            else messages.firstOrNull { it.id in selectedMessageIds && it.type == MessageType.TEXT }
+                        }
+                        if (singleSelectedTextMsg != null) {
+                            IconButton(onClick = {
+                                clipboard.setText(AnnotatedString(singleSelectedTextMsg.displayBody))
+                                clearSelection()
+                                notify(strings.messageCopied, StadiumBannerKind.Success)
+                            }) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = strings.copyMessage)
+                            }
+                        }
+                        if (current != null && current.isOwner) {
+                            IconButton(onClick = {
+                                val toDelete = selectedMessageIds
+                                clearSelection()
+                                scope.launch {
+                                    toDelete.forEach { id ->
+                                        runCatching { container.stadiumChat.deleteMessageAsOwner(owner, current, id) }
+                                    }
+                                }
+                            }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = strings.deleteMessageAction,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
-                    }
-                },
-                actions = {
-                    if (current?.isOwner == true) {
-                        IconButton(onClick = { showInviteDialog = true }) {
-                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.inviteAction)
-                        }
-                        IconButton(onClick = onManage) {
-                            Icon(Icons.Default.Settings, contentDescription = strings.manageStadiumTitle)
-                        }
-                    } else if (current != null) {
-                        IconButton(onClick = { showLeaveDialog = true }) {
-                            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = strings.leaveStadiumAction)
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-            )
+            } else {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(name = current?.name ?: "", size = 36.dp, icon = Icons.Default.Podcasts)
+                            Spacer(Modifier.size(10.dp))
+                            Column {
+                                Text(current?.name ?: "", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    strings.stadiumSubscriberCount(current?.memberCount ?: 0L),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
+                        }
+                    },
+                    actions = {
+                        if (current?.isOwner == true) {
+                            IconButton(onClick = { showInviteDialog = true }) {
+                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.inviteAction)
+                            }
+                            IconButton(onClick = onManage) {
+                                Icon(Icons.Default.Settings, contentDescription = strings.manageStadiumTitle)
+                            }
+                        } else if (current != null) {
+                            IconButton(onClick = { showLeaveDialog = true }) {
+                                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = strings.leaveStadiumAction)
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                )
+            }
         }
     ) { padding ->
         if (current == null) {
@@ -378,14 +448,16 @@ fun StadiumScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(messages, key = { it.id }) { msg ->
-                            val onDeleteMessage: () -> Unit = {
-                                scope.launch { container.stadiumChat.deleteMessageAsOwner(owner, current, msg.id) }
-                            }
+                            val isSelected = selectedMessageIds.contains(msg.id)
+                            val onShortClick: () -> Unit = { if (inSelectionMode) toggleSelection(msg.id) }
+                            val onLongClick: () -> Unit = { toggleSelection(msg.id) }
                             when (msg.type) {
                                 MessageType.IMAGE -> StadiumImageBubble(
                                     msg = msg,
-                                    isOwner = current.isOwner,
-                                    onDelete = onDeleteMessage,
+                                    selected = isSelected,
+                                    inSelectionMode = inSelectionMode,
+                                    onShortClick = onShortClick,
+                                    onLongClick = onLongClick,
                                     onSaveImage = { bytes ->
                                         scope.launch {
                                             val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
@@ -405,13 +477,27 @@ fun StadiumScreen(
                                         }
                                     }
                                 )
-                                MessageType.VOICE -> StadiumVoiceBubble(msg = msg, isOwner = current.isOwner, onDelete = onDeleteMessage)
+                                MessageType.VOICE -> StadiumVoiceBubble(
+                                    msg = msg,
+                                    selected = isSelected,
+                                    inSelectionMode = inSelectionMode,
+                                    onShortClick = onShortClick,
+                                    onLongClick = onLongClick
+                                )
                                 MessageType.VIDEO -> StadiumVideoBubble(
                                     msg = msg,
-                                    isOwner = current.isOwner,
-                                    onDelete = onDeleteMessage
+                                    selected = isSelected,
+                                    inSelectionMode = inSelectionMode,
+                                    onShortClick = onShortClick,
+                                    onLongClick = onLongClick
                                 )
-                                else -> StadiumTextBubble(msg = msg, isOwner = current.isOwner, onDelete = onDeleteMessage)
+                                else -> StadiumTextBubble(
+                                    msg = msg,
+                                    selected = isSelected,
+                                    inSelectionMode = inSelectionMode,
+                                    onShortClick = onShortClick,
+                                    onLongClick = onLongClick
+                                )
                             }
                         }
                     }
@@ -494,22 +580,39 @@ fun StadiumScreen(
 }
 
 @Composable
-private fun StadiumTextBubble(msg: StadiumMessage, isOwner: Boolean, onDelete: () -> Unit) {
+private fun StadiumTextBubble(
+    msg: StadiumMessage,
+    selected: Boolean,
+    inSelectionMode: Boolean,
+    onShortClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
     val bubbleColor = if (msg.isOwn) MaterialTheme.colorScheme.primaryContainer
         else MaterialTheme.colorScheme.surfaceContainerHigh
     val textColor = if (msg.isOwn) MaterialTheme.colorScheme.onPrimaryContainer
         else MaterialTheme.colorScheme.onSurface
-    val clipboard = LocalClipboardManager.current
-    var showMenu by remember(msg.id) { mutableStateOf(false) }
-    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+
+    val tint by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent)
+    val currentOnTap by rememberUpdatedState { if (inSelectionMode) onShortClick() }
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tint)
+            .pointerInput(msg.id) {
+                detectTapGestures(
+                    onTap = { currentOnTap() },
+                    onLongPress = { currentOnLongClick() }
+                )
+            }
+            .padding(vertical = 2.dp),
+        contentAlignment = Alignment.Center
+    ) {
         Surface(
             color = bubbleColor,
             shape = RoundedCornerShape(14.dp),
-            modifier = Modifier
-                .widthIn(max = 340.dp)
-                .pointerInput(msg.id) {
-                    detectTapGestures(onLongPress = { showMenu = true })
-                }
+            modifier = Modifier.widthIn(max = 340.dp)
         ) {
             Text(
                 msg.displayBody,
@@ -519,58 +622,16 @@ private fun StadiumTextBubble(msg: StadiumMessage, isOwner: Boolean, onDelete: (
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
             )
         }
-        StadiumMessageActionMenu(
-            expanded = showMenu,
-            onDismiss = { showMenu = false },
-            showCopy = true,
-            onCopy = { clipboard.setText(AnnotatedString(msg.displayBody)) },
-            showDelete = isOwner,
-            onDelete = onDelete
-        )
-    }
-}
-
-@Composable
-private fun StadiumMessageActionMenu(
-    expanded: Boolean,
-    onDismiss: () -> Unit,
-    showCopy: Boolean,
-    onCopy: () -> Unit,
-    showDelete: Boolean,
-    onDelete: () -> Unit
-) {
-    val strings = LocalStrings.current
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        if (showCopy) {
-            DropdownMenuItem(
-                text = { Text(strings.copyMessage) },
-                leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                onClick = {
-                    onDismiss()
-                    onCopy()
-                }
-            )
-        }
-        if (showDelete) {
-            DropdownMenuItem(
-                text = { Text(strings.deleteMessageAction, color = MaterialTheme.colorScheme.error) },
-                leadingIcon = {
-                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                },
-                onClick = {
-                    onDismiss()
-                    onDelete()
-                }
-            )
-        }
     }
 }
 
 @Composable
 private fun StadiumImageBubble(
     msg: StadiumMessage,
-    isOwner: Boolean,
-    onDelete: () -> Unit,
+    selected: Boolean,
+    inSelectionMode: Boolean,
+    onShortClick: () -> Unit,
+    onLongClick: () -> Unit,
     onSaveImage: (ByteArray) -> Unit,
     onCopyImage: (ByteArray) -> Unit
 ) {
@@ -592,14 +653,25 @@ private fun StadiumImageBubble(
         decodeDone = true
     }
     var showFullscreen by remember { mutableStateOf(false) }
-    var showMenu by remember(msg.id) { mutableStateOf(false) }
     val currentBitmap = bitmap
     val currentBytes = imageBytes
-    val currentOnTap by rememberUpdatedState { if (bitmap != null) showFullscreen = true }
+    val tint by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent)
+    val currentOnTap by rememberUpdatedState {
+        if (inSelectionMode) onShortClick()
+        else if (bitmap != null) showFullscreen = true
+    }
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .background(tint)
+            .pointerInput(msg.id) {
+                detectTapGestures(
+                    onTap = { currentOnTap() },
+                    onLongPress = { currentOnLongClick() }
+                )
+            }
             .padding(top = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -607,22 +679,8 @@ private fun StadiumImageBubble(
             Modifier.widthIn(max = 240.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(bg)
-                .pointerInput(msg.id) {
-                    detectTapGestures(
-                        onTap = { currentOnTap() },
-                        onLongPress = { showMenu = true }
-                    )
-                }
                 .padding(4.dp)
         ) {
-            StadiumMessageActionMenu(
-                expanded = showMenu,
-                onDismiss = { showMenu = false },
-                showCopy = false,
-                onCopy = {},
-                showDelete = isOwner,
-                onDelete = onDelete
-            )
             Column {
                 if (currentBitmap != null) {
                     androidx.compose.foundation.Image(
@@ -706,7 +764,13 @@ private fun StadiumImageBubble(
 }
 
 @Composable
-private fun StadiumVoiceBubble(msg: StadiumMessage, isOwner: Boolean, onDelete: () -> Unit) {
+private fun StadiumVoiceBubble(
+    msg: StadiumMessage,
+    selected: Boolean,
+    inSelectionMode: Boolean,
+    onShortClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
     val outgoing = msg.isOwn
     val bg = if (outgoing) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
     val fg = if (outgoing) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
@@ -727,26 +791,29 @@ private fun StadiumVoiceBubble(msg: StadiumMessage, isOwner: Boolean, onDelete: 
     }
     val player = rememberAudioPlayer()
     val currentBytes = opusBytes
-    var showMenu by remember(msg.id) { mutableStateOf(false) }
+    val tint by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent)
+    val currentOnShortClick by rememberUpdatedState(onShortClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tint)
+            .pointerInput(msg.id) {
+                detectTapGestures(
+                    onTap = { currentOnShortClick() },
+                    onLongPress = { currentOnLongClick() }
+                )
+            }
+            .padding(top = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Box(
             Modifier.widthIn(max = 260.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(bg)
-                .pointerInput(msg.id) {
-                    detectTapGestures(onLongPress = { showMenu = true })
-                }
                 .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
-            StadiumMessageActionMenu(
-                expanded = showMenu,
-                onDismiss = { showMenu = false },
-                showCopy = false,
-                onCopy = {},
-                showDelete = isOwner,
-                onDelete = onDelete
-            )
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
@@ -796,7 +863,13 @@ private fun StadiumVoiceBubble(msg: StadiumMessage, isOwner: Boolean, onDelete: 
 }
 
 @Composable
-private fun StadiumVideoBubble(msg: StadiumMessage, isOwner: Boolean, onDelete: () -> Unit) {
+private fun StadiumVideoBubble(
+    msg: StadiumMessage,
+    selected: Boolean,
+    inSelectionMode: Boolean,
+    onShortClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
     val strings = LocalStrings.current
     val outgoing = msg.isOwn
     val bg = if (outgoing) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
@@ -812,23 +885,23 @@ private fun StadiumVideoBubble(msg: StadiumMessage, isOwner: Boolean, onDelete: 
         decodeDone = true
     }
     val currentBytes = videoBytes
-    var showMenu by remember(msg.id) { mutableStateOf(false) }
+    val tint by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent)
+    val currentOnShortClick by rememberUpdatedState(onShortClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tint)
+            .padding(top = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Box(
             Modifier.widthIn(max = 260.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(bg)
                 .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
-            StadiumMessageActionMenu(
-                expanded = showMenu,
-                onDismiss = { showMenu = false },
-                showCopy = false,
-                onCopy = {},
-                showDelete = isOwner,
-                onDelete = onDelete
-            )
             Column {
                 if (expanded && currentBytes != null) {
                     dev.stade.ui.video.VideoPlayerView(
@@ -845,8 +918,11 @@ private fun StadiumVideoBubble(msg: StadiumMessage, isOwner: Boolean, onDelete: 
                             .clip(RoundedCornerShape(10.dp))
                             .pointerInput(msg.id, currentBytes) {
                                 detectTapGestures(
-                                    onTap = { if (currentBytes != null) expanded = true },
-                                    onLongPress = { showMenu = true }
+                                    onTap = {
+                                        if (inSelectionMode) currentOnShortClick()
+                                        else if (currentBytes != null) expanded = true
+                                    },
+                                    onLongPress = { currentOnLongClick() }
                                 )
                             }
                             .padding(vertical = 2.dp)

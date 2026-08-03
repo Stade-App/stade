@@ -22,7 +22,7 @@ data class Contact(
     val muted: Boolean = false
 ) {
     val stadeId: String get() = id
-    override fun equals(other: Any?): Boolean = other is Contact && other.id == id
+    override fun equals(other: Any?): Boolean = other is Contact && other.id == id && other.muted == muted
     override fun hashCode(): Int = id.hashCode()
 }
 
