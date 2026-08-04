@@ -360,6 +360,8 @@ abstract class AppStrings {
     abstract val stickerCreationFailed: String
     abstract val deleteStickerConfirmTitle: String
     abstract val deleteStickerConfirmBody: String
+    abstract val saveStickerToPackAction: String
+    abstract val stickerSavedToPack: String
 
     abstract val replyAction: String
     abstract fun replyingToLabel(name: String): String

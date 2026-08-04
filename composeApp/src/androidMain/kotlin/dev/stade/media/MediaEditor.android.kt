@@ -34,6 +34,7 @@ actual fun ForceFullScreenDialogWindow() {
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT
         )
+        window.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         ViewCompat.requestApplyInsets(window.decorView)
     }
@@ -43,10 +44,16 @@ actual fun ForceFullScreenDialogWindow() {
 actual fun rememberNavigationBarHeight(): Dp {
     val view = LocalView.current
     val density = LocalDensity.current
-    var heightPx by remember { mutableStateOf(0) }
+    val fallbackPx = remember(view) {
+        val res = view.context.resources
+        val id = res.getIdentifier("navigation_bar_height", "dimen", "android")
+        if (id > 0) runCatching { res.getDimensionPixelSize(id) }.getOrDefault(0) else 0
+    }
+    var heightPx by remember(fallbackPx) { mutableStateOf(fallbackPx) }
     DisposableEffect(view) {
         val listener = androidx.core.view.OnApplyWindowInsetsListener { _, insets ->
-            heightPx = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            val navInset = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            if (navInset > 0) heightPx = navInset
             insets
         }
         ViewCompat.setOnApplyWindowInsetsListener(view, listener)

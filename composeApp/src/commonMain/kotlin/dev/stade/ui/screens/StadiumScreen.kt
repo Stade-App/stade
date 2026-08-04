@@ -87,6 +87,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -142,6 +143,7 @@ fun StadiumScreen(
     val connected by container.sync.connectedContacts.collectAsState()
     val listState = rememberLazyListState()
     val clipboard = LocalClipboardManager.current
+    var prevColumnHeight by remember { mutableStateOf(Int.MAX_VALUE) }
 
     var draft by remember { mutableStateOf(TextFieldValue("")) }
     var showLeaveDialog by remember { mutableStateOf(false) }
@@ -363,6 +365,25 @@ fun StadiumScreen(
                                 Icon(Icons.Default.ContentCopy, contentDescription = strings.copyMessage)
                             }
                         }
+                        val singleSelectedStickerMsg = remember(selectedMessageIds, messages) {
+                            if (selectedMessageIds.size != 1) null
+                            else messages.firstOrNull {
+                                it.id in selectedMessageIds && it.type == MessageType.STICKER && !it.isOwn
+                            }
+                        }
+                        if (singleSelectedStickerMsg != null) {
+                            IconButton(onClick = {
+                                val bytes = singleSelectedStickerMsg.stickerBytes()
+                                clearSelection()
+                                if (bytes != null) {
+                                    runCatching { container.stickers.create(owner.id, bytes) }
+                                        .onSuccess { notify(strings.stickerSavedToPack, StadiumBannerKind.Success) }
+                                        .onFailure { notify(strings.stickerCreationFailed, StadiumBannerKind.Error) }
+                                }
+                            }) {
+                                Icon(Icons.Default.Download, contentDescription = strings.saveStickerToPackAction)
+                            }
+                        }
                         if (current != null && current.isOwner) {
                             IconButton(onClick = {
                                 val toDelete = selectedMessageIds
@@ -441,6 +462,12 @@ fun StadiumScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                        .onSizeChanged { size ->
+                            if (size.height < prevColumnHeight && messages.isNotEmpty()) {
+                                scope.launch { listState.scrollToItem(messages.lastIndex) }
+                            }
+                            prevColumnHeight = size.height
+                        }
                 ) {
                     if (!current.isOwner && !connected.contains(current.creatorStadeId)) {
                         Surface(
@@ -477,7 +504,7 @@ fun StadiumScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(messages, key = { it.id }) { msg ->
-                            val isSelected = selectedMessageIds.contains(msg.id)
+                            val isSelected by remember(msg.id) { derivedStateOf { selectedMessageIds.contains(msg.id) } }
                             val onShortClick: () -> Unit = { if (inSelectionMode) toggleSelection(msg.id) }
                             val onLongClick: () -> Unit = { toggleSelection(msg.id) }
                             when (msg.type) {

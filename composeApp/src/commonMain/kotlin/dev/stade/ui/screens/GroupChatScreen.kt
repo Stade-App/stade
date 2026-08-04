@@ -579,6 +579,25 @@ fun GroupChatScreen(
                                 Icon(Icons.Default.ContentCopy, contentDescription = strings.copyMessage)
                             }
                         }
+                        val singleSelectedStickerMsg = remember(selectedMessageIds, messages) {
+                            if (selectedMessageIds.size != 1) null
+                            else messages.firstOrNull {
+                                it.id in selectedMessageIds && it.type == MessageType.STICKER && !it.isOwn
+                            }
+                        }
+                        if (singleSelectedStickerMsg != null) {
+                            IconButton(onClick = {
+                                val bytes = singleSelectedStickerMsg.stickerBytes()
+                                clearSelection()
+                                if (bytes != null) {
+                                    runCatching { container.stickers.create(owner.id, bytes) }
+                                        .onSuccess { notify(strings.stickerSavedToPack, GroupBannerKind.Success) }
+                                        .onFailure { notify(strings.stickerCreationFailed, GroupBannerKind.Error) }
+                                }
+                            }) {
+                                Icon(Icons.Default.Download, contentDescription = strings.saveStickerToPackAction)
+                            }
+                        }
                         IconButton(onClick = { showSelectionDeleteDialog = true }) {
                             Icon(
                                 Icons.Default.Delete,

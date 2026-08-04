@@ -541,6 +541,25 @@ fun ChatScreen(
                                 Icon(Icons.Default.ContentCopy, contentDescription = strings.copyMessage)
                             }
                         }
+                        val singleSelectedStickerMsg = remember(selectedMessageIds, messages) {
+                            if (selectedMessageIds.size != 1) null
+                            else messages.firstOrNull {
+                                it.id in selectedMessageIds && it.type == MessageType.STICKER && it.direction == MessageDirection.IN
+                            }
+                        }
+                        if (singleSelectedStickerMsg != null) {
+                            IconButton(onClick = {
+                                val bytes = singleSelectedStickerMsg.stickerBytes()
+                                clearSelection()
+                                if (bytes != null) {
+                                    runCatching { container.stickers.create(owner.id, bytes) }
+                                        .onSuccess { showNotification(strings.stickerSavedToPack, NotificationKind.Success) }
+                                        .onFailure { showNotification(strings.stickerCreationFailed, NotificationKind.Error) }
+                                }
+                            }) {
+                                Icon(Icons.Default.Download, contentDescription = strings.saveStickerToPackAction)
+                            }
+                        }
                         IconButton(onClick = { showSelectionDeleteDialog = true }) {
                             Icon(
                                 Icons.Default.Delete,

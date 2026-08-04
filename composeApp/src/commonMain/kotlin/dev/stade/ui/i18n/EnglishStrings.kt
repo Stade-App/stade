@@ -421,6 +421,8 @@ object EnglishStrings : AppStrings() {
     override val stickerCreationFailed = "Couldn't create sticker"
     override val deleteStickerConfirmTitle = "Delete sticker?"
     override val deleteStickerConfirmBody = "This sticker will be removed from your pack."
+    override val saveStickerToPackAction = "Save to my stickers"
+    override val stickerSavedToPack = "Sticker saved to your pack"
 
     override val replyAction = "Reply"
     override fun replyingToLabel(name: String) = "Replying to $name"

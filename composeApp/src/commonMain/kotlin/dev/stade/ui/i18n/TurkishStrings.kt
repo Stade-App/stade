@@ -420,6 +420,8 @@ object TurkishStrings : AppStrings() {
     override val stickerCreationFailed = "Çıkartma oluşturulamadı"
     override val deleteStickerConfirmTitle = "Çıkartma silinsin mi?"
     override val deleteStickerConfirmBody = "Bu çıkartma paketinizden kaldırılacak."
+    override val saveStickerToPackAction = "Çıkartmalarıma kaydet"
+    override val stickerSavedToPack = "Çıkartma paketinize kaydedildi"
 
     override val replyAction = "Yanıtla"
     override fun replyingToLabel(name: String) = "$name yanıtlanıyor"
