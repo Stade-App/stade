@@ -7,6 +7,7 @@ import dev.stade.group.GroupManager
 import dev.stade.identity.LocalIdentity
 import dev.stade.message.MessageManager
 import dev.stade.message.encodeImageBody
+import dev.stade.message.encodeStickerBody
 import dev.stade.message.encodeVideoBody
 import dev.stade.message.encodeVoiceBody
 import dev.stade.sync.SyncEngine
@@ -80,6 +81,9 @@ class StadiumChatService(
 
     suspend fun postVideo(owner: LocalIdentity, stadium: StadiumInfo, videoBytes: ByteArray, caption: String = ""): Boolean =
         post(owner, stadium, encodeVideoBody(videoBytes, caption))
+
+    suspend fun postSticker(owner: LocalIdentity, stadium: StadiumInfo, stickerBytes: ByteArray): Boolean =
+        post(owner, stadium, encodeStickerBody(stickerBytes))
 
     suspend fun deleteAsOwner(owner: LocalIdentity, stadium: StadiumInfo) {
         if (!stadium.isOwner) return

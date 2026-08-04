@@ -7,6 +7,7 @@ import dev.stade.identity.LocalIdentity
 import dev.stade.message.encodeImageBody
 import dev.stade.message.encodeReactionBody
 import dev.stade.message.encodeReplyBody
+import dev.stade.message.encodeStickerBody
 import dev.stade.message.encodeVideoBody
 import dev.stade.message.encodeVoiceBody
 import dev.stade.sync.SyncEngine
@@ -59,6 +60,10 @@ class GroupChatService(
 
     suspend fun sendVideo(owner: LocalIdentity, groupId: String, videoBytes: ByteArray, replyToId: String? = null, caption: String = ""): Boolean {
         return sendMessage(owner, groupId, encodeVideoBody(videoBytes, caption), replyToId)
+    }
+
+    suspend fun sendSticker(owner: LocalIdentity, groupId: String, stickerBytes: ByteArray, replyToId: String? = null): Boolean {
+        return sendMessage(owner, groupId, encodeStickerBody(stickerBytes), replyToId)
     }
 
     suspend fun kickMember(owner: LocalIdentity, group: GroupInfo, memberId: String): Boolean {

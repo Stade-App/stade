@@ -110,6 +110,8 @@ import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.ChatComposerBar
+import dev.stade.ui.components.EmojiStickerDrawer
+import dev.stade.ui.components.StickerMakerDialog
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.rememberMediaPickerLauncher
@@ -144,6 +146,9 @@ fun StadiumScreen(
     var draft by remember { mutableStateOf(TextFieldValue("")) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
+    var showEmojiDrawer by remember { mutableStateOf(false) }
+    var showStickerMaker by remember { mutableStateOf(false) }
+    val stickers by remember(owner.id) { container.stickers.observeStickers(owner.id) }.collectAsState(initial = emptyList())
     var leaving by remember { mutableStateOf(false) }
 
     var selectedMessageIds by remember(stadiumId) { mutableStateOf<Set<String>>(emptySet()) }
@@ -296,6 +301,30 @@ fun StadiumScreen(
             owner = owner,
             stadium = current,
             onDismiss = { showInviteDialog = false }
+        )
+    }
+
+    if (showEmojiDrawer && current != null) {
+        EmojiStickerDrawer(
+            stickers = stickers,
+            onDismiss = { showEmojiDrawer = false },
+            onSend = { bytes -> scope.launch { container.stadiumChat.postSticker(owner, current, bytes) } },
+            onCreateSticker = {
+                showEmojiDrawer = false
+                showStickerMaker = true
+            },
+            onDeleteSticker = { id -> container.stickers.delete(id) }
+        )
+    }
+
+    if (showStickerMaker) {
+        StickerMakerDialog(
+            onSave = { bytes ->
+                runCatching { container.stickers.create(owner.id, bytes) }
+                    .onFailure { notify(strings.stickerCreationFailed, StadiumBannerKind.Error) }
+                showStickerMaker = false
+            },
+            onCancel = { showStickerMaker = false }
         )
     }
 
@@ -491,6 +520,13 @@ fun StadiumScreen(
                                     onShortClick = onShortClick,
                                     onLongClick = onLongClick
                                 )
+                                MessageType.STICKER -> StadiumStickerBubble(
+                                    msg = msg,
+                                    selected = isSelected,
+                                    inSelectionMode = inSelectionMode,
+                                    onShortClick = onShortClick,
+                                    onLongClick = onLongClick
+                                )
                                 else -> StadiumTextBubble(
                                     msg = msg,
                                     selected = isSelected,
@@ -546,7 +582,8 @@ fun StadiumScreen(
                                 }
                             },
                             onPickMedia = { mediaPicker.launch() },
-                            onToggleRecording = { toggleRecording() }
+                            onToggleRecording = { toggleRecording() },
+                            onOpenEmojiPicker = { showEmojiDrawer = true }
                         )
                     }
                 }
@@ -555,7 +592,7 @@ fun StadiumScreen(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .windowInsetsBottomHeight(WindowInsets.navigationBars)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .background(MaterialTheme.colorScheme.background)
                 )
                 val editIdx = editingImageIndex
                 if (editIdx != null && editIdx < pendingImages.size) {
@@ -962,6 +999,63 @@ private fun StadiumVideoBubble(
         }
     }
 }
+
+@Composable
+private fun StadiumStickerBubble(
+    msg: StadiumMessage,
+    selected: Boolean,
+    inSelectionMode: Boolean,
+    onShortClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    val sub = MaterialTheme.colorScheme.onSurfaceVariant
+    var stickerBytes by remember(msg.id) { mutableStateOf<ByteArray?>(null) }
+    var decodeDone by remember(msg.id) { mutableStateOf(false) }
+    LaunchedEffect(msg.id) {
+        val bytes = withContext(Dispatchers.Default) { runCatching { msg.stickerBytes() }.getOrNull() }
+        stickerBytes = bytes
+        decodeDone = true
+    }
+    val bitmap = remember(stickerBytes) {
+        stickerBytes?.let { runCatching { it.decodeToImageBitmap() }.getOrNull() }
+    }
+    val tint by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent)
+    val currentOnTap by rememberUpdatedState { if (inSelectionMode) onShortClick() }
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tint)
+            .pointerInput(msg.id) {
+                detectTapGestures(
+                    onTap = { currentOnTap() },
+                    onLongPress = { currentOnLongClick() }
+                )
+            }
+            .padding(top = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(modifier = Modifier.size(120.dp), contentAlignment = Alignment.Center) {
+            if (bitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = bitmap,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            } else if (decodeDone) {
+                Icon(Icons.Default.BrokenImage, contentDescription = null, tint = sub, modifier = Modifier.size(28.dp))
+            }
+        }
+        Text(
+            formatChatTime(msg.timestamp),
+            color = sub,
+            style = MaterialTheme.typography.labelSmall
+        )
+    }
+}
+
 @Composable
 private fun StadiumTopBanner(
     data: StadiumBannerData?,

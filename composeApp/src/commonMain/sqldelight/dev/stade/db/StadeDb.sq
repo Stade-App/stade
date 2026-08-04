@@ -390,7 +390,7 @@ SELECT Message.*, Contact.nickname AS contactNickname FROM Message
 JOIN Contact ON Contact.id = Message.contactId
 WHERE Message.contactId IN (SELECT id FROM Contact WHERE ownerId = :ownerId)
 AND Message.body LIKE '%' || :query || '%'
-AND Message.body NOT LIKE 'STADE_IMG_V1:%' AND Message.body NOT LIKE 'STADE_VOI_V1:%'
+AND Message.body NOT LIKE 'STADE_IMG_V1:%' AND Message.body NOT LIKE 'STADE_VOI_V1:%' AND Message.body NOT LIKE 'STADE_STK_V1:%'
 ORDER BY Message.timestamp DESC LIMIT :resultLimit;
 
 searchGroupMessages:
@@ -398,7 +398,7 @@ SELECT GroupMessage.*, StadeGroup.name AS groupName FROM GroupMessage
 JOIN StadeGroup ON StadeGroup.id = GroupMessage.groupId
 WHERE StadeGroup.ownerId = :ownerId
 AND GroupMessage.body LIKE '%' || :query || '%'
-AND GroupMessage.body NOT LIKE 'STADE_IMG_V1:%' AND GroupMessage.body NOT LIKE 'STADE_VOI_V1:%'
+AND GroupMessage.body NOT LIKE 'STADE_IMG_V1:%' AND GroupMessage.body NOT LIKE 'STADE_VOI_V1:%' AND GroupMessage.body NOT LIKE 'STADE_STK_V1:%'
 ORDER BY GroupMessage.timestamp DESC LIMIT :resultLimit;
 
 CREATE TABLE Stadium (
@@ -501,6 +501,27 @@ SELECT StadiumMessage.*, Stadium.name AS stadiumName FROM StadiumMessage
 JOIN Stadium ON Stadium.id = StadiumMessage.stadiumId
 WHERE Stadium.ownerId = :ownerId
 AND StadiumMessage.body LIKE '%' || :query || '%'
-AND StadiumMessage.body NOT LIKE 'STADE_IMG_V1:%' AND StadiumMessage.body NOT LIKE 'STADE_VOI_V1:%'
+AND StadiumMessage.body NOT LIKE 'STADE_IMG_V1:%' AND StadiumMessage.body NOT LIKE 'STADE_VOI_V1:%' AND StadiumMessage.body NOT LIKE 'STADE_STK_V1:%'
 ORDER BY StadiumMessage.timestamp DESC LIMIT :resultLimit;
+
+CREATE TABLE Sticker (
+    id TEXT NOT NULL PRIMARY KEY,
+    ownerId TEXT NOT NULL,
+    imageBytes BLOB NOT NULL,
+    createdAt INTEGER NOT NULL
+);
+
+CREATE INDEX idxSticker ON Sticker(ownerId);
+
+insertSticker:
+INSERT INTO Sticker(id, ownerId, imageBytes, createdAt) VALUES (?, ?, ?, ?);
+
+selectStickers:
+SELECT * FROM Sticker WHERE ownerId = ? ORDER BY createdAt DESC;
+
+deleteSticker:
+DELETE FROM Sticker WHERE id = ?;
+
+wipeStickers:
+DELETE FROM Sticker;
 

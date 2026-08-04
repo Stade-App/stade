@@ -2,6 +2,7 @@ package dev.stade.stadium
 
 import dev.stade.message.IMAGE_BODY_PREFIX
 import dev.stade.message.MessageType
+import dev.stade.message.STICKER_BODY_PREFIX
 import dev.stade.message.VIDEO_BODY_PREFIX
 import dev.stade.message.VOICE_BODY_PREFIX
 import kotlin.io.encoding.Base64
@@ -34,6 +35,7 @@ data class StadiumMessage(
             body.startsWith(IMAGE_BODY_PREFIX) -> MessageType.IMAGE
             body.startsWith(VOICE_BODY_PREFIX) -> MessageType.VOICE
             body.startsWith(VIDEO_BODY_PREFIX) -> MessageType.VIDEO
+            body.startsWith(STICKER_BODY_PREFIX) -> MessageType.STICKER
             else -> MessageType.TEXT
         }
 
@@ -47,6 +49,12 @@ data class StadiumMessage(
     fun videoBytes(): ByteArray? =
         if (type == MessageType.VIDEO)
             runCatching { Base64.Default.decode(body.removePrefix(VIDEO_BODY_PREFIX).substringBefore('\n')) }.getOrNull()
+        else null
+
+    @OptIn(ExperimentalEncodingApi::class)
+    fun stickerBytes(): ByteArray? =
+        if (type == MessageType.STICKER)
+            runCatching { Base64.Default.decode(body.removePrefix(STICKER_BODY_PREFIX)) }.getOrNull()
         else null
 
     val caption: String

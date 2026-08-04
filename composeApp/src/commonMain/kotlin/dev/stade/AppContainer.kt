@@ -23,6 +23,7 @@ import dev.stade.security.SecretStore
 import dev.stade.security.Vault
 import dev.stade.stadium.StadiumChatService
 import dev.stade.stadium.StadiumManager
+import dev.stade.sticker.StickerManager
 import dev.stade.sync.Outbox
 import dev.stade.sync.SyncEngine
 import dev.stade.transport.ConnectionManager
@@ -134,6 +135,13 @@ class AppContainer(
             runCatching { createdDriver.execute(null, "CREATE TABLE IF NOT EXISTS ProcessedEnvelope (messageId TEXT NOT NULL PRIMARY KEY, contactId TEXT NOT NULL, processedAt INTEGER NOT NULL)", 0) }
             runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxProcessedEnvelope ON ProcessedEnvelope(processedAt)", 0) }
         }
+        runCatching {
+            createdDriver.executeQuery(null, "SELECT id FROM Sticker LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "CREATE TABLE IF NOT EXISTS Sticker (id TEXT NOT NULL PRIMARY KEY, ownerId TEXT NOT NULL, imageBytes BLOB NOT NULL, createdAt INTEGER NOT NULL)", 0) }
+            runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxSticker ON Sticker(ownerId)", 0) }
+        }
         db = database
     }
 
@@ -146,6 +154,7 @@ class AppContainer(
     val ratchet = RatchetSessions(crypto, pq, contacts)
     val groups = GroupManager(db, crypto)
     val stadiums = StadiumManager(db, crypto)
+    val stickers = StickerManager(db, crypto)
     val pinnedChats = PinnedChats(db)
     val sync = SyncEngine(crypto, pq, contacts, messages, ratchet, outbox, handshake, groups, stadiums)
     val chat = ChatService(messages, sync)
@@ -206,6 +215,8 @@ class AppContainer(
                 db.stadeDbQueries.wipeTransports()
                 db.stadeDbQueries.wipeKeyValue()
                 db.stadeDbQueries.wipeProcessedEnvelope()
+                db.stadeDbQueries.wipeStickers()
+                db.stadeDbQueries.wipeReactions()
             }
         }
         runCatching { driver.close() }

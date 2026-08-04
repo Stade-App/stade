@@ -50,7 +50,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -72,6 +72,9 @@ expect fun applyMediaEdits(original: ByteArray, crop: CropRect?, strokes: List<E
 
 @Composable
 expect fun ForceFullScreenDialogWindow()
+
+@Composable
+expect fun rememberNavigationBarHeight(): Dp
 
 private enum class EditorMode { CROP, DRAW }
 
@@ -99,7 +102,6 @@ fun MediaEditorDialog(
     var currentColor by remember { mutableStateOf(Color.Red) }
     var saving by remember { mutableStateOf(false) }
     var boxSizePx by remember { mutableStateOf(IntSize.Zero) }
-    var controlsHeight by remember { mutableStateOf(80.dp) }
 
     val aspect = bitmap.width.toFloat() / bitmap.height.toFloat()
 
@@ -108,7 +110,7 @@ fun MediaEditorDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         ForceFullScreenDialogWindow()
-        val density = LocalDensity.current
+        val navBarHeight = rememberNavigationBarHeight()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -170,22 +172,18 @@ fun MediaEditorDialog(
                 contentAlignment = Alignment.Center
             ) {
                 val availW = maxWidth * 0.94f
-                val availH = (maxHeight - controlsHeight).coerceAtLeast(40.dp) * 0.94f
+                val availH = maxHeight * 0.94f
                 val fitsByWidth = (availW / aspect) <= availH
                 val targetW = if (fitsByWidth) availW else availH * aspect
                 val targetH = if (fitsByWidth) availW / aspect else availH
 
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Box(
+                    modifier = Modifier
+                        .width(targetW)
+                        .height(targetH)
+                        .onSizeChanged { boxSizePx = it }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .width(targetW)
-                            .height(targetH)
-                            .onSizeChanged { boxSizePx = it }
-                    ) {
-                        androidx.compose.foundation.Image(
+                    androidx.compose.foundation.Image(
                             bitmap = bitmap,
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
@@ -312,42 +310,41 @@ fun MediaEditorDialog(
                             }
                         }
                     }
+            }
 
-                    if (mode == EditorMode.DRAW) {
-                        Row(
+            if (mode == EditorMode.DRAW) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = navBarHeight)
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    swatchColors.forEach { c ->
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .onSizeChanged { controlsHeight = with(density) { it.height.toDp() } }
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            swatchColors.forEach { c ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(if (c == currentColor) 32.dp else 26.dp)
-                                        .clip(CircleShape)
-                                        .background(c)
-                                        .clickable { currentColor = c }
-                                )
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            IconButton(onClick = { if (strokes.isNotEmpty()) strokes = strokes.dropLast(1) }) {
-                                Icon(Icons.Default.Undo, contentDescription = strings.undoAction, tint = Color.White)
-                            }
-                        }
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .onSizeChanged { controlsHeight = with(density) { it.height.toDp() } }
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            TextButton(onClick = { crop = CropRect(0f, 0f, 1f, 1f) }) {
-                                Text(strings.resetCropAction, color = Color.White)
-                            }
-                        }
+                                .size(if (c == currentColor) 32.dp else 26.dp)
+                                .clip(CircleShape)
+                                .background(c)
+                                .clickable { currentColor = c }
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(onClick = { if (strokes.isNotEmpty()) strokes = strokes.dropLast(1) }) {
+                        Icon(Icons.Default.Undo, contentDescription = strings.undoAction, tint = Color.White)
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = navBarHeight)
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    TextButton(onClick = { crop = CropRect(0f, 0f, 1f, 1f) }) {
+                        Text(strings.resetCropAction, color = Color.White)
                     }
                 }
             }

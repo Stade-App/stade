@@ -268,7 +268,7 @@ private fun UnlockedApp(
                     val sender = contact?.nickname ?: "Stade"
                     val preview = runCatching { container.messages.lastMessage(event.contactId)?.body }
                         .getOrNull()
-                        ?.let { dev.stade.message.previewBody(it, notifStrings.photoMessage, notifStrings.voiceMessage, notifStrings.videoMessage) }
+                        ?.let { dev.stade.message.previewBody(it, notifStrings.photoMessage, notifStrings.voiceMessage, notifStrings.videoMessage, notifStrings.stickerMessage) }
                         ?: notifStrings.notifNewMessageFallback
                     val total = runCatching { container.messages.totalUnread() }.getOrDefault(0L).toInt()
                     val privacy = dev.stade.notification.getNotificationPrivacyEnabled().value
@@ -299,7 +299,7 @@ private fun UnlockedApp(
                     val group = container.groups.getGroup(event.groupId)
                     val name = group?.name ?: "Stade"
                     val preview = container.groups.lastMessage(event.groupId)?.body
-                        ?.let { dev.stade.message.previewBody(it, notifStrings.photoMessage, notifStrings.voiceMessage, notifStrings.videoMessage) }
+                        ?.let { dev.stade.message.previewBody(it, notifStrings.photoMessage, notifStrings.voiceMessage, notifStrings.videoMessage, notifStrings.stickerMessage) }
                         ?: notifStrings.notifNewMessageFallback
                     val privacy = dev.stade.notification.getNotificationPrivacyEnabled().value
                     dev.stade.notification.showIncomingMessageNotification(

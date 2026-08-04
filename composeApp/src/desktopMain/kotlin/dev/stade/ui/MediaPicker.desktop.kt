@@ -20,12 +20,12 @@ actual class MediaPickerLauncher(private val doLaunch: () -> Unit) {
 private val IMAGE_EXTS = setOf("jpg", "jpeg", "png", "gif", "bmp", "webp")
 private val VIDEO_EXTS = setOf("mp4")
 
-private fun openNativeMediaDialog(title: String): Array<File> {
+private fun openNativeMediaDialog(title: String, imagesOnly: Boolean): Array<File> {
     val dialog = FileDialog(null as Frame?, title, FileDialog.LOAD)
     dialog.isMultipleMode = true
     dialog.setFilenameFilter { _, name ->
         val ext = name.substringAfterLast('.', "").lowercase()
-        ext in IMAGE_EXTS || ext in VIDEO_EXTS
+        if (imagesOnly) ext in IMAGE_EXTS else ext in IMAGE_EXTS || ext in VIDEO_EXTS
     }
     dialog.isVisible = true
     return dialog.files ?: emptyArray()
@@ -34,14 +34,15 @@ private fun openNativeMediaDialog(title: String): Array<File> {
 @Composable
 actual fun rememberMediaPickerLauncher(
     onImages: (List<ByteArray>) -> Unit,
-    onVideo: (ByteArray) -> Unit
+    onVideo: (ByteArray) -> Unit,
+    imagesOnly: Boolean
 ): MediaPickerLauncher {
     val scope = rememberCoroutineScope()
     val title = LocalStrings.current.selectMediaTitle
-    return remember(title) {
+    return remember(title, imagesOnly) {
         MediaPickerLauncher {
             scope.launch(Dispatchers.IO) {
-                val files = openNativeMediaDialog(title)
+                val files = openNativeMediaDialog(title, imagesOnly)
                 if (files.isEmpty()) return@launch
                 val images = mutableListOf<ByteArray>()
                 var video: ByteArray? = null

@@ -9,5 +9,6 @@ expect class MediaPickerLauncher {
 @Composable
 expect fun rememberMediaPickerLauncher(
     onImages: (List<ByteArray>) -> Unit,
-    onVideo: (ByteArray) -> Unit
+    onVideo: (ByteArray) -> Unit,
+    imagesOnly: Boolean = false
 ): MediaPickerLauncher

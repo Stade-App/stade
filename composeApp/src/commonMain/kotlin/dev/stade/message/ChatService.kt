@@ -35,6 +35,11 @@ class ChatService(
         return send(owner, contact, body, replyToId)
     }
 
+    suspend fun sendSticker(owner: LocalIdentity, contact: Contact, stickerBytes: ByteArray, replyToId: String? = null): Message {
+        val body = encodeStickerBody(stickerBytes)
+        return send(owner, contact, body, replyToId)
+    }
+
     suspend fun sendReaction(owner: LocalIdentity, contact: Contact, targetMessageId: String, add: Boolean, emoji: String) {
         val body = encodeReactionBody(targetMessageId, add, emoji)
         val now = Clock.System.now().toEpochMilliseconds()

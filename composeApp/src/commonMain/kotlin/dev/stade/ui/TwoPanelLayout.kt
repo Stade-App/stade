@@ -471,7 +471,7 @@ fun TwoPanelLayout(
                                             val unread by remember(contact.id) { container.messages.observeUnreadCount(contact.id) }
                                                 .collectAsState(initial = remember(contact.id) { container.messages.unreadCount(contact.id) })
                                             val preview by remember(lastMsg?.id) {
-                                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage) } }
+                                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage) } }
                                             }
                                             val isSelected by remember(contact.id) {
                                                 derivedStateOf {
@@ -511,7 +511,7 @@ fun TwoPanelLayout(
                                             val groupUnread by remember(group.id) { container.groups.observeUnreadCount(group.id) }
                                                 .collectAsState(initial = remember(group.id) { container.groups.unreadCount(group.id) })
                                             val groupPreview by remember(lastGroupMsg?.id) {
-                                                derivedStateOf { lastGroupMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage) } }
+                                                derivedStateOf { lastGroupMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage) } }
                                             }
                                             val isGroupSelected by remember(group.id) {
                                                 derivedStateOf {

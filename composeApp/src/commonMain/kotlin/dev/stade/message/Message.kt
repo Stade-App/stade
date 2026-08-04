@@ -5,10 +5,11 @@ import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 enum class MessageDirection { IN, OUT }
-enum class MessageType { TEXT, IMAGE, VOICE, VIDEO }
+enum class MessageType { TEXT, IMAGE, VOICE, VIDEO, STICKER }
 const val IMAGE_BODY_PREFIX = "STADE_IMG_V1:"
 const val VOICE_BODY_PREFIX = "STADE_VOI_V1:"
 const val VIDEO_BODY_PREFIX = "STADE_VID_V1:"
+const val STICKER_BODY_PREFIX = "STADE_STK_V1:"
 const val REPLY_BODY_PREFIX = "STADE_RPL_V1:"
 const val REACTION_BODY_PREFIX = "STADE_RXN_V1:"
 
@@ -38,6 +39,7 @@ data class Message(
             effectiveBody.startsWith(IMAGE_BODY_PREFIX) -> MessageType.IMAGE
             effectiveBody.startsWith(VOICE_BODY_PREFIX) -> MessageType.VOICE
             effectiveBody.startsWith(VIDEO_BODY_PREFIX) -> MessageType.VIDEO
+            effectiveBody.startsWith(STICKER_BODY_PREFIX) -> MessageType.STICKER
             else -> MessageType.TEXT
         }
 
@@ -51,6 +53,12 @@ data class Message(
     fun videoBytes(): ByteArray? =
         if (type == MessageType.VIDEO)
             runCatching { Base64.Default.decode(effectiveBody.removePrefix(VIDEO_BODY_PREFIX).substringBefore('\n')) }.getOrNull()
+        else null
+
+    @OptIn(ExperimentalEncodingApi::class)
+    fun stickerBytes(): ByteArray? =
+        if (type == MessageType.STICKER)
+            runCatching { Base64.Default.decode(effectiveBody.removePrefix(STICKER_BODY_PREFIX)) }.getOrNull()
         else null
 
     val caption: String
@@ -87,6 +95,10 @@ fun encodeImageBody(bytes: ByteArray, caption: String = ""): String =
 @OptIn(ExperimentalEncodingApi::class)
 fun encodeVideoBody(bytes: ByteArray, caption: String = ""): String =
     VIDEO_BODY_PREFIX + Base64.Default.encode(bytes) + if (caption.isNotEmpty()) "\n$caption" else ""
+
+@OptIn(ExperimentalEncodingApi::class)
+fun encodeStickerBody(bytes: ByteArray): String =
+    STICKER_BODY_PREFIX + Base64.Default.encode(bytes)
 
 @OptIn(ExperimentalEncodingApi::class)
 fun encodeVoiceBody(opusBytes: ByteArray, durationMs: Int): String {

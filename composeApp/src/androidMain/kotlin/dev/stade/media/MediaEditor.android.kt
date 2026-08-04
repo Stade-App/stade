@@ -7,12 +7,21 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.view.WindowManager
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import java.io.ByteArrayOutputStream
 import kotlin.math.roundToInt
 
@@ -28,6 +37,25 @@ actual fun ForceFullScreenDialogWindow() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         ViewCompat.requestApplyInsets(window.decorView)
     }
+}
+
+@Composable
+actual fun rememberNavigationBarHeight(): Dp {
+    val view = LocalView.current
+    val density = LocalDensity.current
+    var heightPx by remember { mutableStateOf(0) }
+    DisposableEffect(view) {
+        val listener = androidx.core.view.OnApplyWindowInsetsListener { _, insets ->
+            heightPx = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            insets
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(view, listener)
+        ViewCompat.requestApplyInsets(view)
+        onDispose {
+            ViewCompat.setOnApplyWindowInsetsListener(view, null)
+        }
+    }
+    return with(density) { heightPx.toDp() }
 }
 
 actual fun applyMediaEdits(original: ByteArray, crop: CropRect?, strokes: List<EditStroke>): ByteArray {

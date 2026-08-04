@@ -16,7 +16,8 @@ actual class MediaPickerLauncher(private val doLaunch: () -> Unit) {
 @Composable
 actual fun rememberMediaPickerLauncher(
     onImages: (List<ByteArray>) -> Unit,
-    onVideo: (ByteArray) -> Unit
+    onVideo: (ByteArray) -> Unit,
+    imagesOnly: Boolean
 ): MediaPickerLauncher {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
@@ -43,8 +44,13 @@ actual fun rememberMediaPickerLauncher(
         if (images.isNotEmpty()) onImages(images)
         video?.let { onVideo(it) }
     }
+    val mediaType = if (imagesOnly) {
+        ActivityResultContracts.PickVisualMedia.ImageOnly
+    } else {
+        ActivityResultContracts.PickVisualMedia.ImageAndVideo
+    }
     return MediaPickerLauncher {
-        launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+        launcher.launch(PickVisualMediaRequest(mediaType))
     }
 }
 

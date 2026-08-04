@@ -345,6 +345,22 @@ abstract class AppStrings {
     abstract val vlcNotFoundHint: String
     abstract val videoOpenFailed: String
 
+    abstract val emojiPickerAction: String
+    abstract val stickerMessage: String
+    abstract val emojiTabLabel: String
+    abstract val stickersTabLabel: String
+    abstract val noCustomEmojiYet: String
+    abstract val noStickersYet: String
+    abstract val createStickerAction: String
+    abstract val stickerMakerTitle: String
+    abstract val removingBackgroundLabel: String
+    abstract val removeBackgroundOption: String
+    abstract val keepOriginalBackgroundOption: String
+    abstract val saveStickerAction: String
+    abstract val stickerCreationFailed: String
+    abstract val deleteStickerConfirmTitle: String
+    abstract val deleteStickerConfirmBody: String
+
     abstract val replyAction: String
     abstract fun replyingToLabel(name: String): String
     abstract val cancelReply: String

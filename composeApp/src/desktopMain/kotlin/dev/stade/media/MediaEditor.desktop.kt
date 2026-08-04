@@ -1,6 +1,8 @@
 package dev.stade.media
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.RenderingHints
@@ -76,3 +78,6 @@ actual fun applyMediaEdits(original: ByteArray, crop: CropRect?, strokes: List<E
 @Composable
 actual fun ForceFullScreenDialogWindow() {
 }
+
+@Composable
+actual fun rememberNavigationBarHeight(): Dp = 0.dp

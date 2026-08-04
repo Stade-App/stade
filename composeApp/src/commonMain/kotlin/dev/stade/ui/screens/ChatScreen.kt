@@ -150,6 +150,8 @@ import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.ChatComposerReplyPreview
+import dev.stade.ui.components.EmojiStickerDrawer
+import dev.stade.ui.components.StickerMakerDialog
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.components.maskAddress
@@ -196,6 +198,9 @@ fun ChatScreen(
     var deleting by remember { mutableStateOf(false) }
     var showDiagnosticsDialog by remember(contactId) { mutableStateOf(false) }
     var showClearAddressesDialog by remember { mutableStateOf(false) }
+    var showEmojiDrawer by remember { mutableStateOf(false) }
+    var showStickerMaker by remember { mutableStateOf(false) }
+    val stickers by remember(owner.id) { container.stickers.observeStickers(owner.id) }.collectAsState(initial = emptyList())
 
     var selectedMessageIds by remember(contactId) { mutableStateOf<Set<String>>(emptySet()) }
     val inSelectionMode by remember { derivedStateOf { selectedMessageIds.isNotEmpty() } }
@@ -476,6 +481,31 @@ fun ChatScreen(
         )
     }
 
+    if (showEmojiDrawer && contact != null) {
+        val c = contact
+        EmojiStickerDrawer(
+            stickers = stickers,
+            onDismiss = { showEmojiDrawer = false },
+            onSend = { bytes -> scope.launch { container.chat.sendSticker(owner, c, bytes) } },
+            onCreateSticker = {
+                showEmojiDrawer = false
+                showStickerMaker = true
+            },
+            onDeleteSticker = { id -> container.stickers.delete(id) }
+        )
+    }
+
+    if (showStickerMaker) {
+        StickerMakerDialog(
+            onSave = { bytes ->
+                runCatching { container.stickers.create(owner.id, bytes) }
+                    .onFailure { showNotification(strings.stickerCreationFailed, NotificationKind.Error) }
+                showStickerMaker = false
+            },
+            onCancel = { showStickerMaker = false }
+        )
+    }
+
     PlatformBackHandler(enabled = inSelectionMode) { clearSelection() }
 
     Scaffold(
@@ -652,7 +682,7 @@ fun ChatScreen(
                             val tight = prev != null &&
                                     prev.direction == msg.direction &&
                                     (msg.timestamp - prev.timestamp) < 60_000L
-                            val isSelected = selectedMessageIds.contains(msg.id)
+                            val isSelected by remember(msg.id) { derivedStateOf { selectedMessageIds.contains(msg.id) } }
                             val isHighlighted = flashedMessageId == msg.id
                             val reactions by remember(msg.id) { container.messages.observeReactionsForMessage(msg.id) }.collectAsState(initial = emptyList())
                             val quotedMsg = remember(msg.id, msg.replyToId, messagesById) {
@@ -663,7 +693,7 @@ fun ChatScreen(
                                     msg.replyToId == null -> null
                                     quotedMsg != null -> ReplyQuoteInfo(
                                         senderLabel = if (quotedMsg.direction == MessageDirection.OUT) strings.youLabel else (contact?.nickname ?: ""),
-                                        snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage)
+                                        snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage)
                                     ) {
                                         val target = messages.indexOfFirst { it.id == quotedMsg.id }
                                         if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
@@ -745,6 +775,22 @@ fun ChatScreen(
                                         },
                                         onDoubleTap = { toggleReaction(msg.id, reactions) }
                                     )
+                                } else if (msg.type == MessageType.STICKER) {
+                                    StickerBubble(
+                                        msg = msg,
+                                        tightWithPrev = tight,
+                                        selected = isSelected,
+                                        highlighted = isHighlighted,
+                                        inSelectionMode = inSelectionMode,
+                                        quoted = quoted,
+                                        reactions = reactions,
+                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            toggleSelection(msg.id)
+                                        },
+                                        onDoubleTap = { toggleReaction(msg.id, reactions) }
+                                    )
                                 } else {
                                     Bubble(
                                         msg = msg,
@@ -778,7 +824,7 @@ fun ChatScreen(
                     replyPreview = replyTarget?.let { target ->
                         ChatComposerReplyPreview(
                             senderLabel = if (target.direction == MessageDirection.OUT) strings.youLabel else (contact?.nickname ?: ""),
-                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage)
+                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage)
                         )
                     },
                     onChange = { draft = it },
@@ -823,7 +869,8 @@ fun ChatScreen(
                         }
                     },
                     onPickMedia = { mediaPicker.launch() },
-                    onToggleRecording = { toggleRecording() }
+                    onToggleRecording = { toggleRecording() },
+                    onOpenEmojiPicker = { showEmojiDrawer = true }
                 )
             }
 
@@ -1328,6 +1375,77 @@ private fun Bubble(
                         )
                     }
                 }
+            }
+        }
+        ReactionPill(reactions)
+    }
+}
+
+@Composable
+private fun StickerBubble(
+    msg: Message,
+    tightWithPrev: Boolean,
+    selected: Boolean,
+    highlighted: Boolean,
+    inSelectionMode: Boolean,
+    quoted: ReplyQuoteInfo?,
+    reactions: List<dev.stade.db.MessageReaction>,
+    onShortClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onDoubleTap: () -> Unit
+) {
+    val outgoing = msg.direction == MessageDirection.OUT
+    val align = if (outgoing) Alignment.End else Alignment.Start
+
+    var stickerBytes by remember(msg.id) { mutableStateOf<ByteArray?>(null) }
+    var decodeDone by remember(msg.id) { mutableStateOf(false) }
+    LaunchedEffect(msg.id) {
+        val bytes = withContext(Dispatchers.Default) { runCatching { msg.stickerBytes() }.getOrNull() }
+        stickerBytes = bytes
+        decodeDone = true
+    }
+    val bitmap = remember(stickerBytes) {
+        stickerBytes?.let { runCatching { it.decodeToImageBitmap() }.getOrNull() }
+    }
+
+    val tintTarget = when {
+        highlighted -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.28f)
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        else -> Color.Transparent
+    }
+    val tint by animateColorAsState(tintTarget)
+
+    val currentOnShortClick by rememberUpdatedState(onShortClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tint)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { currentOnShortClick() },
+                    onLongPress = { currentOnLongClick() },
+                    onDoubleTap = { currentOnDoubleTap() }
+                )
+            }
+            .padding(top = if (tightWithPrev) 1.dp else 6.dp),
+        horizontalAlignment = align
+    ) {
+        if (quoted != null) {
+            ReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 2.dp))
+        }
+        Box(modifier = Modifier.size(120.dp), contentAlignment = Alignment.Center) {
+            if (bitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = bitmap,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            } else if (decodeDone) {
+                Icon(Icons.Default.BrokenImage, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(28.dp))
             }
         }
         ReactionPill(reactions)

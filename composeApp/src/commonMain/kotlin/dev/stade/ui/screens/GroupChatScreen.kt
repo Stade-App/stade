@@ -139,6 +139,8 @@ import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.ChatComposerReplyPreview
+import dev.stade.ui.components.EmojiStickerDrawer
+import dev.stade.ui.components.StickerMakerDialog
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.copyImageToClipboard
@@ -196,6 +198,9 @@ fun GroupChatScreen(
     var showAddMembersDialog by remember { mutableStateOf(false) }
     var showDeleteGroupDialog by remember { mutableStateOf(false) }
     var showLeaveGroupDialog by remember { mutableStateOf(false) }
+    var showEmojiDrawer by remember { mutableStateOf(false) }
+    var showStickerMaker by remember { mutableStateOf(false) }
+    val stickers by remember(owner.id) { container.stickers.observeStickers(owner.id) }.collectAsState(initial = emptyList())
 
     var selectedMessageIds by remember(groupId) { mutableStateOf<Set<String>>(emptySet()) }
     val inSelectionMode by remember { derivedStateOf { selectedMessageIds.isNotEmpty() } }
@@ -515,6 +520,30 @@ fun GroupChatScreen(
         )
     }
 
+    if (showEmojiDrawer) {
+        EmojiStickerDrawer(
+            stickers = stickers,
+            onDismiss = { showEmojiDrawer = false },
+            onSend = { bytes -> scope.launch { container.groupChat.sendSticker(owner, groupId, bytes) } },
+            onCreateSticker = {
+                showEmojiDrawer = false
+                showStickerMaker = true
+            },
+            onDeleteSticker = { id -> container.stickers.delete(id) }
+        )
+    }
+
+    if (showStickerMaker) {
+        StickerMakerDialog(
+            onSave = { bytes ->
+                runCatching { container.stickers.create(owner.id, bytes) }
+                    .onFailure { notify(strings.stickerCreationFailed, GroupBannerKind.Error) }
+                showStickerMaker = false
+            },
+            onCancel = { showStickerMaker = false }
+        )
+    }
+
     PlatformBackHandler(enabled = inSelectionMode) { clearSelection() }
 
     Scaffold(
@@ -720,7 +749,7 @@ fun GroupChatScreen(
                                 if (msg.isOwn) owner.nickname
                                 else container.contacts.get(msg.senderId)?.nickname ?: msg.senderId.takeLast(6)
                             }
-                            val isSelected = selectedMessageIds.contains(msg.id)
+                            val isSelected by remember(msg.id) { derivedStateOf { selectedMessageIds.contains(msg.id) } }
                             val isHighlighted = flashedMessageId == msg.id
                             val reactions by remember(msg.id) { container.messages.observeReactionsForMessage(msg.id) }.collectAsState(initial = emptyList())
                             val quotedMsg = remember(msg.id, msg.replyToId, messagesById) {
@@ -734,7 +763,7 @@ fun GroupChatScreen(
                                             else container.contacts.get(quotedMsg.senderId)?.nickname ?: quotedMsg.senderId.takeLast(6)
                                         GroupReplyQuoteInfo(
                                             senderLabel = quotedSenderName,
-                                            snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage)
+                                            snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage)
                                         ) {
                                             val target = messages.indexOfFirst { it.id == quotedMsg.id }
                                             if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
@@ -820,6 +849,23 @@ fun GroupChatScreen(
                                         },
                                         onDoubleTap = { toggleReaction(msg.id, reactions) }
                                     )
+                                } else if (msg.type == MessageType.STICKER) {
+                                    GroupStickerBubble(
+                                        msg = msg,
+                                        senderName = senderName,
+                                        tightWithPrev = tight,
+                                        selected = isSelected,
+                                        highlighted = isHighlighted,
+                                        inSelectionMode = inSelectionMode,
+                                        quoted = quoted,
+                                        reactions = reactions,
+                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            toggleSelection(msg.id)
+                                        },
+                                        onDoubleTap = { toggleReaction(msg.id, reactions) }
+                                    )
                                 } else {
                                     GroupTextBubble(
                                         msg = msg,
@@ -856,7 +902,7 @@ fun GroupChatScreen(
                             else container.contacts.get(target.senderId)?.nickname ?: target.senderId.takeLast(6)
                         ChatComposerReplyPreview(
                             senderLabel = targetSenderName,
-                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage)
+                            snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage)
                         )
                     },
                     onChange = { draft = it },
@@ -900,7 +946,8 @@ fun GroupChatScreen(
                         }
                     },
                     onPickMedia = { mediaPicker.launch() },
-                    onToggleRecording = { toggleRecording() }
+                    onToggleRecording = { toggleRecording() },
+                    onOpenEmojiPicker = { showEmojiDrawer = true }
                 )
             }
 
@@ -1235,6 +1282,87 @@ private fun GroupTextBubble(
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.align(Alignment.End)
                 )
+            }
+        }
+        GroupReactionPill(reactions)
+    }
+}
+
+@Composable
+private fun GroupStickerBubble(
+    msg: GroupMessage,
+    senderName: String,
+    tightWithPrev: Boolean,
+    selected: Boolean,
+    highlighted: Boolean,
+    inSelectionMode: Boolean,
+    quoted: GroupReplyQuoteInfo?,
+    reactions: List<dev.stade.db.MessageReaction>,
+    onShortClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onDoubleTap: () -> Unit
+) {
+    val outgoing = msg.isOwn
+    val align = if (outgoing) Alignment.End else Alignment.Start
+
+    var stickerBytes by remember(msg.id) { mutableStateOf<ByteArray?>(null) }
+    var decodeDone by remember(msg.id) { mutableStateOf(false) }
+    LaunchedEffect(msg.id) {
+        val bytes = withContext(Dispatchers.Default) { runCatching { msg.stickerBytes() }.getOrNull() }
+        stickerBytes = bytes
+        decodeDone = true
+    }
+    val bitmap = remember(stickerBytes) {
+        stickerBytes?.let { runCatching { it.decodeToImageBitmap() }.getOrNull() }
+    }
+
+    val tintTarget = when {
+        highlighted -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.28f)
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        else -> Color.Transparent
+    }
+    val tint by animateColorAsState(tintTarget)
+    val currentOnShortClick by rememberUpdatedState(onShortClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tint)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { currentOnShortClick() },
+                    onLongPress = { currentOnLongClick() },
+                    onDoubleTap = { currentOnDoubleTap() }
+                )
+            }
+            .padding(top = if (tightWithPrev) 1.dp else 6.dp),
+        horizontalAlignment = align
+    ) {
+        if (!outgoing && !tightWithPrev) {
+            Text(
+                senderName,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+            Spacer(Modifier.height(2.dp))
+        }
+        if (quoted != null) {
+            GroupReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 2.dp))
+        }
+        Box(modifier = Modifier.size(120.dp), contentAlignment = Alignment.Center) {
+            if (bitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = bitmap,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            } else if (decodeDone) {
+                Icon(Icons.Default.BrokenImage, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(28.dp))
             }
         }
         GroupReactionPill(reactions)

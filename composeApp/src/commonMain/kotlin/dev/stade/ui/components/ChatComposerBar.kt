@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.InsertEmoticon
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -87,7 +88,8 @@ fun ChatComposerBar(
     onCancelReply: () -> Unit = {},
     onSend: () -> Unit,
     onPickMedia: () -> Unit,
-    onToggleRecording: () -> Unit
+    onToggleRecording: () -> Unit,
+    onOpenEmojiPicker: () -> Unit = {}
 ) {
     val strings = LocalStrings.current
     val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty() || pendingVideo != null || pendingVoiceClip != null
@@ -324,9 +326,20 @@ fun ChatComposerBar(
                                 shape = RoundedCornerShape(54.dp)
                             )
                             .border(1.5.dp, borderColor, RoundedCornerShape(54.dp))
-                            .padding(start = 18.dp, end = 10.dp),
+                            .padding(start = 4.dp, end = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        IconButton(
+                            onClick = onOpenEmojiPicker,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.InsertEmoticon,
+                                contentDescription = strings.emojiPickerAction,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                         Box(modifier = Modifier.weight(1f)) {
                             if (draft.text.isEmpty()) {
                                 Text(
