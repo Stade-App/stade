@@ -1,0 +1,73 @@
+name: Linux Package Build
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Install Linux packaging tools
+        run: sudo apt-get update && sudo apt-get install -y rpm fakeroot
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Deb and Rpm packages
+        run: ./gradlew :composeApp:packageDeb :composeApp:packageRpm --stacktrace
+
+      - name: Verify package metadata
+        run: |
+          set -euo pipefail
+          DEB_FILE="$(find composeApp/build/compose/binaries -name '*.deb' -print -quit)"
+          RPM_FILE="$(find composeApp/build/compose/binaries -name '*.rpm' -print -quit)"
+
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::No .deb package was produced"
+            exit 1
+          fi
+          if [ -z "$RPM_FILE" ]; then
+            echo "::error::No .rpm package was produced"
+            exit 1
+          fi
+
+          echo "Deb package: $DEB_FILE"
+          dpkg-deb --info "$DEB_FILE"
+          dpkg-deb --contents "$DEB_FILE"
+
+          echo "Rpm package: $RPM_FILE"
+          rpm -qip "$RPM_FILE"
+          rpm -qlp "$RPM_FILE"
+
+          echo "DEB_FILE=$DEB_FILE" >> "$GITHUB_ENV"
+          echo "RPM_FILE=$RPM_FILE" >> "$GITHUB_ENV"
+
+      - name: Upload Deb package
+        uses: actions/upload-artifact@v4
+        with:
+          name: stade-deb
+          path: ${{ env.DEB_FILE }}
+          if-no-files-found: error
+
+      - name: Upload Rpm package
+        uses: actions/upload-artifact@v4
+        with:
+          name: stade-rpm
+          path: ${{ env.RPM_FILE }}
+          if-no-files-found: error
