@@ -123,21 +123,15 @@ private fun applyDarkTitleBar(window: java.awt.Window) {
     }
 }
 
-private fun applyLinuxDarkTheme() {
+private fun applyLinuxFontRendering() {
     val os = System.getProperty("os.name", "").lowercase()
     if (!os.contains("linux") && !os.contains("nix")) return
     System.setProperty("awt.useSystemAAFontSettings", "on")
-    runCatching {
-        val toolkit = java.awt.Toolkit.getDefaultToolkit()
-        val darkThemeClass = Class.forName("sun.awt.X11.XToolkit")
-        if (darkThemeClass.isInstance(toolkit)) {
-        }
-    }
 }
 
 fun main(args: Array<String>) {
     applyWindowsAppUserModelId()
-    applyLinuxDarkTheme()
+    applyLinuxFontRendering()
 
     val singleInstanceRoot = java.io.File(System.getProperty("user.home") ?: ".", ".stade")
     val initialInvite = readInviteArg(args)

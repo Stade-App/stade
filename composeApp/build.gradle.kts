@@ -159,7 +159,7 @@ compose.desktop {
         rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { localProps.load(it) }
         javaHome = localProps.getProperty("java.home") ?: System.getProperty("java.home")
         nativeDistributions {
-            targetFormats(TargetFormat.Deb, TargetFormat.Exe, TargetFormat.Dmg)
+            targetFormats(TargetFormat.Deb, TargetFormat.Rpm, TargetFormat.Exe, TargetFormat.Dmg)
             modules(
                 "jdk.unsupported",
                 "java.sql",
@@ -172,7 +172,7 @@ compose.desktop {
                 "java.desktop"
             )
             packageName = "Stade"
-            packageVersion = "0.1.7"
+            packageVersion = "0.1.8"
             windows {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.ico"))
                 menuGroup = "Stade"
@@ -193,7 +193,7 @@ compose.desktop {
             macOS {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.icns"))
                 bundleID = "dev.stade.app"
-                packageVersion = "1.0.7"
+                packageVersion = "1.0.8"
             }
         }
     }
