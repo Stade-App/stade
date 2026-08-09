@@ -96,17 +96,17 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.deleteOutboxForContactMessage(messageId, contactId)
     }
 
-    fun saveOutgoing(contactId: String, body: String, timestamp: Long): Message {
+    fun saveOutgoing(contactId: String, body: String, timestamp: Long, vanishSessionId: String? = null): Message {
         val id = Encoding.toHex(crypto.randomBytes(16))
-        db.stadeDbQueries.insertMessage(id, contactId, "OUT", body, timestamp, 0, 1)
-        return Message(id, contactId, MessageDirection.OUT, body, timestamp, false, true)
+        db.stadeDbQueries.insertMessage(id, contactId, "OUT", body, timestamp, 0, 1, vanishSessionId)
+        return Message(id, contactId, MessageDirection.OUT, body, timestamp, false, true, vanishSessionId)
     }
 
-    fun saveIncoming(messageId: String, contactId: String, body: String, timestamp: Long): Message? {
+    fun saveIncoming(messageId: String, contactId: String, body: String, timestamp: Long, vanishSessionId: String? = null): Message? {
         val exists = db.stadeDbQueries.messageExists(messageId).executeAsOne() > 0L
         if (exists) return null
-        db.stadeDbQueries.insertMessage(messageId, contactId, "IN", body, timestamp, 1, 0)
-        return Message(messageId, contactId, MessageDirection.IN, body, timestamp, true, false)
+        db.stadeDbQueries.insertMessage(messageId, contactId, "IN", body, timestamp, 1, 0, vanishSessionId)
+        return Message(messageId, contactId, MessageDirection.IN, body, timestamp, true, false, vanishSessionId)
     }
 
     fun deleteMessages(messageIds: Collection<String>) {
@@ -124,14 +124,14 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
         Message(
             id, contactId,
             if (direction == "IN") MessageDirection.IN else MessageDirection.OUT,
-            body, timestamp, delivered == 1L, read == 1L
+            body, timestamp, delivered == 1L, read == 1L, vanishSessionId
         )
 
     private fun dev.stade.db.SelectLastMessagePreview.toMessage(): Message =
         Message(
             id, contactId,
             if (direction == "IN") MessageDirection.IN else MessageDirection.OUT,
-            body, timestamp, delivered == 1L, read == 1L
+            body, timestamp, delivered == 1L, read == 1L, vanishSessionId
         )
 }
 

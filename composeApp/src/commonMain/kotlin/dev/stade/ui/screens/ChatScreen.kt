@@ -67,6 +67,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.filled.Verified
@@ -74,6 +75,7 @@ import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -102,6 +104,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -112,7 +115,11 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -152,6 +159,7 @@ import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.ChatComposerReplyPreview
 import dev.stade.ui.components.EmojiStickerDrawer
 import dev.stade.ui.components.StickerMakerDialog
+import dev.stade.ui.components.VanishDurationSheet
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.components.maskAddress
@@ -165,6 +173,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
 
 private enum class NotificationKind { Success, Error, Info }
 private data class NotificationData(val message: String, val kind: NotificationKind)
@@ -202,9 +211,63 @@ fun ChatScreen(
     var showStickerMaker by remember { mutableStateOf(false) }
     val stickers by remember(owner.id) { container.stickers.observeStickers(owner.id) }.collectAsState(initial = emptyList())
 
+    var showVanishDurationSheet by remember { mutableStateOf(false) }
+    var showVanishCancelDialog by remember { mutableStateOf(false) }
+    val activeVanishSession by remember(contactId) { container.vanish.observeCurrentSession(contactId) }.collectAsState(initial = null)
+    val vanishPullOffset = remember(contactId) { Animatable(0f) }
+    val vanishScope = rememberCoroutineScope()
+    val vanishThresholdPx = with(LocalDensity.current) { 72.dp.toPx() }
+    val vanishMaxPullPx = with(LocalDensity.current) { 120.dp.toPx() }
+    val vanishPullProgress by remember { derivedStateOf { (vanishPullOffset.value / vanishThresholdPx).coerceIn(0f, 1f) } }
+    var vanishTriggered by remember(contactId) { mutableStateOf(false) }
+
+    LaunchedEffect(contactId) {
+        container.vanish.sweepIfExpired(contactId)
+    }
+    LaunchedEffect(activeVanishSession?.sessionId) {
+        val session = activeVanishSession
+        if (session != null) {
+            val remaining = session.deadlineAtMs - Clock.System.now().toEpochMilliseconds()
+            if (remaining > 0) delay(remaining)
+            container.vanish.sweepIfExpired(contactId)
+        }
+    }
+
     var selectedMessageIds by remember(contactId) { mutableStateOf<Set<String>>(emptySet()) }
     val inSelectionMode by remember { derivedStateOf { selectedMessageIds.isNotEmpty() } }
     var showSelectionDeleteDialog by remember { mutableStateOf(false) }
+
+    val vanishNestedScrollConnection = remember(contactId, inSelectionMode, activeVanishSession) {
+        object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (inSelectionMode ||
+                    source != NestedScrollSource.Drag ||
+                    listState.canScrollForward ||
+                    available.y == 0f
+                ) {
+                    return Offset.Zero
+                }
+                val delta = kotlin.math.abs(available.y)
+                vanishScope.launch {
+                    val newOffset = (vanishPullOffset.value + delta).coerceIn(0f, vanishMaxPullPx)
+                    vanishPullOffset.snapTo(newOffset)
+                    if (newOffset >= vanishThresholdPx && !vanishTriggered) {
+                        vanishTriggered = true
+                        if (activeVanishSession != null) showVanishCancelDialog = true else showVanishDurationSheet = true
+                    }
+                }
+                return Offset(0f, available.y)
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (vanishPullOffset.value > 0f) {
+                    vanishTriggered = false
+                    vanishScope.launch { vanishPullOffset.animateTo(0f, animationSpec = tween(180)) }
+                }
+                return Velocity.Zero
+            }
+        }
+    }
 
     fun clearSelection() {
         selectedMessageIds = emptySet()
@@ -506,6 +569,43 @@ fun ChatScreen(
         )
     }
 
+    if (showVanishDurationSheet && contact != null) {
+        val c = contact
+        VanishDurationSheet(
+            onDismiss = { showVanishDurationSheet = false },
+            onPick = { durationMs ->
+                scope.launch {
+                    withContext(Dispatchers.Default) {
+                        runCatching { container.chat.startVanishMode(owner, c, durationMs) }
+                    }
+                    showVanishDurationSheet = false
+                }
+            }
+        )
+    }
+
+    if (showVanishCancelDialog && contact != null) {
+        val c = contact
+        AlertDialog(
+            onDismissRequest = { showVanishCancelDialog = false },
+            title = { Text(strings.vanishTurnOffConfirmTitle) },
+            text = { Text(strings.vanishTurnOffConfirmBody) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showVanishCancelDialog = false
+                    scope.launch {
+                        withContext(Dispatchers.Default) {
+                            runCatching { container.chat.cancelVanishMode(owner, c) }
+                        }
+                    }
+                }) { Text(strings.vanishTurnOffAction, color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showVanishCancelDialog = false }) { Text(strings.cancel) }
+            }
+        )
+    }
+
     PlatformBackHandler(enabled = inSelectionMode) { clearSelection() }
 
     Scaffold(
@@ -659,6 +759,10 @@ fun ChatScreen(
                 if (!isOnline && contact != null) {
                     DiagnosticsCard(onOpenDetails = { showDiagnosticsDialog = true })
                 }
+                val currentVanishSession = activeVanishSession
+                if (currentVanishSession != null) {
+                    VanishActiveBanner(deadlineAtMs = currentVanishSession.deadlineAtMs)
+                }
 
                 if (rawMessages == null) {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth())
@@ -692,7 +796,8 @@ fun ChatScreen(
                             .weight(1f)
                             .fillMaxWidth()
                             .padding(horizontal = 8.dp)
-                            .alpha(if (scrollReady) 1f else 0f),
+                            .alpha(if (scrollReady) 1f else 0f)
+                            .nestedScroll(vanishNestedScrollConnection),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                         contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
@@ -830,6 +935,34 @@ fun ChatScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+                }
+
+                if (vanishPullProgress > 0f && !inSelectionMode) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier.size(40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                progress = { vanishPullProgress },
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                strokeWidth = 3.dp
+                            )
+                            Icon(
+                                Icons.Default.Schedule,
+                                contentDescription = strings.vanishSwipeUpPrompt,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
                     }
                 }
@@ -1023,6 +1156,55 @@ private fun DiagnosticsCard(
                 contentDescription = strings.viewDetailsAction,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun VanishActiveBanner(deadlineAtMs: Long) {
+    val strings = LocalStrings.current
+    var now by remember { mutableStateOf(Clock.System.now().toEpochMilliseconds()) }
+    LaunchedEffect(deadlineAtMs) {
+        while (true) {
+            now = Clock.System.now().toEpochMilliseconds()
+            delay(60_000L)
+        }
+    }
+    val remainingMs = (deadlineAtMs - now).coerceAtLeast(0L)
+    val totalMinutes = remainingMs / 60_000L
+    val remainingText = when {
+        totalMinutes >= 60 && totalMinutes % 60 > 0 -> "${totalMinutes / 60}h ${totalMinutes % 60}m"
+        totalMinutes >= 60 -> "${totalMinutes / 60}h"
+        else -> "${totalMinutes}m"
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                Icons.Default.Schedule,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                strings.vanishActiveBannerLabel(remainingText),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -1380,6 +1562,10 @@ private fun Bubble(
                 }
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (msg.vanishSessionId != null) {
+                        Icon(Icons.Default.Schedule, contentDescription = null, tint = sub, modifier = Modifier.size(11.dp))
+                        Spacer(Modifier.size(3.dp))
+                    }
                     Text(
                         formatChatTime(msg.timestamp),
                         color = sub,
@@ -1465,6 +1651,23 @@ private fun StickerBubble(
                 )
             } else if (decodeDone) {
                 Icon(Icons.Default.BrokenImage, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(28.dp))
+            }
+            if (msg.vanishSessionId != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Schedule,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
             }
         }
         ReactionPill(reactions)
@@ -1668,6 +1871,10 @@ private fun ImageBubble(
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (msg.vanishSessionId != null) {
+                        Icon(Icons.Default.Schedule, contentDescription = null, tint = sub, modifier = Modifier.size(11.dp))
+                        Spacer(Modifier.size(3.dp))
+                    }
                     Text(
                         formatChatTime(msg.timestamp),
                         color = sub,
@@ -1869,6 +2076,10 @@ private fun VoiceBubble(
                 }
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (msg.vanishSessionId != null) {
+                        Icon(Icons.Default.Schedule, contentDescription = null, tint = sub, modifier = Modifier.size(11.dp))
+                        Spacer(Modifier.size(3.dp))
+                    }
                     Text(
                         formatChatTime(msg.timestamp),
                         color = sub,
@@ -2009,6 +2220,10 @@ private fun VideoBubble(
                 }
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (msg.vanishSessionId != null) {
+                        Icon(Icons.Default.Schedule, contentDescription = null, tint = sub, modifier = Modifier.size(11.dp))
+                        Spacer(Modifier.size(3.dp))
+                    }
                     Text(
                         formatChatTime(msg.timestamp),
                         color = sub,

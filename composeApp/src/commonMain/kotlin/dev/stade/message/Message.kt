@@ -12,6 +12,9 @@ const val VIDEO_BODY_PREFIX = "STADE_VID_V1:"
 const val STICKER_BODY_PREFIX = "STADE_STK_V1:"
 const val REPLY_BODY_PREFIX = "STADE_RPL_V1:"
 const val REACTION_BODY_PREFIX = "STADE_RXN_V1:"
+const val VANISH_START_PREFIX = "STADE_VST_V1:"
+const val VANISH_CANCEL_PREFIX = "STADE_VCL_V1:"
+const val VANISH_TAG_PREFIX = "STADE_VTG_V1:"
 
 const val MAX_ATTACHMENT_BYTES = 1800 * 1024
 
@@ -23,7 +26,8 @@ data class Message(
     val body: String,
     val timestamp: Long,
     val delivered: Boolean,
-    val read: Boolean
+    val read: Boolean,
+    val vanishSessionId: String? = null
 ) {
     val replyToId: String?
         get() = parseReplyWrapper(body)?.first
@@ -147,4 +151,47 @@ fun parseReactionWrapper(body: String): ReactionWrapper? {
     val emoji = afterSep.substring(len + 1)
     if (emoji.isEmpty()) return null
     return ReactionWrapper(id, action == 'A', emoji)
+}
+
+data class VanishStartWrapper(val sessionId: String, val startedAt: Long, val durationMs: Long)
+
+fun encodeVanishStartBody(sessionId: String, startedAt: Long, durationMs: Long): String =
+    VANISH_START_PREFIX + sessionId + ":" + startedAt + ":" + durationMs
+
+fun parseVanishStartBody(body: String): VanishStartWrapper? {
+    if (!body.startsWith(VANISH_START_PREFIX)) return null
+    val parts = body.substring(VANISH_START_PREFIX.length).split(":")
+    if (parts.size != 3) return null
+    val startedAt = parts[1].toLongOrNull() ?: return null
+    val durationMs = parts[2].toLongOrNull() ?: return null
+    return VanishStartWrapper(parts[0], startedAt, durationMs)
+}
+
+fun encodeVanishCancelBody(sessionId: String): String = VANISH_CANCEL_PREFIX + sessionId
+
+fun parseVanishCancelBody(body: String): String? =
+    if (body.startsWith(VANISH_CANCEL_PREFIX)) body.substring(VANISH_CANCEL_PREFIX.length) else null
+
+data class VanishTagWrapper(val sessionId: String, val deadlineAtMs: Long, val innerBody: String)
+
+fun encodeVanishTag(sessionId: String, deadlineAtMs: Long, innerBody: String): String {
+    val header = "$sessionId|$deadlineAtMs"
+    return VANISH_TAG_PREFIX + header.length.toString() + ":" + header + innerBody
+}
+
+fun parseVanishTag(body: String): VanishTagWrapper? {
+    if (!body.startsWith(VANISH_TAG_PREFIX)) return null
+    val rest = body.substring(VANISH_TAG_PREFIX.length)
+    val sep = rest.indexOf(':')
+    if (sep < 0) return null
+    val len = rest.substring(0, sep).toIntOrNull() ?: return null
+    val afterSep = rest.substring(sep + 1)
+    if (len < 0 || len > afterSep.length) return null
+    val header = afterSep.substring(0, len)
+    val inner = afterSep.substring(len)
+    val pipeIdx = header.indexOf('|')
+    if (pipeIdx < 0) return null
+    val sessionId = header.substring(0, pipeIdx)
+    val deadlineAtMs = header.substring(pipeIdx + 1).toLongOrNull() ?: return null
+    return VanishTagWrapper(sessionId, deadlineAtMs, inner)
 }

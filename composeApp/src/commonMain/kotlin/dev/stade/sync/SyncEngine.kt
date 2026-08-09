@@ -21,7 +21,12 @@ import dev.stade.identity.LocalIdentity
 import dev.stade.identity.StadeId
 import dev.stade.message.MessageManager
 import dev.stade.message.REACTION_BODY_PREFIX
+import dev.stade.message.VANISH_CANCEL_PREFIX
+import dev.stade.message.VANISH_START_PREFIX
 import dev.stade.message.parseReactionWrapper
+import dev.stade.message.parseVanishCancelBody
+import dev.stade.message.parseVanishStartBody
+import dev.stade.message.parseVanishTag
 import dev.stade.stadium.STD_DELETE_PREFIX
 import dev.stade.stadium.STD_INV_PREFIX
 import dev.stade.stadium.STD_MSG_DELETE_PREFIX
@@ -32,6 +37,7 @@ import dev.stade.stadium.STD_WELCOME_PREFIX
 import dev.stade.stadium.StadiumManager
 import dev.stade.transport.Connection
 import dev.stade.ui.i18n.I18n
+import dev.stade.vanish.VanishManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -60,6 +66,7 @@ class SyncEngine(
     private val ratchet: RatchetSessions,
     private val outbox: Outbox,
     private val handshakeService: HandshakeService,
+    private val vanish: VanishManager,
     val groupManager: GroupManager? = null,
     val stadiumManager: StadiumManager? = null
 ) {
@@ -543,6 +550,25 @@ class SyncEngine(
                                 _events.tryEmit(SyncEvent.ReactionUpdated(wrapper.targetMessageId))
                             }
                         }
+                        bodyStr.startsWith(VANISH_START_PREFIX) -> {
+                            val wrapper = if ((contacts.get(contact.id)?.kind ?: 0) == 0) parseVanishStartBody(bodyStr) else null
+                            if (wrapper != null) {
+                                vanish.withLock(contact.id) {
+                                    vanish.adoptRemoteStartLocked(
+                                        contact.id, wrapper.sessionId, wrapper.startedAt, wrapper.durationMs,
+                                        Clock.System.now().toEpochMilliseconds()
+                                    )
+                                }
+                            }
+                        }
+                        bodyStr.startsWith(VANISH_CANCEL_PREFIX) -> {
+                            val sessionId = if ((contacts.get(contact.id)?.kind ?: 0) == 0) parseVanishCancelBody(bodyStr) else null
+                            if (sessionId != null) {
+                                vanish.withLock(contact.id) {
+                                    vanish.cancelSessionLocked(contact.id, sessionId)
+                                }
+                            }
+                        }
                         groupManager != null && bodyStr.startsWith(GRP_RXN_PREFIX) -> {
                             val stripped = bodyStr.removePrefix(GRP_RXN_PREFIX)
                             val colonIdx = stripped.indexOf(':')
@@ -700,10 +726,16 @@ class SyncEngine(
                         }
                         else -> {
                             if ((contacts.get(contact.id)?.kind ?: 0) == 0) {
-                                val saved = messages.saveIncoming(payload.messageId, contact.id, bodyStr, payload.timestamp)
-                                if (saved != null) {
-                                    _events.tryEmit(SyncEvent.MessageReceived(contact.id, payload.messageId))
-                                    contacts.markSeen(contact.id, payload.timestamp)
+                                val tag = parseVanishTag(bodyStr)
+                                val now = Clock.System.now().toEpochMilliseconds()
+                                if (tag == null || now < tag.deadlineAtMs) {
+                                    val saved = messages.saveIncoming(
+                                        payload.messageId, contact.id, tag?.innerBody ?: bodyStr, payload.timestamp, tag?.sessionId
+                                    )
+                                    if (saved != null) {
+                                        _events.tryEmit(SyncEvent.MessageReceived(contact.id, payload.messageId))
+                                        contacts.markSeen(contact.id, payload.timestamp)
+                                    }
                                 }
                             }
                         }

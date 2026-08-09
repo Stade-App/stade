@@ -49,10 +49,13 @@ CREATE TABLE Message (
     timestamp INTEGER NOT NULL,
     delivered INTEGER NOT NULL DEFAULT 0,
     read INTEGER NOT NULL DEFAULT 0,
+    vanishSessionId TEXT,
     FOREIGN KEY(contactId) REFERENCES Contact(id)
 );
 
 CREATE INDEX idxMessageContact ON Message(contactId, timestamp);
+
+CREATE INDEX idxMessageVanishSession ON Message(vanishSessionId);
 
 CREATE TABLE Outbox (
     id TEXT NOT NULL PRIMARY KEY,
@@ -151,7 +154,7 @@ deletePending:
 DELETE FROM PendingContact WHERE id = ?;
 
 insertMessage:
-INSERT INTO Message(id, contactId, direction, body, timestamp, delivered, read) VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO Message(id, contactId, direction, body, timestamp, delivered, read, vanishSessionId) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
 selectMessages:
 SELECT * FROM Message WHERE contactId = ? ORDER BY timestamp ASC;
@@ -160,7 +163,7 @@ selectLastMessage:
 SELECT * FROM Message WHERE contactId = ? ORDER BY timestamp DESC LIMIT 1;
 
 selectLastMessagePreview:
-SELECT id, contactId, direction, substr(body, 1, 200) AS body, timestamp, delivered, read FROM Message WHERE contactId = ? ORDER BY timestamp DESC LIMIT 1;
+SELECT id, contactId, direction, substr(body, 1, 200) AS body, timestamp, delivered, read, vanishSessionId FROM Message WHERE contactId = ? ORDER BY timestamp DESC LIMIT 1;
 
 markDelivered:
 UPDATE Message SET delivered = 1 WHERE id = ?;
@@ -524,4 +527,32 @@ DELETE FROM Sticker WHERE id = ?;
 
 wipeStickers:
 DELETE FROM Sticker;
+
+CREATE TABLE VanishSession (
+    sessionId TEXT NOT NULL PRIMARY KEY,
+    contactId TEXT NOT NULL,
+    startedAt INTEGER NOT NULL,
+    durationMs INTEGER NOT NULL,
+    FOREIGN KEY(contactId) REFERENCES Contact(id)
+);
+
+CREATE INDEX idxVanishSessionContact ON VanishSession(contactId);
+
+insertVanishSession:
+INSERT INTO VanishSession(sessionId, contactId, startedAt, durationMs) VALUES (?, ?, ?, ?);
+
+selectVanishSessionsForContact:
+SELECT * FROM VanishSession WHERE contactId = ? ORDER BY startedAt DESC;
+
+selectAllActiveVanishSessions:
+SELECT * FROM VanishSession;
+
+deleteVanishSession:
+DELETE FROM VanishSession WHERE sessionId = ?;
+
+selectMessageIdsForVanishSession:
+SELECT id FROM Message WHERE vanishSessionId = ?;
+
+wipeVanishSessions:
+DELETE FROM VanishSession;
 

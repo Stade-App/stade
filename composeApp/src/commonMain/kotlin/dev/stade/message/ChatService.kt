@@ -3,21 +3,29 @@ package dev.stade.message
 import dev.stade.contact.Contact
 import dev.stade.identity.LocalIdentity
 import dev.stade.sync.SyncEngine
+import dev.stade.vanish.VanishManager
+import dev.stade.vanish.VanishSessionInfo
 import kotlinx.datetime.Clock
 
 class ChatService(
     private val messages: MessageManager,
-    private val sync: SyncEngine
+    private val sync: SyncEngine,
+    private val vanish: VanishManager
 ) {
-    suspend fun send(owner: LocalIdentity, contact: Contact, body: String, replyToId: String? = null): Message {
-        val wireBody = if (replyToId != null) encodeReplyBody(replyToId, body) else body
-        val now = Clock.System.now().toEpochMilliseconds()
-        val msg = messages.saveOutgoing(contact.id, wireBody, now)
-        runCatching {
-            sync.queueOutgoing(owner, contact, msg.id, wireBody, now)
+    suspend fun send(owner: LocalIdentity, contact: Contact, body: String, replyToId: String? = null): Message =
+        vanish.withLock(contact.id) {
+            val session = vanish.currentSessionLocked(contact.id)
+            val wireBody = if (replyToId != null) encodeReplyBody(replyToId, body) else body
+            val now = Clock.System.now().toEpochMilliseconds()
+            val msg = messages.saveOutgoing(contact.id, wireBody, now, session?.sessionId)
+            val sentBody = if (session != null) {
+                encodeVanishTag(session.sessionId, session.deadlineAtMs, wireBody)
+            } else wireBody
+            runCatching {
+                sync.queueOutgoing(owner, contact, msg.id, sentBody, now)
+            }
+            msg
         }
-        return msg
-    }
 
 
     suspend fun sendImage(owner: LocalIdentity, contact: Contact, imageBytes: ByteArray, replyToId: String? = null, caption: String = ""): Message {
@@ -47,4 +55,25 @@ class ChatService(
             sync.queueOutgoing(owner, contact, messages.newId(), body, now)
         }
     }
+
+    suspend fun startVanishMode(owner: LocalIdentity, contact: Contact, durationMs: Long): VanishSessionInfo =
+        vanish.withLock(contact.id) {
+            val now = Clock.System.now().toEpochMilliseconds()
+            val session = vanish.startSessionLocked(contact.id, durationMs, now)
+            runCatching {
+                val body = encodeVanishStartBody(session.sessionId, session.startedAt, session.durationMs)
+                sync.queueOutgoing(owner, contact, messages.newId(), body, now)
+            }
+            session
+        }
+
+    suspend fun cancelVanishMode(owner: LocalIdentity, contact: Contact): VanishSessionInfo? =
+        vanish.withLock(contact.id) {
+            val session = vanish.cancelCurrentSessionLocked(contact.id) ?: return@withLock null
+            val now = Clock.System.now().toEpochMilliseconds()
+            runCatching {
+                sync.queueOutgoing(owner, contact, messages.newId(), encodeVanishCancelBody(session.sessionId), now)
+            }
+            session
+        }
 }

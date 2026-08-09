@@ -44,6 +44,8 @@ import dev.stade.ui.i18n.localeToStrings
 import dev.stade.ui.theme.StadeTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -205,6 +207,13 @@ private fun UnlockedApp(
 
     DisposableEffect(container) {
         onDispose {
+        }
+    }
+
+    LaunchedEffect(container) {
+        while (isActive) {
+            runCatching { container.vanish.sweepAllActive() }
+            delay(30_000L)
         }
     }
 

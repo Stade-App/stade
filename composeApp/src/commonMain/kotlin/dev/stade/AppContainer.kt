@@ -30,6 +30,7 @@ import dev.stade.transport.ConnectionManager
 import dev.stade.transport.ConnectionRegistry
 import dev.stade.transport.TransportPlugin
 import dev.stade.transport.TransportSettings
+import dev.stade.vanish.VanishManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -142,12 +143,27 @@ class AppContainer(
             runCatching { createdDriver.execute(null, "CREATE TABLE IF NOT EXISTS Sticker (id TEXT NOT NULL PRIMARY KEY, ownerId TEXT NOT NULL, imageBytes BLOB NOT NULL, createdAt INTEGER NOT NULL)", 0) }
             runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxSticker ON Sticker(ownerId)", 0) }
         }
+        runCatching {
+            createdDriver.executeQuery(null, "SELECT sessionId FROM VanishSession LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "CREATE TABLE IF NOT EXISTS VanishSession (sessionId TEXT NOT NULL PRIMARY KEY, contactId TEXT NOT NULL, startedAt INTEGER NOT NULL, durationMs INTEGER NOT NULL)", 0) }
+            runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxVanishSessionContact ON VanishSession(contactId)", 0) }
+        }
+        runCatching {
+            createdDriver.executeQuery(null, "SELECT vanishSessionId FROM Message LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "ALTER TABLE Message ADD COLUMN vanishSessionId TEXT", 0) }
+            runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxMessageVanishSession ON Message(vanishSessionId)", 0) }
+        }
         db = database
     }
 
     val identities = IdentityManager(db, crypto, pq)
     val contacts = ContactManager(db, crypto)
     val messages = MessageManager(db, crypto)
+    val vanish = VanishManager(db, messages)
     val fingerprint = FingerprintService(crypto)
     val handshake = HandshakeService(crypto, pq)
     val outbox = Outbox(db, crypto)
@@ -156,8 +172,8 @@ class AppContainer(
     val stadiums = StadiumManager(db, crypto)
     val stickers = StickerManager(db, crypto)
     val pinnedChats = PinnedChats(db)
-    val sync = SyncEngine(crypto, pq, contacts, messages, ratchet, outbox, handshake, groups, stadiums)
-    val chat = ChatService(messages, sync)
+    val sync = SyncEngine(crypto, pq, contacts, messages, ratchet, outbox, handshake, vanish, groups, stadiums)
+    val chat = ChatService(messages, sync, vanish)
     val groupChat = GroupChatService(groups, sync, contacts, crypto)
     val stadiumChat = StadiumChatService(stadiums, sync, contacts, crypto, messages, groups)
     val transports = ConnectionRegistry().also { reg ->
@@ -217,6 +233,7 @@ class AppContainer(
                 db.stadeDbQueries.wipeProcessedEnvelope()
                 db.stadeDbQueries.wipeStickers()
                 db.stadeDbQueries.wipeReactions()
+                db.stadeDbQueries.wipeVanishSessions()
             }
         }
         runCatching { driver.close() }
