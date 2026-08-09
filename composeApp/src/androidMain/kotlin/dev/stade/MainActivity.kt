@@ -3,6 +3,7 @@
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -47,12 +48,14 @@ class MainActivity : ComponentActivity() {
         askNotificationPermissionIfNeeded()
         setContent { StadeApp(app.boot) }
         handleNotificationIntent(intent)
+        handleInviteFileIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleNotificationIntent(intent)
+        handleInviteFileIntent(intent)
     }
 
     private fun handleNotificationIntent(intent: Intent?) {
@@ -62,6 +65,33 @@ class MainActivity : ComponentActivity() {
         intent?.getStringExtra(EXTRA_OPEN_GROUP_ID)?.let { app.handleOpenGroupIntent(it) }
         if (intent?.getBooleanExtra(EXTRA_GO_HOME, false) == true) app.handleGoHomeIntent()
     }
+
+    private fun handleInviteFileIntent(intent: Intent?) {
+        intent ?: return
+        val uri: Uri? = when (intent.action) {
+            Intent.ACTION_VIEW -> intent.data
+            Intent.ACTION_SEND -> extractStreamUri(intent)
+            else -> null
+        }
+        uri ?: return
+        val app = application as StadeApplication
+        lifecycleScope.launch(Dispatchers.IO) {
+            val text = runCatching {
+                contentResolver.openInputStream(uri)?.readBytes()
+            }.getOrNull()?.toString(Charsets.UTF_8)?.trim()
+            if (!text.isNullOrBlank() && text.startsWith("STADE2-")) {
+                app.handleOpenInviteIntent(text)
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun extractStreamUri(intent: Intent): Uri? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        }
 
     override fun onStop() {
         super.onStop()

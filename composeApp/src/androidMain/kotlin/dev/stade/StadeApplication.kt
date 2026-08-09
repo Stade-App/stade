@@ -30,10 +30,16 @@ class StadeApplication : Application() {
     private var pendingStadiumAtBoot: String? = null
     private var pendingGroupAtBoot: String? = null
     private var pendingGoHomeAtBoot: Boolean = false
+    private var pendingInviteAtBoot: String? = null
 
     fun handleOpenChatIntent(contactId: String) {
         val c = activeContainer
         if (c != null) c.pendingOpenChat.value = contactId else pendingChatAtBoot = contactId
+    }
+
+    fun handleOpenInviteIntent(inviteText: String) {
+        val c = activeContainer
+        if (c != null) c.pendingInvite.value = inviteText else pendingInviteAtBoot = inviteText
     }
 
     fun handleOpenStadiumIntent(stadiumId: String) {
@@ -90,6 +96,8 @@ class StadeApplication : Application() {
                     c.pendingGoHome.value = true
                     pendingGoHomeAtBoot = false
                 }
+                pendingInviteAtBoot?.let { c.pendingInvite.value = it }
+                pendingInviteAtBoot = null
             }
         )
         var startedCount = 0

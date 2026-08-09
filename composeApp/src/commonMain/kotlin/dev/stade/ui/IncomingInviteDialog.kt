@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.identity.LocalIdentity
 import dev.stade.ui.i18n.LocalStrings
+import kotlinx.coroutines.delay
 
 @Composable
 fun IncomingInviteDialog(
@@ -39,23 +40,37 @@ fun IncomingInviteDialog(
     var name by remember(code) { mutableStateOf(parsed?.nickname ?: "") }
     var confirmed by remember(code) { mutableStateOf(false) }
     var status by remember(code) { mutableStateOf<String?>(null) }
-    var accepted by remember(code) { mutableStateOf(false) }
+    var connecting by remember(code) { mutableStateOf(false) }
+    var noAddressInfo by remember(code) { mutableStateOf(false) }
+    var timedOut by remember(code) { mutableStateOf(false) }
     var targetId by remember(code) { mutableStateOf<String?>(null) }
+    var dialingAddrs by remember(code) { mutableStateOf<Set<String>>(emptySet()) }
 
     val knownContacts by remember(owner.id) { container.contacts.observeContacts(owner.id) }.collectAsState(initial = emptyList())
     val isAdded = targetId != null && knownContacts.any { it.id == targetId }
+
     LaunchedEffect(isAdded) {
-        if (isAdded) {
-            status = strings.contactAdded(name.ifBlank { parsed?.nickname ?: "" })
-            accepted = true
+        if (isAdded) onDismiss()
+    }
+
+    LaunchedEffect(connecting) {
+        if (connecting) {
+            delay(ACCEPT_INVITE_TIMEOUT_MS)
+            if (!isAdded) timedOut = true
         }
     }
+
+    val pendingDialsMap by container.connections.pendingDials.collectAsState()
+    val activeAttempts = pendingDialsMap.filterKeys { it in dialingAddrs }.values
+
+    val locked = connecting && !timedOut
+    val done = connecting || noAddressInfo
 
     val lanOnly = parsed != null && parsed.addresses.isNotEmpty() &&
         parsed.addresses.none { it.startsWith("tor://") }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!locked) onDismiss() },
         title = { Text(strings.addContactDialogTitle) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -77,11 +92,11 @@ fun IncomingInviteDialog(
                         onValueChange = { name = it },
                         label = { Text(strings.contactNameLabel) },
                         singleLine = true,
-                        enabled = !accepted,
+                        enabled = !done,
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.medium
                     )
-                    if (!accepted) {
+                    if (!done) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(
                                 checked = confirmed,
@@ -94,12 +109,23 @@ fun IncomingInviteDialog(
                             )
                         }
                     }
-                    if (lanOnly && !accepted) {
+                    if (lanOnly && !done) {
                         Text(
                             strings.inviteLanOnlyWarning,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error
                         )
+                    }
+                }
+                if (connecting && activeAttempts.isNotEmpty()) {
+                    Column {
+                        for (a in activeAttempts.sortedByDescending { it.timestamp }) {
+                            Text(
+                                "• ${a.address.take(40)}…  —  ${a.detail ?: a.status.name}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
                 status?.let {
@@ -109,10 +135,17 @@ fun IncomingInviteDialog(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+                if (timedOut) {
+                    Text(
+                        strings.connectionTimeout,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         },
         confirmButton = {
-            if (parsed != null && !accepted) {
+            if (parsed != null && !done) {
                 TextButton(
                     enabled = name.isNotBlank() && confirmed,
                     onClick = {
@@ -120,23 +153,24 @@ fun IncomingInviteDialog(
                             is BeginAcceptResult.Error -> status = result.message
                             is BeginAcceptResult.NoAddress -> {
                                 status = strings.inviteAcceptedNoAddr
-                                accepted = true
+                                noAddressInfo = true
                             }
                             is BeginAcceptResult.Dialing -> {
                                 targetId = result.payload.stadeId
-                                status = strings.connectingInBackground(
-                                    name.ifBlank { result.payload.nickname }
-                                )
-                                accepted = true
+                                dialingAddrs = result.payload.addresses.toSet()
+                                status = null
+                                connecting = true
                             }
                         }
                     }
                 ) { Text(strings.addAction) }
+            } else if (!locked) {
+                TextButton(onClick = onDismiss) { Text(strings.understood) }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(if (accepted) strings.understood else strings.notNowAction)
+            if (!done) {
+                TextButton(onClick = onDismiss) { Text(strings.notNowAction) }
             }
         }
     )

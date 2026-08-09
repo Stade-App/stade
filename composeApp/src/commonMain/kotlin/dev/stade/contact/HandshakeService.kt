@@ -67,18 +67,6 @@ class HandshakeService(
     }
 
 
-    fun createQrChunks(invite: InviteCode): List<String> {
-        val b32 = invite.display.removePrefix("STADE2-")
-        val chunkSize = 4100
-        val total = (b32.length + chunkSize - 1) / chunkSize
-        return (0 until total).map { i ->
-            val from = i * chunkSize
-            val to = minOf(from + chunkSize, b32.length)
-            "STDP/${i + 1}/$total/${b32.substring(from, to)}"
-        }
-    }
-
-
     fun parseInvite(code: String): InvitePayload? =
         (parseInviteDetailed(code) as? InviteParseResult.Ok)?.payload
 

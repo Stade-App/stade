@@ -233,6 +233,9 @@ object TurkishStrings : AppStrings() {
     override val inviteNotReadyForRemote =
         "Tor henüz başlatılıyor, bu yüzden davetin uzaktan erişilebilir değil. " +
         "Hazır olmasını bekle; aksi halde karşı taraf yalnızca aynı Wi-Fi'da bağlanabilir."
+    override val shareInviteFileAction = "Davet dosyasını paylaş"
+    override val saveInviteFileAction = "Davet dosyasını kaydet"
+    override val inviteFileImportHint = "Sana paylaşılan bir davet dosyasını da (örneğin bir mesajlaşma uygulamasından) açarak bu alanı otomatik doldurabilirsin"
     override val addContactDialogTitle = "Kişi eklensin mi?"
     override fun addContactQuestion(name: String) = "\"$name\" kişisini eklemek istiyor musun?"
     override val incomingInviteMessage = "Bu kullanıcıyı eklemek üzeresin."
@@ -511,5 +514,16 @@ object TurkishStrings : AppStrings() {
     override val unmuteStadiumAction = "Stadium Sesini Aç"
     override val muteChatAction = "Sessize Al"
     override val unmuteChatAction = "Sesi Aç"
+    override val vanishSwipeUpPrompt = "Kaybolan mesajları açmak için yukarı kaydırın"
+    override val vanishDurationSheetTitle = "Kaybolan mesajlar"
+    override val vanishDuration30Min = "30 dakika"
+    override val vanishDuration1Hour = "1 saat"
+    override val vanishDuration6Hours = "6 saat"
+    override val vanishDuration12Hours = "12 saat"
+    override val vanishDuration1Day = "1 gün"
+    override fun vanishActiveBannerLabel(remaining: String) = "Kaybolan mesajlar açık · $remaining içinde sona eriyor"
+    override val vanishTurnOffConfirmTitle = "Kaybolan mesajlar kapatılsın mı?"
+    override val vanishTurnOffConfirmBody = "Kaybolan mesaj modu aktifken gönderilen mesajlar şimdi, her iki tarafta da silinecek."
+    override val vanishTurnOffAction = "Kapat"
 }
 

@@ -231,6 +231,9 @@ object EnglishStrings : AppStrings() {
     override val inviteNotReadyForRemote =
         "Tor is still starting, so your invite is not reachable remotely yet. " +
         "Wait until it is ready, otherwise the other person can only connect on the same Wi-Fi."
+    override val shareInviteFileAction = "Share invite file"
+    override val saveInviteFileAction = "Save invite file"
+    override val inviteFileImportHint = "You can also open an invite file shared with you (e.g. from a chat app) to fill this in automatically"
     override val addContactDialogTitle = "Add contact?"
     override fun addContactQuestion(name: String) = "Do you want to add \"$name\"?"
     override val incomingInviteMessage = "You are about to add this user."
@@ -512,5 +515,16 @@ object EnglishStrings : AppStrings() {
     override val unmuteStadiumAction = "Unmute Stadium"
     override val muteChatAction = "Mute"
     override val unmuteChatAction = "Unmute"
+    override val vanishSwipeUpPrompt = "Swipe up to turn on vanishing messages"
+    override val vanishDurationSheetTitle = "Vanishing messages"
+    override val vanishDuration30Min = "30 minutes"
+    override val vanishDuration1Hour = "1 hour"
+    override val vanishDuration6Hours = "6 hours"
+    override val vanishDuration12Hours = "12 hours"
+    override val vanishDuration1Day = "1 day"
+    override fun vanishActiveBannerLabel(remaining: String) = "Vanishing messages on · expires in $remaining"
+    override val vanishTurnOffConfirmTitle = "Turn off vanishing messages?"
+    override val vanishTurnOffConfirmBody = "Messages sent while vanishing mode was active will be deleted now, on both sides."
+    override val vanishTurnOffAction = "Turn off"
 }
 

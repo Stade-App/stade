@@ -194,6 +194,9 @@ abstract class AppStrings {
     abstract val torStartingInviteHint: String
     abstract val inviteLanOnlyWarning: String
     abstract val inviteNotReadyForRemote: String
+    abstract val shareInviteFileAction: String
+    abstract val saveInviteFileAction: String
+    abstract val inviteFileImportHint: String
     abstract val addContactDialogTitle: String
     abstract fun addContactQuestion(name: String): String
     abstract val incomingInviteMessage: String
@@ -451,6 +454,17 @@ abstract class AppStrings {
     abstract val unmuteStadiumAction: String
     abstract val muteChatAction: String
     abstract val unmuteChatAction: String
+    abstract val vanishSwipeUpPrompt: String
+    abstract val vanishDurationSheetTitle: String
+    abstract val vanishDuration30Min: String
+    abstract val vanishDuration1Hour: String
+    abstract val vanishDuration6Hours: String
+    abstract val vanishDuration12Hours: String
+    abstract val vanishDuration1Day: String
+    abstract fun vanishActiveBannerLabel(remaining: String): String
+    abstract val vanishTurnOffConfirmTitle: String
+    abstract val vanishTurnOffConfirmBody: String
+    abstract val vanishTurnOffAction: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

@@ -41,6 +41,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +55,8 @@ import dev.stade.contact.InviteParseResult
 import dev.stade.contact.PROMOTE_TO_CONTACT_PREFIX
 import dev.stade.crypto.Encoding
 import dev.stade.identity.LocalIdentity
+import dev.stade.share.isShareSheetSupported
+import dev.stade.share.shareFile
 import dev.stade.transport.TransportType
 import dev.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.delay
@@ -67,6 +70,7 @@ import kotlinx.datetime.Clock
 fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -> Unit) {
     val strings = LocalStrings.current
     val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
 
     val torPlugin = remember { container.transports.get(TransportType.TOR) }
     val torInfo by remember(torPlugin) {
@@ -145,6 +149,24 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                 Spacer(Modifier.height(12.dp))
                 FilledTonalButton(
                     enabled = inviteHasTor,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    onClick = {
+                        scope.launch {
+                            shareFile(
+                                invite.display.encodeToByteArray(),
+                                "invite.stadeid",
+                                "application/octet-stream",
+                                strings.shareInviteFileAction
+                            )
+                        }
+                    }
+                ) {
+                    Text(if (isShareSheetSupported) strings.shareInviteFileAction else strings.saveInviteFileAction)
+                }
+                Spacer(Modifier.height(8.dp))
+                FilledTonalButton(
+                    enabled = inviteHasTor,
                     onClick = {
                         clipboard.setText(AnnotatedString(invite.display))
                         status = strings.inviteCodeCopied(invite.display.length)
@@ -183,6 +205,12 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                         val n = pastedCode.replace(Regex("[^A-Za-z0-9]"), "").length
                         Text(strings.charCount(n))
                     }
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    strings.inviteFileImportHint,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(

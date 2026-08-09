@@ -15,6 +15,8 @@ import kotlinx.datetime.Clock
 
 private val STADE_ID_REGEX = Regex("^STADE-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}$")
 
+const val ACCEPT_INVITE_TIMEOUT_MS = 5 * 60_000L
+
 fun inviteErrorText(result: InviteParseResult, strings: AppStrings): String? = when (result) {
     is InviteParseResult.Ok -> null
     is InviteParseResult.MissingPrefix -> strings.inviteMissingPrefix(result.firstChars)
@@ -83,7 +85,7 @@ fun AppContainer.beginAcceptInvite(
     val a = alias.trim()
     val targetId = payload.stadeId
     appScope.launch {
-        val added = withTimeoutOrNull(5 * 60_000L) {
+        val added = withTimeoutOrNull(ACCEPT_INVITE_TIMEOUT_MS) {
             contacts.observeContacts(owner.id).first { list -> list.any { it.id == targetId } }
             true
         } ?: false
