@@ -97,8 +97,8 @@ android {
         applicationId = "dev.stade"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.1.8"
+        versionCode = 12
+        versionName = "0.1.9"
     }
 
     val localProps = Properties().also { props ->
@@ -171,7 +171,7 @@ compose.desktop {
                 "java.desktop"
             )
             packageName = "Stade"
-            packageVersion = "0.1.8"
+            packageVersion = "0.1.9"
             windows {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.ico"))
                 menuGroup = "Stade"
@@ -192,7 +192,7 @@ compose.desktop {
             macOS {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.icns"))
                 bundleID = "dev.stade.app"
-                packageVersion = "1.0.8"
+                packageVersion = "1.0.9"
             }
         }
     }
