@@ -79,9 +79,27 @@ object DesktopNotifier {
         }
     }
 
+    private val isMac: Boolean by lazy {
+        val os = System.getProperty("os.name", "").lowercase()
+        os.contains("mac") || os.contains("darwin")
+    }
+
+    private fun appleScriptQuote(text: String): String =
+        "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+    private fun showMacNotification(title: String, body: String): Boolean =
+        runCatching {
+            val script = "display notification ${appleScriptQuote(body)} with title ${appleScriptQuote(title)}"
+            ProcessBuilder("osascript", "-e", script).start().waitFor() == 0
+        }.getOrDefault(false)
+
     fun showMessage(title: String, body: String) {
         if (!getNotificationsEnabled().value) return
         ensureTray()
+        if (isMac) {
+            showMacNotification(title, body)
+            return
+        }
         val icon = trayIcon ?: return
         runCatching {
             icon.displayMessage(title, body, TrayIcon.MessageType.NONE)
@@ -91,6 +109,12 @@ object DesktopNotifier {
     fun notifyBackgroundIfFirstTime(title: String, body: String) {
         if (flagPrefs.getBoolean(KEY_BG_NOTICE_SHOWN, false)) return
         ensureTray()
+        if (isMac) {
+            if (showMacNotification(title, body)) {
+                flagPrefs.putBoolean(KEY_BG_NOTICE_SHOWN, true)
+            }
+            return
+        }
         val icon = trayIcon ?: return
         runCatching {
             icon.displayMessage(title, body, TrayIcon.MessageType.NONE)

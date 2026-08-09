@@ -129,7 +129,24 @@ private fun applyLinuxFontRendering() {
     System.setProperty("awt.useSystemAAFontSettings", "on")
 }
 
+private fun applyMacDockIdentity() {
+    val os = System.getProperty("os.name", "").lowercase()
+    if (!os.contains("mac") && !os.contains("darwin")) return
+    System.setProperty("apple.awt.application.name", "Stade")
+    runCatching {
+        if (!java.awt.Taskbar.isTaskbarSupported()) return@runCatching
+        val taskbar = java.awt.Taskbar.getTaskbar()
+        if (!taskbar.isSupported(java.awt.Taskbar.Feature.ICON_IMAGE)) return@runCatching
+        val cl = Thread.currentThread().contextClassLoader ?: ClassLoader.getSystemClassLoader()
+        val stream = cl.getResourceAsStream("drawable/app_icon_desktop.png")
+            ?: cl.getResourceAsStream("composeResources/stade.composeapp.generated.resources/drawable/app_icon_desktop.png")
+        val image = stream?.use { javax.imageio.ImageIO.read(it) }
+        if (image != null) taskbar.setIconImage(image)
+    }
+}
+
 fun main(args: Array<String>) {
+    applyMacDockIdentity()
     applyWindowsAppUserModelId()
     applyLinuxFontRendering()
 
