@@ -198,6 +198,82 @@ compose.desktop {
     }
 }
 
+val fixDmgVolumeIcon by tasks.registering {
+    group = "compose desktop"
+    description = "Sets the built DMG's own Finder icon to the app icon (jpackage leaves it generic)."
+    doLast {
+        runCatching {
+            val macIconFile = project.file("src/desktopMain/resources/app_icon_desktop.icns")
+            if (!macIconFile.exists()) {
+                logger.warn("[dmg-icon] $macIconFile not found, skipping")
+                return@doLast
+            }
+            val setFilePath = runCatching {
+                val p = ProcessBuilder("xcrun", "-find", "SetFile").redirectErrorStream(true).start()
+                val out = p.inputStream.bufferedReader().readText().trim()
+                if (p.waitFor() == 0 && out.isNotEmpty()) out else null
+            }.getOrNull()
+            if (setFilePath == null) {
+                logger.warn("[dmg-icon] SetFile not found (needs Xcode Command Line Tools: xcode-select --install) — leaving DMG icon as-is")
+                return@doLast
+            }
+            val dmgDirs = listOf(
+                layout.buildDirectory.dir("compose/binaries/main/dmg").get().asFile,
+                layout.buildDirectory.dir("compose/binaries/main-release/dmg").get().asFile
+            )
+            for (dmgDir in dmgDirs) {
+                val dmgFile = dmgDir.takeIf { it.isDirectory }?.listFiles { f -> f.extension == "dmg" }?.firstOrNull()
+                    ?: continue
+                runCatching { setVolumeIcon(dmgFile, macIconFile, setFilePath) }
+                    .onFailure { logger.warn("[dmg-icon] Failed to set volume icon for ${dmgFile.name}: ${it.message}") }
+            }
+        }.onFailure { logger.warn("[dmg-icon] Skipped: ${it.message}") }
+    }
+}
+
+fun runProcess(vararg args: String): Boolean {
+    val process = ProcessBuilder(*args).redirectErrorStream(true).start()
+    val exitCode = process.waitFor()
+    if (exitCode != 0) {
+        val output = process.inputStream.bufferedReader().readText().trim()
+        throw GradleException("${args.joinToString(" ")} failed ($exitCode): $output")
+    }
+    return true
+}
+
+fun setVolumeIcon(dmgFile: File, icnsFile: File, setFilePath: String) {
+    val rwDmg = File(dmgFile.parentFile, "${dmgFile.nameWithoutExtension}-rw-tmp.dmg")
+    val mountPoint = File(System.getProperty("java.io.tmpdir"), "stade-dmg-mount-${System.currentTimeMillis()}")
+    rwDmg.delete()
+    mountPoint.mkdirs()
+    try {
+        runProcess("hdiutil", "convert", dmgFile.absolutePath, "-format", "UDRW", "-o", rwDmg.absolutePath)
+        runProcess("hdiutil", "attach", rwDmg.absolutePath, "-mountpoint", mountPoint.absolutePath, "-nobrowse", "-noautoopen")
+        try {
+            val volumeIcon = File(mountPoint, ".VolumeIcon.icns")
+            icnsFile.copyTo(volumeIcon, overwrite = true)
+            runProcess(setFilePath, "-a", "C", mountPoint.absolutePath)
+            runProcess(setFilePath, "-a", "V", volumeIcon.absolutePath)
+        } finally {
+            runCatching { runProcess("hdiutil", "detach", mountPoint.absolutePath, "-force") }
+        }
+        val fixedDmg = File(dmgFile.parentFile, "${dmgFile.nameWithoutExtension}-fixed-tmp.dmg")
+        fixedDmg.delete()
+        runProcess("hdiutil", "convert", rwDmg.absolutePath, "-format", "UDZO", "-o", fixedDmg.absolutePath)
+        if (fixedDmg.exists() && fixedDmg.length() > 0) {
+            dmgFile.delete()
+            fixedDmg.renameTo(dmgFile)
+        }
+    } finally {
+        rwDmg.delete()
+        mountPoint.deleteRecursively()
+    }
+}
+
+tasks.matching { it.name == "packageDmg" || it.name == "packageReleaseDmg" }.configureEach {
+    finalizedBy(fixDmgVolumeIcon)
+}
+
 sqldelight {
     databases {
         create("StadeDb") {
