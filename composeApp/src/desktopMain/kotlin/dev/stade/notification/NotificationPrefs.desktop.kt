@@ -68,3 +68,9 @@ actual fun getRunInBackgroundEnabledCommon(): State<Boolean> = _runInBackground
 actual fun setRunInBackgroundEnabledCommon(value: Boolean) {
     setRunInBackgroundEnabled(value)
 }
+
+actual val isConversationShortcutsSupported: Boolean = false
+private val _conversationShortcutsEnabled = mutableStateOf(true)
+actual fun getConversationShortcutsEnabled(): State<Boolean> = _conversationShortcutsEnabled
+actual fun setConversationShortcutsEnabled(value: Boolean) {}
+actual fun removeConversationShortcut(kind: ShortcutEntityKind, id: String) {}

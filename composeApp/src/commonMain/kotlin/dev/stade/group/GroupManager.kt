@@ -9,6 +9,8 @@ import dev.stade.crypto.Encoding
 import dev.stade.db.StadeDb
 import dev.stade.message.SearchResult
 import dev.stade.message.previewBody
+import dev.stade.notification.ShortcutEntityKind
+import dev.stade.notification.removeConversationShortcut
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -82,6 +84,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
             db.stadeDbQueries.deleteGroupMembers(groupId)
             db.stadeDbQueries.deleteGroup(groupId)
         }
+        removeConversationShortcut(ShortcutEntityKind.GROUP, groupId)
     }
 
     fun removeMember(groupId: String, contactId: String) {
@@ -135,6 +138,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
             db.stadeDbQueries.deleteGroupMembers(groupId)
             db.stadeDbQueries.deleteGroup(groupId)
         }
+        removeConversationShortcut(ShortcutEntityKind.GROUP, groupId)
     }
 
     fun handleIncomingGroupMsg(contactId: String, messageId: String, rawBody: String, timestamp: Long): String? {

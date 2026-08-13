@@ -6,6 +6,8 @@ import dev.stade.crypto.CryptoApi
 import dev.stade.db.StadeDb
 import dev.stade.identity.LocalIdentity
 import dev.stade.identity.StadeId
+import dev.stade.notification.ShortcutEntityKind
+import dev.stade.notification.removeConversationShortcut
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -107,6 +109,7 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
 
     fun delete(contactId: String) {
         db.stadeDbQueries.deleteContact(contactId)
+        removeConversationShortcut(ShortcutEntityKind.CONTACT, contactId)
     }
 
     fun purge(contactId: String) {
@@ -115,6 +118,7 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
             db.stadeDbQueries.deleteMessagesForContact(contactId)
             db.stadeDbQueries.deleteContact(contactId)
         }
+        removeConversationShortcut(ShortcutEntityKind.CONTACT, contactId)
     }
 
     private fun dev.stade.db.Contact.toDomain(): Contact =

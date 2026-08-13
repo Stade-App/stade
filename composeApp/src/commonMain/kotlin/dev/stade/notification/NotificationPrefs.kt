@@ -33,3 +33,13 @@ expect val isRunInBackgroundSupported: Boolean
 expect fun getRunInBackgroundEnabledCommon(): androidx.compose.runtime.State<Boolean>
 expect fun setRunInBackgroundEnabledCommon(value: Boolean)
 
+enum class ShortcutEntityKind { CONTACT, GROUP, STADIUM }
+
+expect val isConversationShortcutsSupported: Boolean
+
+expect fun getConversationShortcutsEnabled(): State<Boolean>
+
+expect fun setConversationShortcutsEnabled(value: Boolean)
+
+expect fun removeConversationShortcut(kind: ShortcutEntityKind, id: String)
+

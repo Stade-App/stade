@@ -272,6 +272,9 @@ abstract class AppStrings {
     abstract val linkPreviewsSettingSubtitle: String
     abstract val transportsLockTitle: String
     abstract val transportsLockSubtitle: String
+    abstract val conversationShortcutsTitle: String
+    abstract val conversationShortcutsOnSubtitle: String
+    abstract val conversationShortcutsOffSubtitle: String
     abstract val duressPinTitle: String
     abstract val duressPinSetSubtitle: String
     abstract val duressPinNotSetSubtitle: String

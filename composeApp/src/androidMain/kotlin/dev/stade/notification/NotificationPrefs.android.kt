@@ -6,6 +6,7 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.content.pm.ShortcutManagerCompat
 import dev.stade.StadeApplication
 
 actual val isNotificationSupported: Boolean = true
@@ -79,4 +80,31 @@ actual val isRunInBackgroundSupported: Boolean = false
 private val _androidBg = mutableStateOf(true)
 actual fun getRunInBackgroundEnabledCommon(): State<Boolean> = _androidBg
 actual fun setRunInBackgroundEnabledCommon(value: Boolean) {}
+
+actual val isConversationShortcutsSupported: Boolean = true
+
+private val _conversationShortcutsEnabled by lazy {
+    mutableStateOf(prefs.getBoolean("conversation_shortcuts_enabled", true))
+}
+
+actual fun getConversationShortcutsEnabled(): State<Boolean> = _conversationShortcutsEnabled
+
+actual fun setConversationShortcutsEnabled(value: Boolean) {
+    _conversationShortcutsEnabled.value = value
+    prefs.edit().putBoolean("conversation_shortcuts_enabled", value).apply()
+    if (!value) {
+        runCatching { ShortcutManagerCompat.removeAllDynamicShortcuts(StadeApplication.instance) }
+    }
+}
+
+actual fun removeConversationShortcut(kind: ShortcutEntityKind, id: String) {
+    val prefix = when (kind) {
+        ShortcutEntityKind.CONTACT -> "contact"
+        ShortcutEntityKind.GROUP -> "group"
+        ShortcutEntityKind.STADIUM -> "stadium"
+    }
+    runCatching {
+        ShortcutManagerCompat.removeLongLivedShortcuts(StadeApplication.instance, listOf("${prefix}_$id"))
+    }
+}
 

@@ -14,10 +14,12 @@ import androidx.core.app.Person
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
+import dev.stade.AppContainer
 import dev.stade.MainActivity
 import dev.stade.StadeApplication
 import dev.stade.notification.NotificationAvatar
 import dev.stade.notification.NotificationIds
+import dev.stade.notification.getConversationShortcutsEnabled
 import dev.stade.notification.getNotificationPrivacyEnabled
 import dev.stade.notification.getNotificationsEnabled
 import dev.stade.sync.SyncEngine
@@ -122,11 +124,32 @@ class StadeService : Service() {
 
 
 
+    private fun pruneStaleShortcuts(container: AppContainer) {
+        runCatching {
+            val existing = ShortcutManagerCompat.getDynamicShortcuts(this)
+            if (existing.isEmpty()) return
+            val stale = existing.mapNotNull { shortcut ->
+                val id = shortcut.id
+                val stillExists = when {
+                    id.startsWith("contact_") -> container.contacts.get(id.removePrefix("contact_")) != null
+                    id.startsWith("group_") -> container.groups.getGroup(id.removePrefix("group_")) != null
+                    id.startsWith("stadium_") -> container.stadiums.getStadium(id.removePrefix("stadium_")) != null
+                    else -> true
+                }
+                if (!stillExists) id else null
+            }
+            if (stale.isNotEmpty()) {
+                ShortcutManagerCompat.removeLongLivedShortcuts(this, stale)
+            }
+        }
+    }
+
     private fun observeMessages() {
         val app = (application as StadeApplication)
         scope.launch {
             app.containerFlow.collectLatest { container ->
                 if (container == null) return@collectLatest
+                pruneStaleShortcuts(container)
                 launch {
                     container.sync.events.collect { event ->
                         when (event) {
@@ -240,20 +263,22 @@ class StadeService : Service() {
         val userPerson = Person.Builder().setName("Me").build()
 
         val shortcutId = "${if (isStadium) "stadium" else if (isGroup) "group" else "contact"}_$contactId"
-        runCatching {
-            val shortcutIntent = Intent(this, MainActivity::class.java).apply {
-                action = Intent.ACTION_VIEW
-                putExtra(extraKey, contactId)
+        if (getConversationShortcutsEnabled().value) {
+            runCatching {
+                val shortcutIntent = Intent(this, MainActivity::class.java).apply {
+                    action = Intent.ACTION_VIEW
+                    putExtra(extraKey, contactId)
+                }
+                val shortcut = ShortcutInfoCompat.Builder(this, shortcutId)
+                    .setShortLabel(senderName)
+                    .setLongLived(true)
+                    .setIntent(shortcutIntent)
+                    .setPerson(senderPerson)
+                    .setCategories(setOf("android.shortcut.conversation"))
+                    .apply { avatarIcon?.let { setIcon(it) } }
+                    .build()
+                ShortcutManagerCompat.pushDynamicShortcut(this, shortcut)
             }
-            val shortcut = ShortcutInfoCompat.Builder(this, shortcutId)
-                .setShortLabel(senderName)
-                .setLongLived(true)
-                .setIntent(shortcutIntent)
-                .setPerson(senderPerson)
-                .setCategories(setOf("android.shortcut.conversation"))
-                .apply { avatarIcon?.let { setIcon(it) } }
-                .build()
-            ShortcutManagerCompat.pushDynamicShortcut(this, shortcut)
         }
 
         val notif = NotificationCompat.Builder(this, msgChannelId)

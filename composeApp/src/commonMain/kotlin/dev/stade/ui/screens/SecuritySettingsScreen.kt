@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -192,7 +193,11 @@ private fun SecuritySettingsContent(
                 item {
                     val duressSet = remember(refreshTick) { container.vault.hasDuressPin() }
                     val transportsLockEnabled = remember(refreshTick) { container.secrets.isTransportsLockEnabled() }
-                    val privacyRowCount = (if (isScreenPrivacySupported) 4 else 3)
+                    val conversationShortcutsEnabled by dev.stade.notification.getConversationShortcutsEnabled()
+                    val privacyRowCount = 3 +
+                        (if (isScreenPrivacySupported) 1 else 0) +
+                        (if (dev.stade.notification.isConversationShortcutsSupported) 1 else 0)
+                    var privacyRowIndex = 0
                     SecuritySectionLabel(strings.privacySection)
                     SecurityGroup {
                         SecuritySwitchRow(
@@ -205,7 +210,7 @@ private fun SecuritySettingsContent(
                                 dev.stade.link.setLinkPreviewsEnabled(container.db, it)
                                 refreshTick++
                             },
-                            modifier = privacyGroupRowModifier(0, privacyRowCount)
+                            modifier = privacyGroupRowModifier(privacyRowIndex++, privacyRowCount)
                         )
                         if (isScreenPrivacySupported) {
                             SecuritySwitchRow(
@@ -218,7 +223,7 @@ private fun SecuritySettingsContent(
                                     container.secrets.setScreenshotBlockingEnabled(it)
                                     refreshTick++
                                 },
-                                modifier = privacyGroupRowModifier(1, privacyRowCount)
+                                modifier = privacyGroupRowModifier(privacyRowIndex++, privacyRowCount)
                             )
                         }
                         SecuritySwitchRow(
@@ -231,15 +236,28 @@ private fun SecuritySettingsContent(
                                 container.secrets.setTransportsLockEnabled(it)
                                 refreshTick++
                             },
-                            modifier = privacyGroupRowModifier(privacyRowCount - 2, privacyRowCount)
+                            modifier = privacyGroupRowModifier(privacyRowIndex++, privacyRowCount)
                         )
+                        if (dev.stade.notification.isConversationShortcutsSupported) {
+                            SecuritySwitchRow(
+                                icon = Icons.Default.TouchApp,
+                                tint = MaterialTheme.colorScheme.primary,
+                                title = strings.conversationShortcutsTitle,
+                                subtitle = if (conversationShortcutsEnabled) strings.conversationShortcutsOnSubtitle else strings.conversationShortcutsOffSubtitle,
+                                checked = conversationShortcutsEnabled,
+                                onCheckedChange = {
+                                    dev.stade.notification.setConversationShortcutsEnabled(it)
+                                },
+                                modifier = privacyGroupRowModifier(privacyRowIndex++, privacyRowCount)
+                            )
+                        }
                         SecurityNavRow(
                             icon = Icons.Default.ReportProblem,
                             tint = MaterialTheme.colorScheme.error,
                             title = strings.duressPinTitle,
                             subtitle = if (duressSet) strings.duressPinSetSubtitle else strings.duressPinNotSetSubtitle,
                             onClick = onOpenDuressPinSetup,
-                            modifier = privacyGroupRowModifier(privacyRowCount - 1, privacyRowCount),
+                            modifier = privacyGroupRowModifier(privacyRowIndex++, privacyRowCount),
                             trailingContent = if (duressSet) {
                                 {
                                     IconButton(onClick = {

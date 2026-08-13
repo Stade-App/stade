@@ -9,6 +9,8 @@ import dev.stade.crypto.Encoding
 import dev.stade.db.StadeDb
 import dev.stade.message.SearchResult
 import dev.stade.message.previewBody
+import dev.stade.notification.ShortcutEntityKind
+import dev.stade.notification.removeConversationShortcut
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -84,6 +86,7 @@ class StadiumManager(private val db: StadeDb, private val crypto: CryptoApi) {
             db.stadeDbQueries.deleteStadiumMembers(stadiumId)
             db.stadeDbQueries.deleteStadium(stadiumId)
         }
+        removeConversationShortcut(ShortcutEntityKind.STADIUM, stadiumId)
     }
 
     fun leaveStadium(stadiumId: String) {
@@ -91,6 +94,7 @@ class StadiumManager(private val db: StadeDb, private val crypto: CryptoApi) {
             db.stadeDbQueries.deleteStadiumMessages(stadiumId)
             db.stadeDbQueries.deleteStadium(stadiumId)
         }
+        removeConversationShortcut(ShortcutEntityKind.STADIUM, stadiumId)
     }
 
     fun deleteMessage(messageId: String) {
