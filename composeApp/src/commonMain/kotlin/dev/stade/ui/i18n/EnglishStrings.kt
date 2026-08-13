@@ -529,5 +529,22 @@ object EnglishStrings : AppStrings() {
     override val vanishTurnOffConfirmTitle = "Turn off vanishing messages?"
     override val vanishTurnOffConfirmBody = "Messages sent while vanishing mode was active will be deleted now, on both sides."
     override val vanishTurnOffAction = "Turn off"
+
+    override val stadeyRowSubtitle = "Help & FAQ"
+    override val stadeyIntro = "Hi, I'm Stadey! Tap a topic below and I'll walk you through it."
+    override val stadeySupportLabel = "Support"
+    override val stadeySupportAnswer = "Need more help or want to chat with the community? Join the Stade Discord:"
+    override val stadeyFaqAddFriendsQuestion = "How can I add friends?"
+    override val stadeyFaqAddFriendsAnswer = "Tap the + button and share your invite code with someone, or paste theirs in. There's no phone number lookup or directory — you connect directly, person to person. Once you're connected, you can verify each other's safety number for extra peace of mind."
+    override val stadeyFaqSecurityQuestion = "What makes Stade secure?"
+    override val stadeyFaqSecurityAnswer = "Every conversation is protected by a hybrid encryption scheme that combines classical cryptography with post-quantum algorithms (ML-KEM and ML-DSA), so your messages stay safe even against future quantum computers. Stade is also fully peer-to-peer — there's no server in the middle that ever sees your messages."
+    override val stadeyFaqGroupsStadiumsQuestion = "How do groups and Stadiums work?"
+    override val stadeyFaqGroupsStadiumsAnswer = "Groups are private chats between you and multiple people you invite. Stadiums are broadcast channels — one owner posts updates, and everyone who joins receives them. Great for announcements without turning into a group chat."
+    override val stadeyFaqMediaQuestion = "What about voice messages, stickers, and vanishing messages?"
+    override val stadeyFaqMediaAnswer = "You can record and send voice messages, and create your own stickers right from a photo. You can also turn on vanishing messages for any chat — pick a timer from 30 minutes to a day, and messages disappear on both sides once it runs out."
+    override val stadeyFaqNetworkingQuestion = "How does Stade connect without a central server?"
+    override val stadeyFaqNetworkingAnswer = "Stade routes your messages over Tor by default, including support for bridges if your network is restricted. When you and a contact are on the same local network, Stade can also connect directly for a faster path. You can see each contact's connection status right in your chat list."
+    override val stadeyFaqLockdownQuestion = "How do I lock down my account?"
+    override val stadeyFaqLockdownAnswer = "Head to Settings → Security. You can set a PIN with auto-lock, add a separate duress PIN that wipes the app if you're ever forced to unlock it, block screenshots and screen recording, and require your PIN before transport settings can even be opened."
 }
 

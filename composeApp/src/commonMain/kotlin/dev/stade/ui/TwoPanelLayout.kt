@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.PushPin
@@ -95,6 +96,7 @@ import dev.stade.identity.LocalIdentity
 import dev.stade.message.SearchResult
 import dev.stade.message.previewBody
 import dev.stade.ui.components.Avatar
+import dev.stade.ui.components.BotBadge
 import dev.stade.ui.components.BrandMark
 import dev.stade.ui.components.ChatListFabMenu
 import dev.stade.ui.components.formatChatTime
@@ -108,6 +110,7 @@ import dev.stade.ui.screens.GroupMembersScreen
 import dev.stade.ui.screens.JoinStadiumScreen
 import dev.stade.ui.screens.ManageStadiumScreen
 import dev.stade.ui.screens.PinSetupScreen
+import dev.stade.ui.screens.StadeyScreen
 import dev.stade.ui.screens.StadiumScreen
 import dev.stade.ui.screens.SettingsScreen
 import dev.stade.ui.screens.TransportsScreen
@@ -135,6 +138,7 @@ private sealed class PanelRight {
     data object Security : PanelRight()
     data object Transports : PanelRight()
     data object About : PanelRight()
+    data object Stadey : PanelRight()
     data object AddContact : PanelRight()
     data class Verify(val contactId: String, val from: PanelRight = Chat(contactId)) : PanelRight()
     data class PinSetup(val requireCurrent: Boolean, val ret: PanelRight, val mode: dev.stade.ui.screens.PinSetupMode = dev.stade.ui.screens.PinSetupMode.Primary) : PanelRight()
@@ -420,48 +424,61 @@ fun TwoPanelLayout(
                         )
                     }
 
-                    if (contacts.isEmpty() && groups.isEmpty() && stadiums.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize().padding(24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.PersonAdd, null,
-                                    modifier = Modifier.size(52.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(strings.noContactsTitle, style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    strings.noContactsHint,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                FilledTonalButton(onClick = { right = PanelRight.AddContact }) {
-                                    Icon(Icons.Default.PersonAdd, null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(strings.addContactAction)
-                                }
-                                FilledTonalButton(onClick = { right = PanelRight.CreateStadium }) {
-                                    Icon(Icons.Default.Podcasts, null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(strings.createStadiumAction)
-                                }
-                                FilledTonalButton(onClick = { right = PanelRight.JoinStadium }) {
-                                    Icon(Icons.Default.Podcasts, null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(strings.joinStadiumAction)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            if (query.isBlank()) {
+                                item(key = "stadey") {
+                                    PanelStadeyRow(
+                                        selected = right is PanelRight.Stadey,
+                                        onClick = { right = PanelRight.Stadey }
+                                    )
                                 }
                             }
-                        }
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            if (contacts.isEmpty() && groups.isEmpty() && stadiums.isEmpty()) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .fillParentMaxHeight()
+                                            .padding(24.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.PersonAdd, null,
+                                                modifier = Modifier.size(52.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(strings.noContactsTitle, style = MaterialTheme.typography.titleMedium)
+                                            Text(
+                                                strings.noContactsHint,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                textAlign = TextAlign.Center
+                                            )
+                                            Spacer(Modifier.height(4.dp))
+                                            FilledTonalButton(onClick = { right = PanelRight.AddContact }) {
+                                                Icon(Icons.Default.PersonAdd, null, modifier = Modifier.size(18.dp))
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(strings.addContactAction)
+                                            }
+                                            FilledTonalButton(onClick = { right = PanelRight.CreateStadium }) {
+                                                Icon(Icons.Default.Podcasts, null, modifier = Modifier.size(18.dp))
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(strings.createStadiumAction)
+                                            }
+                                            FilledTonalButton(onClick = { right = PanelRight.JoinStadium }) {
+                                                Icon(Icons.Default.Podcasts, null, modifier = Modifier.size(18.dp))
+                                                Spacer(Modifier.width(8.dp))
+                                                Text(strings.joinStadiumAction)
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
                                 items(combinedPanelItems, key = { it.key }) { item ->
                                     when (item) {
                                         is PanelChatItem.ContactItem -> {
@@ -602,19 +619,19 @@ fun TwoPanelLayout(
                                 }
                                 item { Spacer(Modifier.height(80.dp)) }
                             }
+                        }
 
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(16.dp)
-                            ) {
-                                ChatListFabMenu(
-                                    onAddContact = { right = PanelRight.AddContact },
-                                    onCreateGroup = { right = PanelRight.CreateGroup },
-                                    onCreateStadium = { right = PanelRight.CreateStadium },
-                                    onJoinStadium = { right = PanelRight.JoinStadium }
-                                )
-                            }
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(16.dp)
+                        ) {
+                            ChatListFabMenu(
+                                onAddContact = { right = PanelRight.AddContact },
+                                onCreateGroup = { right = PanelRight.CreateGroup },
+                                onCreateStadium = { right = PanelRight.CreateStadium },
+                                onJoinStadium = { right = PanelRight.JoinStadium }
+                            )
                         }
                     }
                 }
@@ -704,6 +721,10 @@ fun TwoPanelLayout(
 
                 is PanelRight.About -> AboutScreen(
                     onBack = { right = PanelRight.Settings }
+                )
+
+                is PanelRight.Stadey -> StadeyScreen(
+                    onBack = { right = PanelRight.Empty }
                 )
 
                 is PanelRight.AddContact -> AddContactScreen(
@@ -823,6 +844,62 @@ private fun PanelMessageSearchRow(result: SearchResult, onClick: () -> Unit) {
             style = MaterialTheme.typography.labelSmall,
             color = subtleColor
         )
+    }
+}
+
+@Composable
+private fun PanelStadeyRow(
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
+    val strings = LocalStrings.current
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(width = 3.dp, height = 36.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+                )
+        )
+        Spacer(Modifier.width(8.dp))
+
+        Avatar(name = "Stadey", size = 42.dp, icon = Icons.Default.SmartToy)
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Stadey",
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.width(6.dp))
+                BotBadge()
+            }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                strings.stadeyRowSubtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

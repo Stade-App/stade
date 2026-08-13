@@ -528,5 +528,22 @@ object TurkishStrings : AppStrings() {
     override val vanishTurnOffConfirmTitle = "Kaybolan mesajlar kapatılsın mı?"
     override val vanishTurnOffConfirmBody = "Kaybolan mesaj modu aktifken gönderilen mesajlar şimdi, her iki tarafta da silinecek."
     override val vanishTurnOffAction = "Kapat"
+
+    override val stadeyRowSubtitle = "Yardım ve SSS"
+    override val stadeyIntro = "Merhaba, ben Stadey! Aşağıdan bir konuya dokun, sana anlatayım."
+    override val stadeySupportLabel = "Destek"
+    override val stadeySupportAnswer = "Daha fazla yardıma mı ihtiyacın var ya da toplulukla sohbet etmek mi istiyorsun? Stade Discord'a katıl:"
+    override val stadeyFaqAddFriendsQuestion = "Nasıl arkadaş ekleyebilirim?"
+    override val stadeyFaqAddFriendsAnswer = "+ düğmesine dokunup davet kodunu birisiyle paylaşabilir ya da onların kodunu yapıştırabilirsin. Telefon numarasıyla arama veya bir rehber yok — doğrudan, kişiden kişiye bağlanırsın. Bağlandıktan sonra, ekstra güvence için birbirinizin güvenlik numarasını doğrulayabilirsiniz."
+    override val stadeyFaqSecurityQuestion = "Stade'i güvenli yapan nedir?"
+    override val stadeyFaqSecurityAnswer = "Her sohbet, klasik kriptografiyi kuantum sonrası algoritmalarla (ML-KEM ve ML-DSA) birleştiren hibrit bir şifreleme yöntemiyle korunur; böylece mesajların gelecekteki kuantum bilgisayarlara karşı bile güvende kalır. Stade ayrıca tamamen eşler arası çalışır — mesajlarını hiçbir zaman gören bir sunucu yoktur."
+    override val stadeyFaqGroupsStadiumsQuestion = "Gruplar ve Stadyumlar nasıl çalışır?"
+    override val stadeyFaqGroupsStadiumsAnswer = "Gruplar, senin ve davet ettiğin birden fazla kişi arasındaki özel sohbetlerdir. Stadyumlar ise yayın kanallarıdır — bir sahip güncelleme paylaşır, katılan herkes bunları alır. Bir grup sohbetine dönüşmeden duyuru yapmak için idealdir."
+    override val stadeyFaqMediaQuestion = "Sesli mesajlar, çıkartmalar ve kaybolan mesajlar nasıl kullanılır?"
+    override val stadeyFaqMediaAnswer = "Sesli mesaj kaydedip gönderebilir, bir fotoğraftan kendi çıkartmalarını oluşturabilirsin. Ayrıca herhangi bir sohbette kaybolan mesajları açabilirsin — 30 dakikadan bir güne kadar bir süre seç, süre dolduğunda mesajlar her iki tarafta da silinir."
+    override val stadeyFaqNetworkingQuestion = "Stade, merkezi bir sunucu olmadan nasıl bağlanır?"
+    override val stadeyFaqNetworkingAnswer = "Stade, mesajlarını varsayılan olarak Tor üzerinden yönlendirir; ağın kısıtlıysa köprü desteği de vardır. Sen ve bir kişi aynı yerel ağdaysanız, Stade daha hızlı bir yol için doğrudan da bağlanabilir. Her kişinin bağlantı durumunu sohbet listende görebilirsin."
+    override val stadeyFaqLockdownQuestion = "Hesabımı nasıl güvenceye alırım?"
+    override val stadeyFaqLockdownAnswer = "Ayarlar → Güvenlik bölümüne git. Otomatik kilitlenmeli bir PIN belirleyebilir, seni kilidi açmaya zorlarlarsa uygulamayı silen ayrı bir tehdit PIN'i ekleyebilir, ekran görüntüsü ve ekran kaydını engelleyebilir, aktarım ayarlarının açılması için bile PIN zorunlu kılabilirsin."
 }
 

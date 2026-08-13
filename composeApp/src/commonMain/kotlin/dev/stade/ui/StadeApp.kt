@@ -32,6 +32,7 @@ import dev.stade.ui.screens.ManageStadiumScreen
 import dev.stade.ui.screens.OnboardingScreen
 import dev.stade.ui.screens.PinSetupMode
 import dev.stade.ui.screens.PinSetupScreen
+import dev.stade.ui.screens.StadeyScreen
 import dev.stade.ui.screens.SecuritySettingsScreen
 import dev.stade.ui.screens.SettingsScreen
 import dev.stade.ui.screens.StadiumScreen
@@ -66,6 +67,7 @@ sealed interface Screen {
     data object Security : Screen
     data object Transports : Screen
     data object About : Screen
+    data object Stadey : Screen
     data object AddContact : Screen
     data class PinSetup(val requireCurrent: Boolean, val returnTo: Screen, val mode: PinSetupMode = PinSetupMode.Primary) : Screen
 }
@@ -354,6 +356,7 @@ private fun UnlockedApp(
                 Screen.Security -> screen = Screen.Settings
                 Screen.Transports -> screen = Screen.Settings
                 Screen.About -> screen = Screen.Settings
+                Screen.Stadey -> screen = Screen.Contacts
                 Screen.AddContact -> screen = Screen.Contacts
                 is Screen.PinSetup -> screen = s.returnTo
                 else -> {}
@@ -417,6 +420,9 @@ private fun UnlockedApp(
             )
             screen == Screen.About -> AboutScreen(
                 onBack = { screen = Screen.Settings }
+            )
+            screen == Screen.Stadey -> StadeyScreen(
+                onBack = { screen = Screen.Contacts }
             )
             screen == Screen.AddContact -> AddContactScreen(
                 container = container,
@@ -522,6 +528,7 @@ private fun UnlockedApp(
                     onOpenGroupChat = { screen = Screen.GroupChat(it) },
                     onOpenStadium = { screen = Screen.Stadium(it) },
                     onOpenSettings = { screen = Screen.Settings },
+                    onOpenStadey = { screen = Screen.Stadey },
                     onAddContact = { screen = Screen.AddContact },
                     onCreateGroup = { screen = Screen.CreateGroup },
                     onCreateStadium = { screen = Screen.CreateStadium },

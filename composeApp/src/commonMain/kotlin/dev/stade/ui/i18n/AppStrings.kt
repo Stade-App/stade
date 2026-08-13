@@ -468,6 +468,23 @@ abstract class AppStrings {
     abstract val vanishTurnOffConfirmTitle: String
     abstract val vanishTurnOffConfirmBody: String
     abstract val vanishTurnOffAction: String
+
+    abstract val stadeyRowSubtitle: String
+    abstract val stadeyIntro: String
+    abstract val stadeySupportLabel: String
+    abstract val stadeySupportAnswer: String
+    abstract val stadeyFaqAddFriendsQuestion: String
+    abstract val stadeyFaqAddFriendsAnswer: String
+    abstract val stadeyFaqSecurityQuestion: String
+    abstract val stadeyFaqSecurityAnswer: String
+    abstract val stadeyFaqGroupsStadiumsQuestion: String
+    abstract val stadeyFaqGroupsStadiumsAnswer: String
+    abstract val stadeyFaqMediaQuestion: String
+    abstract val stadeyFaqMediaAnswer: String
+    abstract val stadeyFaqNetworkingQuestion: String
+    abstract val stadeyFaqNetworkingAnswer: String
+    abstract val stadeyFaqLockdownQuestion: String
+    abstract val stadeyFaqLockdownAnswer: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

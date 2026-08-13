@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import dev.stade.ui.components.Avatar
+import dev.stade.ui.components.BotBadge
 import dev.stade.ui.components.ChatListFabMenu
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -44,6 +45,7 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.PushPin
@@ -141,6 +143,7 @@ fun ContactsScreen(
     onOpenGroupChat: (String) -> Unit,
     onOpenStadium: (String) -> Unit = {},
     onOpenSettings: () -> Unit,
+    onOpenStadey: () -> Unit = {},
     onAddContact: () -> Unit,
     onCreateGroup: () -> Unit,
     onCreateStadium: () -> Unit = {},
@@ -539,10 +542,17 @@ fun ContactsScreen(
             )
         }
     ) { padding ->
-        if (contacts.isEmpty() && groups.isEmpty() && stadiums.isEmpty()) {
-            EmptyContacts(Modifier.fillMaxSize().padding(padding))
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
+        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (!(searchActive && query.isNotBlank())) {
+                item(key = "stadey") {
+                    StadeyRow(onClick = onOpenStadey)
+                }
+            }
+            if (contacts.isEmpty() && groups.isEmpty() && stadiums.isEmpty()) {
+                item {
+                    EmptyContacts(Modifier.fillMaxWidth().fillParentMaxHeight())
+                }
+            } else {
                 items(combinedItems, key = { it.key }) { item ->
                     when (item) {
                         is ChatListItem.ContactItem -> {
@@ -706,6 +716,47 @@ private fun EmptyContacts(modifier: Modifier) {
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+}
+
+@Composable
+private fun StadeyRow(onClick: () -> Unit) {
+    val strings = LocalStrings.current
+    val subtleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.Transparent,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Avatar(name = "Stadey", size = 52.dp, icon = Icons.Default.SmartToy)
+
+            Spacer(Modifier.width(16.dp))
+
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Stadey",
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    BotBadge()
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    strings.stadeyRowSubtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = subtleColor,
+                    maxLines = 1
+                )
+            }
         }
     }
 }
