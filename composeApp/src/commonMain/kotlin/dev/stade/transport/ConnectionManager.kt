@@ -35,13 +35,15 @@ class ConnectionManager(
     private val registry: ConnectionRegistry,
     private val contacts: ContactManager,
     private val sync: SyncEngine,
-    private val transportSettings: TransportSettings
+    private val transportSettings: TransportSettings,
+    private val isForeground: () -> Boolean = { true }
 ) {
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
     private var ownerRef: LocalIdentity? = null
     private val tasks = mutableListOf<Job>()
     private val backoff = mutableMapOf<String, Long>()
+    private val consecutiveFails = mutableMapOf<String, Int>()
     private val dialing = mutableSetOf<String>()
     private val pendingDial = mutableSetOf<String>()
     private val pendingAttempts = mutableMapOf<String, Int>()
@@ -141,6 +143,30 @@ class ConnectionManager(
         synchronized(backoff) { backoff.clear() }
     }
 
+    private fun bumpFailCount(key: String): Int = synchronized(consecutiveFails) {
+        val n = (consecutiveFails[key] ?: 0) + 1
+        consecutiveFails[key] = n
+        n
+    }
+
+    private fun clearFailCount(key: String) {
+        synchronized(consecutiveFails) { consecutiveFails.remove(key) }
+    }
+
+    private fun clearFailCountWithPrefix(prefix: String) {
+        synchronized(consecutiveFails) { consecutiveFails.keys.removeAll { it.startsWith(prefix) } }
+    }
+
+    private fun clearAllFailCounts() {
+        synchronized(consecutiveFails) { consecutiveFails.clear() }
+    }
+
+    private fun nextContactBackoffMs(key: String): Long {
+        if (isForeground()) return 30_000L
+        val streak = bumpFailCount(key)
+        return CONTACT_BACKOFF_STEPS_MS[minOf(streak - 1, CONTACT_BACKOFF_STEPS_MS.lastIndex)]
+    }
+
     private fun isDialing(contactId: String): Boolean = synchronized(dialing) { contactId in dialing }
 
     private fun markDialing(contactId: String) {
@@ -178,10 +204,13 @@ class ConnectionManager(
                             delay(1_000)
                             removeBackoff(event.contactId)
                             clearBackoffWithPrefix("${event.contactId}|")
+                            clearFailCount(event.contactId)
+                            clearFailCountWithPrefix("${event.contactId}|")
                             dialerWake.trySend(Unit)
                         }
                     }
                     is SyncEngine.SyncEvent.ContactConnected -> {
+                        clearFailCountWithPrefix("${event.contactId}|")
                         val siblingAddrs = runCatching { contacts.get(event.contactId)?.addresses }.getOrNull()
                         if (!siblingAddrs.isNullOrEmpty()) {
                             for (addr in siblingAddrs) consumePendingAddress(addr)
@@ -195,6 +224,7 @@ class ConnectionManager(
 
     fun onNetworkChanged() {
         clearAllBackoff()
+        clearAllFailCounts()
         dialerWake.trySend(Unit)
         pendingWake.trySend(Unit)
     }
@@ -241,6 +271,7 @@ class ConnectionManager(
         tasks.forEach { it.cancel() }
         tasks.clear()
         clearAllBackoff()
+        clearAllFailCounts()
         clearDialing()
         synchronized(pendingDial) {
             pendingDial.clear()
@@ -273,6 +304,8 @@ class ConnectionManager(
     fun retryContact(contactId: String) {
         removeBackoff(contactId)
         clearBackoffWithPrefix("$contactId|")
+        clearFailCount(contactId)
+        clearFailCountWithPrefix("$contactId|")
         dialerWake.trySend(Unit)
     }
 
@@ -360,6 +393,7 @@ class ConnectionManager(
             val healed = runCatching { plugin.refreshReachability() }.getOrDefault(false)
             if (healed) {
                 clearAllBackoff()
+                clearAllFailCounts()
                 dialerWake.trySend(Unit)
                 pendingWake.trySend(Unit)
             }
@@ -400,7 +434,7 @@ class ConnectionManager(
                 unmarkDialing(contact.id)
                 val err = conn.exceptionOrNull()?.message?.take(80) ?: I18n.current.dialUnreachableTimeout
                 recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.CONNECT_FAIL, err))
-                setBackoff(key, nowMs() + 30_000L)
+                setBackoff(key, nowMs() + nextContactBackoffMs(key))
                 noteDialOutcome(addr, connected = false)
                 continue
             }
@@ -411,9 +445,10 @@ class ConnectionManager(
                     val sessionConnected = sync.handleConnection(owner, connection, outbound = true)
                     if (sessionConnected || sync.isConnected(contact.id)) {
                         recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_OK, I18n.current.dialConnectedOk))
+                        clearFailCount(key)
                     } else {
                         recordAttempt(contact.id, DialAttempt(addr, nowMs(), DialAttempt.Status.HANDSHAKE_FAIL, I18n.current.dialHandshakeFailed))
-                        setBackoff(key, nowMs() + 30_000L)
+                        setBackoff(key, nowMs() + nextContactBackoffMs(key))
                     }
                 } finally {
                     unmarkDialing(contact.id)
@@ -458,5 +493,6 @@ class ConnectionManager(
 
     private companion object {
         const val MAX_PENDING_AGE_MS = 10 * 60_000L
+        val CONTACT_BACKOFF_STEPS_MS = longArrayOf(30_000L, 60_000L, 120_000L, 240_000L, 480_000L, 600_000L)
     }
 }

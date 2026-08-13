@@ -180,7 +180,7 @@ class AppContainer(
         transportFactory(db).forEach { reg.register(it) }
     }
     val transportSettings = TransportSettings(db)
-    val connections = ConnectionManager(transports, contacts, sync, transportSettings).also {
+    val connections = ConnectionManager(transports, contacts, sync, transportSettings, isForeground = { isAppInForeground.value }).also {
         sync.selfAddressesProvider = { it.selfAddresses() }
     }
 
