@@ -1,0 +1,52 @@
+name: Windows Package Build
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-package:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Install WiX Toolset
+        run: choco install wixtoolset -y
+
+      - name: Build Exe package
+        shell: bash
+        run: ./gradlew :composeApp:packageExe --stacktrace
+
+      - name: Verify package
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE_FILE="$(find composeApp/build/compose/binaries -name '*.exe' -print -quit)"
+
+          if [ -z "$EXE_FILE" ]; then
+            echo "::error::No .exe package was produced"
+            exit 1
+          fi
+
+          echo "Exe package: $EXE_FILE"
+          echo "EXE_FILE=$EXE_FILE" >> "$GITHUB_ENV"
+
+      - name: Upload Exe package
+        uses: actions/upload-artifact@v4
+        with:
+          name: stade-exe
+          path: ${{ env.EXE_FILE }}
+          if-no-files-found: error
