@@ -485,6 +485,25 @@ abstract class AppStrings {
     abstract val stadeyFaqNetworkingAnswer: String
     abstract val stadeyFaqLockdownQuestion: String
     abstract val stadeyFaqLockdownAnswer: String
+
+    abstract val stadeyFaqAddFriendsKeywords: String
+    abstract val stadeyFaqSecurityKeywords: String
+    abstract val stadeyFaqGroupsStadiumsKeywords: String
+    abstract val stadeyFaqMediaKeywords: String
+    abstract val stadeyFaqNetworkingKeywords: String
+    abstract val stadeyFaqLockdownKeywords: String
+    abstract val stadeySupportKeywords: String
+    abstract val stadeyFallbackAnswer: String
+
+    abstract val hideStadeyAction: String
+    abstract val hideStadeyConfirm: String
+    abstract val hideStadeyDialogTitle: String
+    abstract val hideStadeyDialogBody: String
+    abstract val activateStadeyTitle: String
+    abstract val activateStadeySubtitle: String
+    abstract val activateStadeyConfirm: String
+    abstract val activateStadeyDialogTitle: String
+    abstract val activateStadeyDialogBody: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

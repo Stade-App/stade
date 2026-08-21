@@ -1,8 +1,11 @@
 package dev.stade.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,6 +40,7 @@ import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SettingsEthernet
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
@@ -47,6 +51,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -117,6 +122,8 @@ fun SettingsScreen(
     var fingerprintCopied by remember { mutableStateOf(false) }
     val currentLocale by getLocalePreference()
     var showLanguageMenu by remember { mutableStateOf(false) }
+    val stadeyVisible by getStadeyVisible()
+    var showActivateStadeyConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(fingerprintCopied) {
         if (fingerprintCopied) {
@@ -157,6 +164,33 @@ fun SettingsScreen(
         )
     }
 
+    if (showActivateStadeyConfirm) {
+        AlertDialog(
+            onDismissRequest = { showActivateStadeyConfirm = false },
+            icon = {
+                Icon(Icons.Default.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            },
+            title = { Text(strings.activateStadeyDialogTitle) },
+            text = {
+                Text(
+                    strings.activateStadeyDialogBody,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        setStadeyVisible(true)
+                        showActivateStadeyConfirm = false
+                    }
+                ) { Text(strings.activateStadeyConfirm) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showActivateStadeyConfirm = false }) { Text(strings.cancel) }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -193,18 +227,40 @@ fun SettingsScreen(
                 )
             }
 
-            if (isDynamicColorSupported) {
+            if (isDynamicColorSupported || !stadeyVisible) {
                 item {
                     SettingsSectionLabel(strings.appearanceSection)
                     SettingsGroup {
-                        SwitchSettingsRow(
-                            icon = Icons.Default.Palette,
-                            iconTint = MaterialTheme.colorScheme.tertiary,
-                            title = strings.dynamicColorTitle,
-                            subtitle = strings.dynamicColorSubtitle,
-                            checked = dynamicColorEnabled,
-                            onCheckedChange = { setDynamicColorEnabled(it) }
-                        )
+                        Column {
+                            if (isDynamicColorSupported) {
+                                SwitchSettingsRow(
+                                    icon = Icons.Default.Palette,
+                                    iconTint = MaterialTheme.colorScheme.tertiary,
+                                    title = strings.dynamicColorTitle,
+                                    subtitle = strings.dynamicColorSubtitle,
+                                    checked = dynamicColorEnabled,
+                                    onCheckedChange = { setDynamicColorEnabled(it) }
+                                )
+                            }
+                            AnimatedVisibility(
+                                visible = !stadeyVisible,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Column {
+                                    if (isDynamicColorSupported) {
+                                        SettingsDivider()
+                                    }
+                                    NavigationSettingsRow(
+                                        icon = Icons.Default.SmartToy,
+                                        iconTint = MaterialTheme.colorScheme.tertiary,
+                                        title = strings.activateStadeyTitle,
+                                        subtitle = strings.activateStadeySubtitle,
+                                        onClick = { showActivateStadeyConfirm = true }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -253,38 +309,11 @@ fun SettingsScreen(
             if (isNotificationSupported) {
                 item {
                     SettingsSectionLabel(strings.notificationsSection)
-                    val bgColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                    val largeCorner = 16.dp
-                    val smallCorner = 4.dp
                     val showSystemRow = isSystemNotificationSettingsSupported
                     val showPrivacyRow = notificationsEnabled
 
-                    val topShape = if (showPrivacyRow || showSystemRow) {
-                        RoundedCornerShape(
-                            topStart = largeCorner, topEnd = largeCorner,
-                            bottomStart = smallCorner, bottomEnd = smallCorner
-                        )
-                    } else {
-                        RoundedCornerShape(largeCorner)
-                    }
-                    val privacyShape = if (showSystemRow) {
-                        RoundedCornerShape(smallCorner)
-                    } else {
-                        RoundedCornerShape(
-                            topStart = smallCorner, topEnd = smallCorner,
-                            bottomStart = largeCorner, bottomEnd = largeCorner
-                        )
-                    }
-                    val systemShape = RoundedCornerShape(
-                        topStart = smallCorner, topEnd = smallCorner,
-                        bottomStart = largeCorner, bottomEnd = largeCorner
-                    )
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                    ) {
+                    SettingsGroup {
+                        Column {
                         SwitchSettingsRow(
                             icon = if (notificationsEnabled) Icons.Default.Notifications
                                    else Icons.Default.NotificationsOff,
@@ -294,40 +323,38 @@ fun SettingsScreen(
                             subtitle = if (notificationsEnabled) strings.notificationsOnSubtitle
                                        else strings.notificationsOffSubtitle,
                             checked = notificationsEnabled,
-                            onCheckedChange = { setNotificationsEnabled(it) },
-                            modifier = Modifier
-                                .padding(bottom = if (showPrivacyRow || showSystemRow) 2.dp else 0.dp)
-                                .background(color = bgColor, shape = topShape)
-                                .clip(topShape)
+                            onCheckedChange = { setNotificationsEnabled(it) }
                         )
-                        if (showPrivacyRow) {
-                            SwitchSettingsRow(
-                                icon = Icons.Default.VisibilityOff,
-                                iconTint = MaterialTheme.colorScheme.primary,
-                                title = strings.hideNotificationTitle,
-                                subtitle = if (notificationPrivacyEnabled)
-                                    strings.hiddenNotificationSubtitle
-                                else
-                                    strings.visibleNotificationSubtitle,
-                                checked = notificationPrivacyEnabled,
-                                onCheckedChange = { setNotificationPrivacyEnabled(it) },
-                                modifier = Modifier
-                                    .padding(bottom = if (showSystemRow) 2.dp else 0.dp)
-                                    .background(color = bgColor, shape = privacyShape)
-                                    .clip(privacyShape)
-                            )
+                        AnimatedVisibility(
+                            visible = showPrivacyRow,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            Column {
+                                SettingsDivider()
+                                SwitchSettingsRow(
+                                    icon = Icons.Default.VisibilityOff,
+                                    iconTint = MaterialTheme.colorScheme.primary,
+                                    title = strings.hideNotificationTitle,
+                                    subtitle = if (notificationPrivacyEnabled)
+                                        strings.hiddenNotificationSubtitle
+                                    else
+                                        strings.visibleNotificationSubtitle,
+                                    checked = notificationPrivacyEnabled,
+                                    onCheckedChange = { setNotificationPrivacyEnabled(it) }
+                                )
+                            }
                         }
                         if (showSystemRow) {
+                            SettingsDivider()
                             NavigationSettingsRow(
                                 icon = Icons.Default.OpenInNew,
                                 iconTint = MaterialTheme.colorScheme.primary,
                                 title = strings.systemNotificationsTitle,
                                 subtitle = strings.systemNotificationsSubtitle,
-                                onClick = { openNotificationSettings() },
-                                modifier = Modifier
-                                    .background(color = bgColor, shape = systemShape)
-                                    .clip(systemShape)
+                                onClick = { openNotificationSettings() }
                             )
+                        }
                         }
                     }
                 }
@@ -535,6 +562,12 @@ private fun SettingsGroup(content: @Composable () -> Unit) {
     ) {
         content()
     }
+}
+
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }
 
 

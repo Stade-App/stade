@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -194,6 +195,10 @@ fun ContactsScreen(
     var actionItem by remember { mutableStateOf<ChatListItem?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
+
+    val stadeyVisible by getStadeyVisible()
+    var showHideStadeyMenu by remember { mutableStateOf(false) }
+    var showHideStadeyConfirm by remember { mutableStateOf(false) }
 
     if (actionItem != null && !showDeleteConfirm) {
         val item = actionItem!!
@@ -366,6 +371,76 @@ fun ContactsScreen(
                         actionItem = null
                     }
                 ) { Text(strings.cancel) }
+            }
+        )
+    }
+
+    if (showHideStadeyMenu) {
+        AlertDialog(
+            onDismissRequest = { showHideStadeyMenu = false },
+            shape = RoundedCornerShape(28.dp),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            icon = { Avatar(name = "Stadey", size = 56.dp, icon = Icons.Default.SmartToy) },
+            title = {
+                Text(
+                    text = "Stadey",
+                    style = MaterialTheme.typography.titleLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            showHideStadeyMenu = false
+                            showHideStadeyConfirm = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VisibilityOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(strings.hideStadeyAction)
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    if (showHideStadeyConfirm) {
+        AlertDialog(
+            onDismissRequest = { showHideStadeyConfirm = false },
+            icon = {
+                Icon(Icons.Default.VisibilityOff, null, tint = MaterialTheme.colorScheme.primary)
+            },
+            title = { Text(strings.hideStadeyDialogTitle) },
+            text = {
+                Text(
+                    strings.hideStadeyDialogBody,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        setStadeyVisible(false)
+                        showHideStadeyConfirm = false
+                    }
+                ) { Text(strings.hideStadeyConfirm) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHideStadeyConfirm = false }) { Text(strings.cancel) }
             }
         )
     }
@@ -543,9 +618,12 @@ fun ContactsScreen(
         }
     ) { padding ->
         LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (!(searchActive && query.isNotBlank())) {
+            if (stadeyVisible && !(searchActive && query.isNotBlank())) {
                 item(key = "stadey") {
-                    StadeyRow(onClick = onOpenStadey)
+                    StadeyRow(
+                        onClick = onOpenStadey,
+                        onLongPress = { showHideStadeyMenu = true }
+                    )
                 }
             }
             if (contacts.isEmpty() && groups.isEmpty() && stadiums.isEmpty()) {
@@ -720,8 +798,10 @@ private fun EmptyContacts(modifier: Modifier) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StadeyRow(onClick: () -> Unit) {
+private fun StadeyRow(onClick: () -> Unit, onLongPress: () -> Unit) {
+    val haptic = LocalHapticFeedback.current
     val strings = LocalStrings.current
     val subtleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
     Surface(
@@ -731,7 +811,13 @@ private fun StadeyRow(onClick: () -> Unit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onLongPress()
+                    }
+                )
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

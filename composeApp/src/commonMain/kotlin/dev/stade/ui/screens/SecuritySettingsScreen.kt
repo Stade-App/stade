@@ -39,6 +39,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -154,24 +155,15 @@ private fun SecuritySettingsContent(
                 item {
                     SecuritySectionLabel(strings.pinSection)
                     SecurityGroup {
-                        val changePinShape = if (isKeypadSupported) {
-                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
-                        } else {
-                            MaterialTheme.shapes.large
-                        }
                         SecurityNavRow(
                             icon = Icons.Default.Fingerprint,
                             tint = MaterialTheme.colorScheme.primary,
                             title = strings.changePinTitle,
                             subtitle = strings.changePinSubtitle,
-                            onClick = { onOpenPinSetup(true) },
-                            modifier = Modifier
-                                .then(if (isKeypadSupported) Modifier.padding(bottom = 2.dp) else Modifier)
-                                .background(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = changePinShape)
-                                .clip(changePinShape)
+                            onClick = { onOpenPinSetup(true) }
                         )
                         if (isKeypadSupported) {
-                            val scrambleShape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+                            SecurityDivider()
                             SecuritySwitchRow(
                                 icon = Icons.Default.Grid3x3,
                                 tint = MaterialTheme.colorScheme.primary,
@@ -181,10 +173,7 @@ private fun SecuritySettingsContent(
                                 onCheckedChange = {
                                     container.secrets.setScrambleKeypadEnabled(it)
                                     refreshTick++
-                                },
-                                modifier = Modifier
-                                    .background(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = scrambleShape)
-                                    .clip(scrambleShape)
+                                }
                             )
                         }
                     }
@@ -194,10 +183,6 @@ private fun SecuritySettingsContent(
                     val duressSet = remember(refreshTick) { container.vault.hasDuressPin() }
                     val transportsLockEnabled = remember(refreshTick) { container.secrets.isTransportsLockEnabled() }
                     val conversationShortcutsEnabled by dev.stade.notification.getConversationShortcutsEnabled()
-                    val privacyRowCount = 3 +
-                        (if (isScreenPrivacySupported) 1 else 0) +
-                        (if (dev.stade.notification.isConversationShortcutsSupported) 1 else 0)
-                    var privacyRowIndex = 0
                     SecuritySectionLabel(strings.privacySection)
                     SecurityGroup {
                         SecuritySwitchRow(
@@ -209,10 +194,10 @@ private fun SecuritySettingsContent(
                             onCheckedChange = {
                                 dev.stade.link.setLinkPreviewsEnabled(container.db, it)
                                 refreshTick++
-                            },
-                            modifier = privacyGroupRowModifier(privacyRowIndex++, privacyRowCount)
+                            }
                         )
                         if (isScreenPrivacySupported) {
+                            SecurityDivider()
                             SecuritySwitchRow(
                                 icon = Icons.Default.VisibilityOff,
                                 tint = MaterialTheme.colorScheme.primary,
@@ -222,10 +207,10 @@ private fun SecuritySettingsContent(
                                 onCheckedChange = {
                                     container.secrets.setScreenshotBlockingEnabled(it)
                                     refreshTick++
-                                },
-                                modifier = privacyGroupRowModifier(privacyRowIndex++, privacyRowCount)
+                                }
                             )
                         }
+                        SecurityDivider()
                         SecuritySwitchRow(
                             icon = Icons.Default.Lock,
                             tint = MaterialTheme.colorScheme.primary,
@@ -235,10 +220,10 @@ private fun SecuritySettingsContent(
                             onCheckedChange = {
                                 container.secrets.setTransportsLockEnabled(it)
                                 refreshTick++
-                            },
-                            modifier = privacyGroupRowModifier(privacyRowIndex++, privacyRowCount)
+                            }
                         )
                         if (dev.stade.notification.isConversationShortcutsSupported) {
+                            SecurityDivider()
                             SecuritySwitchRow(
                                 icon = Icons.Default.TouchApp,
                                 tint = MaterialTheme.colorScheme.primary,
@@ -247,17 +232,16 @@ private fun SecuritySettingsContent(
                                 checked = conversationShortcutsEnabled,
                                 onCheckedChange = {
                                     dev.stade.notification.setConversationShortcutsEnabled(it)
-                                },
-                                modifier = privacyGroupRowModifier(privacyRowIndex++, privacyRowCount)
+                                }
                             )
                         }
+                        SecurityDivider()
                         SecurityNavRow(
                             icon = Icons.Default.ReportProblem,
                             tint = MaterialTheme.colorScheme.error,
                             title = strings.duressPinTitle,
                             subtitle = if (duressSet) strings.duressPinSetSubtitle else strings.duressPinNotSetSubtitle,
                             onClick = onOpenDuressPinSetup,
-                            modifier = privacyGroupRowModifier(privacyRowIndex++, privacyRowCount),
                             trailingContent = if (duressSet) {
                                 {
                                     IconButton(onClick = {
@@ -286,12 +270,6 @@ private fun SecuritySettingsContent(
                                 title = strings.autoLockTitle,
                                 subtitle = strings.autoLockSubtitle(strings.sessionTimeoutLabel(sessionTimeout)),
                                 onClick = { timeoutMenuOpen = true },
-                                modifier = Modifier
-                                    .background(
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        shape = MaterialTheme.shapes.large
-                                    )
-                                    .clip(MaterialTheme.shapes.large),
                                 trailingContent = {
                                     IconButton(onClick = { showNeverInfoDialog = true }) {
                                         Icon(
@@ -376,9 +354,16 @@ private fun SecurityGroup(content: @Composable () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
         content()
     }
+}
+
+@Composable
+private fun SecurityDivider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 }
 
 @Composable
@@ -462,20 +447,6 @@ private fun SecuritySwitchRow(
     }
 }
 
-
-@Composable
-private fun privacyGroupRowModifier(index: Int, count: Int): Modifier {
-    val shape = when {
-        count <= 1 -> MaterialTheme.shapes.large
-        index == 0 -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
-        index == count - 1 -> RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
-        else -> RoundedCornerShape(4.dp)
-    }
-    return Modifier
-        .then(if (index < count - 1) Modifier.padding(bottom = 2.dp) else Modifier)
-        .background(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = shape)
-        .clip(shape)
-}
 
 @Composable
 private fun SecurityIconBox(icon: ImageVector, tint: Color) {

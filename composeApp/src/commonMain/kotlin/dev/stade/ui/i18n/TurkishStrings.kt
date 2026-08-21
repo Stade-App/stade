@@ -545,5 +545,24 @@ object TurkishStrings : AppStrings() {
     override val stadeyFaqNetworkingAnswer = "Stade, mesajlarını varsayılan olarak Tor üzerinden yönlendirir; ağın kısıtlıysa köprü desteği de vardır. Sen ve bir kişi aynı yerel ağdaysanız, Stade daha hızlı bir yol için doğrudan da bağlanabilir. Her kişinin bağlantı durumunu sohbet listende görebilirsin."
     override val stadeyFaqLockdownQuestion = "Hesabımı nasıl güvenceye alırım?"
     override val stadeyFaqLockdownAnswer = "Ayarlar → Güvenlik bölümüne git. Otomatik kilitlenmeli bir PIN belirleyebilir, seni kilidi açmaya zorlarlarsa uygulamayı silen ayrı bir tehdit PIN'i ekleyebilir, ekran görüntüsü ve ekran kaydını engelleyebilir, aktarım ayarlarının açılması için bile PIN zorunlu kılabilirsin."
+
+    override val stadeyFaqAddFriendsKeywords = "arkadaş, arkadaşlar, ekle, kişi, kişiler, davet, davet kodu, arkadaş ekle, kişi ekle, bağlan, stade id, kod paylaş, kod yapıştır"
+    override val stadeyFaqSecurityKeywords = "güvenli, güvenlik, şifreleme, şifreli, gizlilik, kuantum, uçtan uca, sunucu, sunucu yok, hacklenir mi, casus, casusluk"
+    override val stadeyFaqGroupsStadiumsKeywords = "grup, gruplar, stadyum, stadyumlar, kanal, kanallar, yayın, grup sohbeti, duyuru, duyurular, abone, üyeler"
+    override val stadeyFaqMediaKeywords = "sesli mesaj, sesli mesajlar, çıkartma, çıkartmalar, kaybolan mesaj, kaybolan mesajlar, kendini imha, ses kaydet, mikrofon, süre, zamanlayıcı"
+    override val stadeyFaqNetworkingKeywords = "bağlantı, bağlan, tor, ağ, sunucu yok, çevrimdışı, köprü, köprüler, yerel ağ, nasıl çalışır, p2p, eşler arası, engelli, sansür"
+    override val stadeyFaqLockdownKeywords = "kilit, pin, şifre, güvenlik ayarları, tehdit pin, ekran görüntüsü, ekran kaydı, sil, pin unuttum, hesabı koru, uygulamayı kilitle, otomatik kilit, zorluyor, zorla, tehdit, tehdit ediyor, zorlanıyorum"
+    override val stadeySupportKeywords = "destek, yardım, discord, topluluk, bize ulaşın, hata bildir, geri bildirim, discord'a katıl, yardıma ihtiyacım var, sorun, problem"
+    override val stadeyFallbackAnswer = "Bundan tam olarak emin değilim — aşağıdaki konulardan birine dokunmayı dene ya da sorunu farklı şekilde sorabilirsin."
+
+    override val hideStadeyAction = "Stadey'i Gizle"
+    override val hideStadeyConfirm = "Gizle"
+    override val hideStadeyDialogTitle = "Stadey Gizlensin mi?"
+    override val hideStadeyDialogBody = "Stadey ana ekrandan kaldırılacak. İstediğin zaman Ayarlar'dan geri getirebilirsin."
+    override val activateStadeyTitle = "Stadey'i Etkinleştir"
+    override val activateStadeySubtitle = "Stadey'i ana ekrana geri ekle"
+    override val activateStadeyConfirm = "Etkinleştir"
+    override val activateStadeyDialogTitle = "Stadey Etkinleştirilsin mi?"
+    override val activateStadeyDialogBody = "Stadey ana ekranda yeniden görünecek."
 }
 

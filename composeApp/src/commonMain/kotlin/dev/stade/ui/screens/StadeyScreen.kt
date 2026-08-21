@@ -20,8 +20,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,8 +46,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import dev.stade.ui.components.Avatar
@@ -59,7 +65,7 @@ private sealed class StadeyBubble {
     data class Answer(val text: String, val linkUrl: String? = null, val linkLabel: String? = null) : StadeyBubble()
 }
 
-private data class FaqTopic(val question: String, val answer: String)
+internal data class FaqTopic(val question: String, val answer: String, val keywords: String = "")
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -71,21 +77,39 @@ fun StadeyScreen(onBack: () -> Unit) {
 
     val topics = remember(strings) {
         listOf(
-            FaqTopic(strings.stadeyFaqAddFriendsQuestion, strings.stadeyFaqAddFriendsAnswer),
-            FaqTopic(strings.stadeyFaqSecurityQuestion, strings.stadeyFaqSecurityAnswer),
-            FaqTopic(strings.stadeyFaqGroupsStadiumsQuestion, strings.stadeyFaqGroupsStadiumsAnswer),
-            FaqTopic(strings.stadeyFaqMediaQuestion, strings.stadeyFaqMediaAnswer),
-            FaqTopic(strings.stadeyFaqNetworkingQuestion, strings.stadeyFaqNetworkingAnswer),
-            FaqTopic(strings.stadeyFaqLockdownQuestion, strings.stadeyFaqLockdownAnswer)
+            FaqTopic(strings.stadeyFaqAddFriendsQuestion, strings.stadeyFaqAddFriendsAnswer, strings.stadeyFaqAddFriendsKeywords),
+            FaqTopic(strings.stadeyFaqSecurityQuestion, strings.stadeyFaqSecurityAnswer, strings.stadeyFaqSecurityKeywords),
+            FaqTopic(strings.stadeyFaqGroupsStadiumsQuestion, strings.stadeyFaqGroupsStadiumsAnswer, strings.stadeyFaqGroupsStadiumsKeywords),
+            FaqTopic(strings.stadeyFaqMediaQuestion, strings.stadeyFaqMediaAnswer, strings.stadeyFaqMediaKeywords),
+            FaqTopic(strings.stadeyFaqNetworkingQuestion, strings.stadeyFaqNetworkingAnswer, strings.stadeyFaqNetworkingKeywords),
+            FaqTopic(strings.stadeyFaqLockdownQuestion, strings.stadeyFaqLockdownAnswer, strings.stadeyFaqLockdownKeywords)
         )
     }
+    val supportTopic = remember(strings) {
+        FaqTopic(strings.stadeySupportLabel, strings.stadeySupportAnswer, strings.stadeySupportKeywords)
+    }
+    val matchableTopics = remember(topics, supportTopic) { topics + supportTopic }
 
     var bubbles by remember { mutableStateOf<List<StadeyBubble>>(listOf(StadeyBubble.Answer(strings.stadeyIntro))) }
+    var inputText by remember { mutableStateOf("") }
 
     fun respond(newBubbles: List<StadeyBubble>) {
         bubbles = bubbles + newBubbles
         val targetIndex = bubbles.lastIndex
         scope.launch { listState.animateScrollToItem(targetIndex.coerceAtLeast(0)) }
+    }
+
+    fun sendUserMessage() {
+        val question = inputText.trim()
+        if (question.isEmpty()) return
+        inputText = ""
+        val matched = StadeyMatcher.bestMatch(question, matchableTopics)
+        val answer = when {
+            matched == null -> StadeyBubble.Answer(strings.stadeyFallbackAnswer)
+            matched === supportTopic -> StadeyBubble.Answer(matched.answer, linkUrl = DISCORD_INVITE_URL, linkLabel = "Discord")
+            else -> StadeyBubble.Answer(matched.answer)
+        }
+        respond(listOf(StadeyBubble.Question(question), answer))
     }
 
     Scaffold(
@@ -121,38 +145,83 @@ fun StadeyScreen(onBack: () -> Unit) {
         },
         bottomBar = {
             Surface(tonalElevation = 2.dp, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
-                FlowRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    topics.forEach { topic ->
+                Column {
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        topics.forEach { topic ->
+                            AssistChip(
+                                onClick = {
+                                    respond(listOf(StadeyBubble.Question(topic.question), StadeyBubble.Answer(topic.answer)))
+                                },
+                                label = { Text(topic.question) }
+                            )
+                        }
                         AssistChip(
                             onClick = {
-                                respond(listOf(StadeyBubble.Question(topic.question), StadeyBubble.Answer(topic.answer)))
-                            },
-                            label = { Text(topic.question) }
-                        )
-                    }
-                    AssistChip(
-                        onClick = {
-                            respond(
-                                listOf(
-                                    StadeyBubble.Answer(
-                                        text = strings.stadeySupportAnswer,
-                                        linkUrl = DISCORD_INVITE_URL,
-                                        linkLabel = "Discord"
+                                respond(
+                                    listOf(
+                                        StadeyBubble.Answer(
+                                            text = strings.stadeySupportAnswer,
+                                            linkUrl = DISCORD_INVITE_URL,
+                                            linkLabel = "Discord"
+                                        )
                                     )
                                 )
+                            },
+                            label = { Text(strings.stadeySupportLabel) },
+                            leadingIcon = {
+                                Icon(BrandIcons.Discord, contentDescription = null, modifier = Modifier.width(16.dp))
+                            }
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        BasicTextField(
+                            value = inputText,
+                            onValueChange = { inputText = it },
+                            modifier = Modifier.weight(1f).height(46.dp),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                            keyboardActions = KeyboardActions(onSend = { sendUserMessage() }),
+                            decorationBox = { innerTextField ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(46.dp))
+                                        .padding(horizontal = 16.dp),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    if (inputText.isEmpty()) {
+                                        Text(
+                                            strings.typeMessagePlaceholder,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        IconButton(onClick = { sendUserMessage() }, enabled = inputText.isNotBlank()) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = strings.sendButton,
+                                tint = if (inputText.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        },
-                        label = { Text(strings.stadeySupportLabel) },
-                        leadingIcon = {
-                            Icon(BrandIcons.Discord, contentDescription = null, modifier = Modifier.width(16.dp))
                         }
-                    )
+                    }
                 }
             }
         }

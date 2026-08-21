@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -111,6 +112,8 @@ import dev.stade.ui.screens.JoinStadiumScreen
 import dev.stade.ui.screens.ManageStadiumScreen
 import dev.stade.ui.screens.PinSetupScreen
 import dev.stade.ui.screens.StadeyScreen
+import dev.stade.ui.screens.getStadeyVisible
+import dev.stade.ui.screens.setStadeyVisible
 import dev.stade.ui.screens.StadiumScreen
 import dev.stade.ui.screens.SettingsScreen
 import dev.stade.ui.screens.TransportsScreen
@@ -191,6 +194,8 @@ fun TwoPanelLayout(
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
     var query by remember { mutableStateOf("") }
     val settingsListState = rememberLazyListState()
+    val stadeyVisible by getStadeyVisible()
+    var showHideStadeyConfirm by remember { mutableStateOf(false) }
 
     val contactLastMessages by remember(contacts) {
         combine(
@@ -361,6 +366,34 @@ fun TwoPanelLayout(
         )
     }
 
+    if (showHideStadeyConfirm) {
+        AlertDialog(
+            onDismissRequest = { showHideStadeyConfirm = false },
+            icon = {
+                Icon(Icons.Default.VisibilityOff, null, tint = MaterialTheme.colorScheme.primary)
+            },
+            title = { Text(strings.hideStadeyDialogTitle) },
+            text = {
+                Text(
+                    strings.hideStadeyDialogBody,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        setStadeyVisible(false)
+                        showHideStadeyConfirm = false
+                        if (right is PanelRight.Stadey) right = PanelRight.Empty
+                    }
+                ) { Text(strings.hideStadeyConfirm) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHideStadeyConfirm = false }) { Text(strings.cancel) }
+            }
+        )
+    }
+
     Row(modifier = Modifier.fillMaxSize()) {
 
         Surface(
@@ -426,11 +459,12 @@ fun TwoPanelLayout(
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            if (query.isBlank()) {
+                            if (stadeyVisible && query.isBlank()) {
                                 item(key = "stadey") {
                                     PanelStadeyRow(
                                         selected = right is PanelRight.Stadey,
-                                        onClick = { right = PanelRight.Stadey }
+                                        onClick = { right = PanelRight.Stadey },
+                                        onHideRequest = { showHideStadeyConfirm = true }
                                     )
                                 }
                             }
@@ -847,57 +881,107 @@ private fun PanelMessageSearchRow(result: SearchResult, onClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun PanelStadeyRow(
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onHideRequest: () -> Unit
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
     val strings = LocalStrings.current
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            Modifier
-                .size(width = 3.dp, height = 36.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
-                )
-        )
-        Spacer(Modifier.width(8.dp))
+    var showContextMenu by remember { mutableStateOf(false) }
+    var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
+    var rowHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
 
-        Avatar(name = "Stadey", size = 42.dp, icon = Icons.Default.SmartToy)
+    Box(modifier = Modifier.onSizeChanged { rowHeightPx = it.height }) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(bg)
+                .clickable(onClick = onClick)
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                                val pos = event.changes.firstOrNull()?.position
+                                if (pos != null) {
+                                    menuOffset = with(density) {
+                                        DpOffset(
+                                            x = pos.x.toDp(),
+                                            y = pos.y.toDp() - rowHeightPx.toDp()
+                                        )
+                                    }
+                                }
+                                event.changes.forEach { it.consume() }
+                                showContextMenu = true
+                            }
+                        }
+                    }
+                }
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier
+                    .size(width = 3.dp, height = 36.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+                    )
+            )
+            Spacer(Modifier.width(8.dp))
 
-        Spacer(Modifier.width(12.dp))
+            Avatar(name = "Stadey", size = 42.dp, icon = Icons.Default.SmartToy)
 
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(12.dp))
+
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Stadey",
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    BotBadge()
+                }
+                Spacer(Modifier.height(2.dp))
                 Text(
-                    "Stadey",
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.bodyLarge,
+                    strings.stadeyRowSubtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.width(6.dp))
-                BotBadge()
             }
-            Spacer(Modifier.height(2.dp))
-            Text(
-                strings.stadeyRowSubtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+        }
+
+        DropdownMenu(
+            expanded = showContextMenu,
+            onDismissRequest = { showContextMenu = false },
+            offset = menuOffset
+        ) {
+            DropdownMenuItem(
+                text = { Text(strings.hideStadeyAction) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.VisibilityOff,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onHideRequest()
+                }
             )
         }
     }
