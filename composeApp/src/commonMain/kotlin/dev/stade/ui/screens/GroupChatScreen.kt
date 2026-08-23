@@ -384,7 +384,7 @@ fun GroupChatScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box {
-                                        Avatar(name = contact.nickname, size = 36.dp)
+                                        Avatar(name = contact.nickname, size = 36.dp, keySeed = contact.publicSigningKey, avatarBytes = contact.avatar)
                                         if (checked) {
                                             Box(
                                                 Modifier

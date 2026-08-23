@@ -565,5 +565,10 @@ object EnglishStrings : AppStrings() {
     override val activateStadeyConfirm = "Activate"
     override val activateStadeyDialogTitle = "Activate Stadey?"
     override val activateStadeyDialogBody = "Stadey will reappear on your home screen."
+
+    override val changeAvatarAction = "Change photo"
+    override val removeAvatarAction = "Remove photo"
+    override val removeAvatarConfirmTitle = "Remove profile photo?"
+    override val removeAvatarConfirmBody = "Your profile photo will be removed for everyone you're connected with, and you'll go back to your default avatar."
 }
 

@@ -15,6 +15,7 @@ const val REACTION_BODY_PREFIX = "STADE_RXN_V1:"
 const val VANISH_START_PREFIX = "STADE_VST_V1:"
 const val VANISH_CANCEL_PREFIX = "STADE_VCL_V1:"
 const val VANISH_TAG_PREFIX = "STADE_VTG_V1:"
+const val AVATAR_BODY_PREFIX = "STADE_AVT_V1:"
 
 const val MAX_ATTACHMENT_BYTES = 1800 * 1024
 
@@ -113,6 +114,18 @@ fun encodeVoiceBody(opusBytes: ByteArray, durationMs: Int): String {
         durationMs.toByte()
     )
     return VOICE_BODY_PREFIX + Base64.Default.encode(header + opusBytes)
+}
+
+@OptIn(ExperimentalEncodingApi::class)
+fun encodeAvatarBody(bytes: ByteArray?): String =
+    AVATAR_BODY_PREFIX + (bytes?.let { Base64.Default.encode(it) } ?: "")
+
+@OptIn(ExperimentalEncodingApi::class)
+fun parseAvatarBody(body: String): ByteArray? {
+    if (!body.startsWith(AVATAR_BODY_PREFIX)) return null
+    val encoded = body.removePrefix(AVATAR_BODY_PREFIX)
+    if (encoded.isEmpty()) return null
+    return runCatching { Base64.Default.decode(encoded) }.getOrNull()
 }
 
 fun encodeReplyBody(replyToId: String, innerBody: String): String =

@@ -97,7 +97,7 @@ fun VerifyContactScreen(
                     modifier = Modifier.padding(20.dp).fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Avatar(name = contact?.nickname ?: "?", size = 64.dp)
+                    Avatar(name = contact?.nickname ?: "?", size = 64.dp, keySeed = contact?.publicSigningKey, avatarBytes = contact?.avatar)
                     Spacer(Modifier.height(10.dp))
                     Text(contact?.nickname ?: "", style = MaterialTheme.typography.titleMedium)
                     if (contact != null) {

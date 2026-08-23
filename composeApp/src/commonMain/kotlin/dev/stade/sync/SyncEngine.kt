@@ -19,10 +19,12 @@ import dev.stade.group.GRP_WELCOME_PREFIX
 import dev.stade.group.GroupManager
 import dev.stade.identity.LocalIdentity
 import dev.stade.identity.StadeId
+import dev.stade.message.AVATAR_BODY_PREFIX
 import dev.stade.message.MessageManager
 import dev.stade.message.REACTION_BODY_PREFIX
 import dev.stade.message.VANISH_CANCEL_PREFIX
 import dev.stade.message.VANISH_START_PREFIX
+import dev.stade.message.parseAvatarBody
 import dev.stade.message.parseReactionWrapper
 import dev.stade.message.parseVanishCancelBody
 import dev.stade.message.parseVanishStartBody
@@ -95,6 +97,7 @@ class SyncEngine(
         data class DecryptFailed(val contactId: String) : SyncEvent
         data class SendFailed(val contactId: String, val reason: String) : SyncEvent
         data class ReactionUpdated(val messageId: String) : SyncEvent
+        data class AvatarUpdated(val contactId: String) : SyncEvent
         data class StadiumMessageReceived(val stadiumId: String) : SyncEvent
         data class StadiumContactReleased(val contactId: String, val forget: Boolean) : SyncEvent
         data class StadiumDeleted(val stadiumId: String) : SyncEvent
@@ -548,6 +551,12 @@ class SyncEngine(
                                 if (wrapper.add) messages.upsertReaction(wrapper.targetMessageId, contact.id, wrapper.emoji)
                                 else messages.deleteReaction(wrapper.targetMessageId, contact.id)
                                 _events.tryEmit(SyncEvent.ReactionUpdated(wrapper.targetMessageId))
+                            }
+                        }
+                        bodyStr.startsWith(AVATAR_BODY_PREFIX) -> {
+                            if ((contacts.get(contact.id)?.kind ?: 0) == 0) {
+                                contacts.setAvatar(contact.id, parseAvatarBody(bodyStr))
+                                _events.tryEmit(SyncEvent.AvatarUpdated(contact.id))
                             }
                         }
                         bodyStr.startsWith(VANISH_START_PREFIX) -> {

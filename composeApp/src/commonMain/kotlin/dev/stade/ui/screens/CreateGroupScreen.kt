@@ -128,7 +128,7 @@ fun CreateGroupScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box {
-                                Avatar(name = contact.nickname, size = 44.dp)
+                                Avatar(name = contact.nickname, size = 44.dp, keySeed = contact.publicSigningKey, avatarBytes = contact.avatar)
                                 if (selected) {
                                     Box(
                                         Modifier

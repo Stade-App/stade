@@ -15,6 +15,7 @@ import dev.stade.db.DriverFactory
 import dev.stade.db.StadeDb
 import dev.stade.group.GroupChatService
 import dev.stade.group.GroupManager
+import dev.stade.identity.AvatarService
 import dev.stade.identity.IdentityManager
 import dev.stade.message.ChatService
 import dev.stade.message.FingerprintService
@@ -157,6 +158,18 @@ class AppContainer(
             runCatching { createdDriver.execute(null, "ALTER TABLE Message ADD COLUMN vanishSessionId TEXT", 0) }
             runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxMessageVanishSession ON Message(vanishSessionId)", 0) }
         }
+        runCatching {
+            createdDriver.executeQuery(null, "SELECT avatar FROM Contact LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "ALTER TABLE Contact ADD COLUMN avatar BLOB", 0) }
+        }
+        runCatching {
+            createdDriver.executeQuery(null, "SELECT avatar FROM LocalIdentity LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "ALTER TABLE LocalIdentity ADD COLUMN avatar BLOB", 0) }
+        }
         db = database
     }
 
@@ -175,6 +188,7 @@ class AppContainer(
     val sync = SyncEngine(crypto, pq, contacts, messages, ratchet, outbox, handshake, vanish, groups, stadiums)
     val chat = ChatService(messages, sync, vanish)
     val groupChat = GroupChatService(groups, sync, contacts, crypto)
+    val avatars = AvatarService(identities, sync, contacts, crypto)
     val stadiumChat = StadiumChatService(stadiums, sync, contacts, crypto, messages, groups)
     val transports = ConnectionRegistry().also { reg ->
         transportFactory(db).forEach { reg.register(it) }

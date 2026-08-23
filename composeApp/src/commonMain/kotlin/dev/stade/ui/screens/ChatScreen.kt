@@ -682,7 +682,7 @@ fun ChatScreen(
                                 .clickable { onOpenProfile() }
                                 .padding(vertical = 6.dp, horizontal = 8.dp)
                         ) {
-                            Avatar(name = contact?.nickname ?: "?", size = 36.dp)
+                            Avatar(name = contact?.nickname ?: "?", size = 36.dp, keySeed = contact?.publicSigningKey, avatarBytes = contact?.avatar)
                             Spacer(Modifier.size(10.dp))
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -775,7 +775,7 @@ fun ChatScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Avatar(name = contact?.nickname ?: "?", size = 64.dp)
+                            Avatar(name = contact?.nickname ?: "?", size = 64.dp, keySeed = contact?.publicSigningKey, avatarBytes = contact?.avatar)
                             Text(
                                 strings.noMessagesYet,
                                 style = MaterialTheme.typography.titleSmall,

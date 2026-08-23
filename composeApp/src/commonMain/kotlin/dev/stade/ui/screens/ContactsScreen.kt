@@ -210,7 +210,7 @@ fun ContactsScreen(
 
             icon = {
                 when (item) {
-                    is ChatListItem.ContactItem -> Avatar(item.contact.nickname, size = 56.dp)
+                    is ChatListItem.ContactItem -> Avatar(item.contact.nickname, size = 56.dp, keySeed = item.contact.publicSigningKey, avatarBytes = item.contact.avatar)
                     is ChatListItem.GroupItem -> Avatar(item.group.name, size = 56.dp, icon = Icons.Default.Group)
                     is ChatListItem.StadiumItem -> Avatar(item.stadium.name, size = 56.dp, icon = Icons.Default.Podcasts)
                 }
@@ -570,7 +570,9 @@ fun ContactsScreen(
                                 Avatar(
                                     name = owner.nickname,
                                     size = 38.dp,
-                                    shape = RoundedCornerShape(25)
+                                    shape = RoundedCornerShape(25),
+                                    keySeed = owner.publicSigningKey,
+                                    avatarBytes = owner.avatar
                                 )
                                 Spacer(Modifier.width(10.dp))
                                 Column {
@@ -879,7 +881,7 @@ private fun ContactRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box {
-                Avatar(contact.nickname, size = 52.dp)
+                Avatar(contact.nickname, size = 52.dp, keySeed = contact.publicSigningKey, avatarBytes = contact.avatar)
                 Box(
                     Modifier
                         .align(Alignment.BottomEnd)

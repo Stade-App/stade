@@ -57,7 +57,7 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.insertContact(
             id, owner.id, nickname, peerSigningKey, peerHandshakeKey,
             peerMlKemKey, peerMlDsaKey,
-            rootKey, null, if (isAlice) 1 else 0, 0, 0L, now, addrJoined, kind.toLong()
+            rootKey, null, if (isAlice) 1 else 0, 0, 0L, now, addrJoined, kind.toLong(), null
         )
         Contact(
             id = id,
@@ -107,6 +107,10 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.setContactMuted(if (muted) 1L else 0L, contactId)
     }
 
+    fun setAvatar(contactId: String, avatar: ByteArray?) {
+        db.stadeDbQueries.setContactAvatar(avatar, contactId)
+    }
+
     fun delete(contactId: String) {
         db.stadeDbQueries.deleteContact(contactId)
         removeConversationShortcut(ShortcutEntityKind.CONTACT, contactId)
@@ -138,6 +142,7 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
             createdAt = createdAt,
             addresses = addresses.split("\n").filter { it.isNotBlank() },
             kind = kind.toInt(),
-            muted = muted == 1L
+            muted = muted == 1L,
+            avatar = avatar
         )
 }

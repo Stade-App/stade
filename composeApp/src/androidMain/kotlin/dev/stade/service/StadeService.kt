@@ -166,7 +166,7 @@ class StadeService : Service() {
                                     val preview = container.messages.lastMessage(event.contactId)?.body
                                         ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage, dev.stade.ui.i18n.I18n.current.voiceMessage, dev.stade.ui.i18n.I18n.current.videoMessage, dev.stade.ui.i18n.I18n.current.stickerMessage) }
                                         ?: dev.stade.ui.i18n.I18n.current.notifNewMessageFallback
-                                    showMessageNotification(event.contactId, senderName, preview)
+                                    showMessageNotification(event.contactId, senderName, preview, avatarBytes = contact?.avatar, keySeed = contact?.publicSigningKey)
                                 }
                             }
                             is SyncEngine.SyncEvent.GroupMessageReceived -> {
@@ -236,7 +236,9 @@ class StadeService : Service() {
         senderName: String,
         preview: String,
         isStadium: Boolean = false,
-        isGroup: Boolean = false
+        isGroup: Boolean = false,
+        avatarBytes: ByteArray? = null,
+        keySeed: ByteArray? = null
     ) {
         val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         val extraKey = when {
@@ -253,7 +255,8 @@ class StadeService : Service() {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val avatarBitmap = runCatching { NotificationAvatar.bitmapFor(senderName) }.getOrNull()
+        val avatarBitmap = avatarBytes?.let { NotificationAvatar.fromPhotoBytes(it) }
+            ?: runCatching { NotificationAvatar.bitmapFor(senderName, keySeed) }.getOrNull()
         val avatarIcon = avatarBitmap?.let { IconCompat.createWithBitmap(it) }
         val senderPerson = Person.Builder()
             .setName(senderName)

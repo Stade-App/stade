@@ -1,5 +1,6 @@
 package dev.stade.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -9,6 +10,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -16,11 +18,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.stade.ui.decodeToImageBitmap
 
 private val palette = listOf(
     Color(0xFF1E6091) to Color(0xFF61A5C2),
@@ -39,9 +43,29 @@ fun Avatar(
     modifier: Modifier = Modifier,
     size: Dp = 40.dp,
     shape: Shape = CircleShape,
-    icon: ImageVector? = null
+    icon: ImageVector? = null,
+    keySeed: ByteArray? = null,
+    avatarBytes: ByteArray? = null
 ) {
-    val seed = name.fold(0) { acc, c -> (acc * 31 + c.code) and 0x7fffffff }
+    val bitmap = remember(avatarBytes) { avatarBytes?.let { runCatching { it.decodeToImageBitmap() }.getOrNull() } }
+
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier
+                .size(size)
+                .clip(shape)
+        )
+        return
+    }
+
+    val seed = if (keySeed != null && keySeed.isNotEmpty()) {
+        keySeed.fold(0) { acc, byte -> (acc * 31 + byte.toInt()) and 0x7fffffff }
+    } else {
+        name.fold(0) { acc, c -> (acc * 31 + c.code) and 0x7fffffff }
+    }
     val (a, b) = palette[seed % palette.size]
     val initial = name.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "?"
     val fontSize = (size.value * 0.42f).sp

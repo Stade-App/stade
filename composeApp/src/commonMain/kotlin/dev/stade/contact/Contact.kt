@@ -19,10 +19,12 @@ data class Contact(
     val createdAt: Long,
     val addresses: List<String> = emptyList(),
     val kind: Int = 0,
-    val muted: Boolean = false
+    val muted: Boolean = false,
+    val avatar: ByteArray? = null
 ) {
     val stadeId: String get() = id
-    override fun equals(other: Any?): Boolean = other is Contact && other.id == id && other.muted == muted
+    override fun equals(other: Any?): Boolean =
+        other is Contact && other.id == id && other.muted == muted && other.avatar.contentEquals(avatar)
     override fun hashCode(): Int = id.hashCode()
 }
 

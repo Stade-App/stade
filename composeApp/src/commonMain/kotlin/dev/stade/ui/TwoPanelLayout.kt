@@ -410,7 +410,7 @@ fun TwoPanelLayout(
                         ),
                         title = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(name = owner.nickname, size = 32.dp,shape = RoundedCornerShape(25))
+                                Avatar(name = owner.nickname, size = 32.dp, shape = RoundedCornerShape(25), keySeed = owner.publicSigningKey, avatarBytes = owner.avatar)
                                 Spacer(Modifier.size(10.dp))
                                 Column {
                                     Text(strings.appTitle, style = MaterialTheme.typography.titleMedium)
@@ -1053,7 +1053,7 @@ private fun PanelContactRow(
             Spacer(Modifier.width(8.dp))
 
             Box {
-                Avatar(name = contact.nickname, size = 42.dp)
+                Avatar(name = contact.nickname, size = 42.dp, keySeed = contact.publicSigningKey, avatarBytes = contact.avatar)
                 Box(
                     Modifier
                         .align(Alignment.BottomEnd)

@@ -262,8 +262,16 @@ private fun UnlockedApp(
             container.connections.start(current)
             container.groupChat.start(current, this)
             container.stadiumChat.start(current, this)
+            container.avatars.start(current, this)
         } else {
             container.connections.stop()
+        }
+    }
+
+    LaunchedEffect(identity?.id) {
+        val currentId = identity?.id ?: return@LaunchedEffect
+        container.identities.observeIdentities().collect { list ->
+            list.find { it.id == currentId }?.let { fresh -> identity = fresh }
         }
     }
 

@@ -14,10 +14,12 @@ data class LocalIdentity(
     val privateMlKemKey: ByteArray,
     val publicMlDsaKey: ByteArray,
     val privateMlDsaKey: ByteArray,
-    val createdAt: Long
+    val createdAt: Long,
+    val avatar: ByteArray? = null
 ) {
     val stadeId: String get() = id
-    override fun equals(other: Any?): Boolean = other is LocalIdentity && other.id == id
+    override fun equals(other: Any?): Boolean =
+        other is LocalIdentity && other.id == id && other.avatar.contentEquals(avatar)
     override fun hashCode(): Int = id.hashCode()
 }
 

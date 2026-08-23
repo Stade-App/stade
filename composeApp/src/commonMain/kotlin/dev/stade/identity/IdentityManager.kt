@@ -35,7 +35,7 @@ class IdentityManager(
             handshake.publicKey, handshake.privateKey,
             mlkem.publicKey, mlkem.privateKey,
             mldsa.publicKey, mldsa.privateKey,
-            now
+            now, null
         )
         return LocalIdentity(
             id = id,
@@ -55,6 +55,10 @@ class IdentityManager(
     fun get(id: String): LocalIdentity? =
         db.stadeDbQueries.selectIdentity(id).executeAsOneOrNull()?.toDomain()
 
+    fun setAvatar(identityId: String, avatar: ByteArray?) {
+        db.stadeDbQueries.setIdentityAvatar(avatar, identityId)
+    }
+
     private fun dev.stade.db.LocalIdentity.toDomain(): LocalIdentity =
         LocalIdentity(
             id = id,
@@ -67,6 +71,7 @@ class IdentityManager(
             privateMlKemKey = mlkemPrivateKey,
             publicMlDsaKey = mldsaPublicKey,
             privateMlDsaKey = mldsaPrivateKey,
-            createdAt = createdAt
+            createdAt = createdAt,
+            avatar = avatar
         )
 }

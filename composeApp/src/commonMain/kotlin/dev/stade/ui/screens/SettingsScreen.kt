@@ -24,13 +24,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Grid3x3
 import androidx.compose.material.icons.filled.Info
@@ -39,6 +42,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.SettingsEthernet
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Sync
@@ -66,6 +70,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,6 +83,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.identity.LocalIdentity
+import dev.stade.media.MediaEditorDialog
 import dev.stade.notification.getNotificationPrivacyEnabled
 import dev.stade.notification.getNotificationsEnabled
 import dev.stade.notification.getRunInBackgroundEnabledCommon
@@ -88,8 +94,10 @@ import dev.stade.notification.openNotificationSettings
 import dev.stade.notification.setNotificationPrivacyEnabled
 import dev.stade.notification.setNotificationsEnabled
 import dev.stade.notification.setRunInBackgroundEnabledCommon
+import dev.stade.ui.compressAvatar
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.PlatformVerticalScrollbar
+import dev.stade.ui.rememberMediaPickerLauncher
 import dev.stade.ui.theme.getDynamicColorEnabled
 import dev.stade.ui.theme.isDynamicColorSupported
 import dev.stade.ui.theme.setDynamicColorEnabled
@@ -97,7 +105,10 @@ import dev.stade.ui.i18n.AppLocale
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.i18n.getLocalePreference
 import dev.stade.ui.i18n.setLocalePreference
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -124,6 +135,14 @@ fun SettingsScreen(
     var showLanguageMenu by remember { mutableStateOf(false) }
     val stadeyVisible by getStadeyVisible()
     var showActivateStadeyConfirm by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    var pendingAvatarBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var showRemoveAvatarConfirm by remember { mutableStateOf(false) }
+    val avatarPicker = rememberMediaPickerLauncher(
+        onImages = { images -> images.firstOrNull()?.let { pendingAvatarBytes = it } },
+        onVideo = {},
+        imagesOnly = true
+    )
 
     LaunchedEffect(fingerprintCopied) {
         if (fingerprintCopied) {
@@ -191,6 +210,53 @@ fun SettingsScreen(
         )
     }
 
+    pendingAvatarBytes?.let { raw ->
+        MediaEditorDialog(
+            imageBytes = raw,
+            onSave = { edited ->
+                scope.launch {
+                    val compressed = withContext(Dispatchers.Default) { compressAvatar(edited) }
+                    container.avatars.setMyAvatar(owner, compressed)
+                }
+                pendingAvatarBytes = null
+            },
+            onCancel = { pendingAvatarBytes = null }
+        )
+    }
+
+    if (showRemoveAvatarConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRemoveAvatarConfirm = false },
+            icon = {
+                Icon(Icons.Default.AccountCircle, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            },
+            title = { Text(strings.removeAvatarConfirmTitle) },
+            text = {
+                Text(
+                    strings.removeAvatarConfirmBody,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            container.avatars.setMyAvatar(owner, null)
+                        }
+                        showRemoveAvatarConfirm = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) { Text(strings.removeAvatarAction) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveAvatarConfirm = false }) { Text(strings.cancel) }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -218,12 +284,15 @@ fun SettingsScreen(
             item {
                 ProfileHeader(
                     owner = owner,
+                    avatarBytes = owner.avatar,
                     fingerprint = fingerprint,
                     copied = fingerprintCopied,
                     onCopyFingerprint = {
                         clipboardManager.setText(AnnotatedString(fingerprint))
                         fingerprintCopied = true
-                    }
+                    },
+                    onChangeAvatar = { avatarPicker.launch() },
+                    onRemoveAvatarRequest = { showRemoveAvatarConfirm = true }
                 )
             }
 
@@ -442,12 +511,16 @@ fun SettingsScreen(
 @Composable
 private fun ProfileHeader(
     owner: LocalIdentity,
+    avatarBytes: ByteArray?,
     fingerprint: String,
     copied: Boolean,
-    onCopyFingerprint: () -> Unit
+    onCopyFingerprint: () -> Unit,
+    onChangeAvatar: () -> Unit,
+    onRemoveAvatarRequest: () -> Unit
 ) {
     val strings = LocalStrings.current
     val cardShape = RoundedCornerShape(16.dp)
+    var showAvatarMenu by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -463,7 +536,52 @@ private fun ProfileHeader(
                 .padding(top = 20.dp, bottom = 28.dp, start = 24.dp, end = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Avatar(name = owner.nickname, size = 84.dp)
+            Box {
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable {
+                            if (avatarBytes != null) showAvatarMenu = true else onChangeAvatar()
+                        }
+                ) {
+                    Avatar(
+                        name = owner.nickname,
+                        keySeed = owner.publicSigningKey,
+                        avatarBytes = avatarBytes,
+                        size = 84.dp
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.PhotoCamera,
+                        contentDescription = strings.changeAvatarAction,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                DropdownMenu(
+                    expanded = showAvatarMenu,
+                    onDismissRequest = { showAvatarMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(strings.changeAvatarAction) },
+                        leadingIcon = { Icon(Icons.Default.PhotoCamera, contentDescription = null) },
+                        onClick = { showAvatarMenu = false; onChangeAvatar() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(strings.removeAvatarAction) },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                        onClick = { showAvatarMenu = false; onRemoveAvatarRequest() }
+                    )
+                }
+            }
             Spacer(Modifier.height(14.dp))
             Text(
                 owner.nickname,

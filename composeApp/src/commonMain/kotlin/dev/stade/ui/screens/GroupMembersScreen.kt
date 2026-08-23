@@ -93,6 +93,14 @@ fun GroupMembersScreen(
         if (memberId == owner.stadeId) owner.nickname
         else contactsById[memberId]?.nickname ?: memberId.takeLast(6)
 
+    fun keySeedFor(memberId: String): ByteArray? =
+        if (memberId == owner.stadeId) owner.publicSigningKey
+        else contactsById[memberId]?.publicSigningKey
+
+    fun avatarFor(memberId: String): ByteArray? =
+        if (memberId == owner.stadeId) owner.avatar
+        else contactsById[memberId]?.avatar
+
     if (kickTarget != null && group != null) {
         val targetId = kickTarget!!
         val targetName = nameFor(targetId)
@@ -154,7 +162,7 @@ fun GroupMembersScreen(
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Avatar(name = name, size = 44.dp)
+                        Avatar(name = name, size = 44.dp, keySeed = keySeedFor(memberId), avatarBytes = avatarFor(memberId))
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(

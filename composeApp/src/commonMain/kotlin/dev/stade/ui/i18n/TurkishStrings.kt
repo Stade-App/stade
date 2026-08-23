@@ -564,5 +564,10 @@ object TurkishStrings : AppStrings() {
     override val activateStadeyConfirm = "Etkinleştir"
     override val activateStadeyDialogTitle = "Stadey Etkinleştirilsin mi?"
     override val activateStadeyDialogBody = "Stadey ana ekranda yeniden görünecek."
+
+    override val changeAvatarAction = "Fotoğrafı değiştir"
+    override val removeAvatarAction = "Fotoğrafı kaldır"
+    override val removeAvatarConfirmTitle = "Profil fotoğrafı kaldırılsın mı?"
+    override val removeAvatarConfirmBody = "Profil fotoğrafın bağlı olduğun herkes için kaldırılacak ve varsayılan avatarına geri döneceksin."
 }
 

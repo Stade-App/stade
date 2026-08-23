@@ -504,6 +504,10 @@ abstract class AppStrings {
     abstract val activateStadeyConfirm: String
     abstract val activateStadeyDialogTitle: String
     abstract val activateStadeyDialogBody: String
+    abstract val changeAvatarAction: String
+    abstract val removeAvatarAction: String
+    abstract val removeAvatarConfirmTitle: String
+    abstract val removeAvatarConfirmBody: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }
