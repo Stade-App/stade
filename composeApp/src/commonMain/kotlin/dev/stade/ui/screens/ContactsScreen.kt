@@ -34,9 +34,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import dev.stade.stadium.isOfficial
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.BotBadge
 import dev.stade.ui.components.ChatListFabMenu
+import org.jetbrains.compose.resources.painterResource
+import stade.composeapp.generated.resources.Res
+import stade.composeapp.generated.resources.app_icon
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -212,7 +216,13 @@ fun ContactsScreen(
                 when (item) {
                     is ChatListItem.ContactItem -> Avatar(item.contact.nickname, size = 56.dp, keySeed = item.contact.publicSigningKey, avatarBytes = item.contact.avatar)
                     is ChatListItem.GroupItem -> Avatar(item.group.name, size = 56.dp, icon = Icons.Default.Group)
-                    is ChatListItem.StadiumItem -> Avatar(item.stadium.name, size = 56.dp, icon = Icons.Default.Podcasts)
+                    is ChatListItem.StadiumItem -> Avatar(
+                        item.stadium.name,
+                        size = 56.dp,
+                        icon = Icons.Default.Podcasts,
+                        image = if (item.stadium.isOfficial) painterResource(Res.drawable.app_icon) else null,
+                        verified = item.stadium.isOfficial
+                    )
                 }
             },
 
@@ -1066,7 +1076,13 @@ private fun StadiumRow(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Avatar(name = stadium.name, size = 52.dp, icon = Icons.Default.Podcasts)
+            Avatar(
+                name = stadium.name,
+                size = 52.dp,
+                icon = Icons.Default.Podcasts,
+                image = if (stadium.isOfficial) painterResource(Res.drawable.app_icon) else null,
+                verified = stadium.isOfficial
+            )
 
             Spacer(Modifier.width(16.dp))
 

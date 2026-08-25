@@ -105,11 +105,15 @@ import dev.stade.media.MediaEditorDialog
 import dev.stade.message.MAX_ATTACHMENT_BYTES
 import dev.stade.message.MessageType
 import dev.stade.stadium.StadiumMessage
+import dev.stade.stadium.isOfficial
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.Avatar
+import org.jetbrains.compose.resources.painterResource
+import stade.composeapp.generated.resources.Res
+import stade.composeapp.generated.resources.app_icon
 import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.EmojiStickerDrawer
 import dev.stade.ui.components.StickerMakerDialog
@@ -407,7 +411,13 @@ fun StadiumScreen(
                 TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(name = current?.name ?: "", size = 36.dp, icon = Icons.Default.Podcasts)
+                            Avatar(
+                                name = current?.name ?: "",
+                                size = 36.dp,
+                                icon = Icons.Default.Podcasts,
+                                image = if (current?.isOfficial == true) painterResource(Res.drawable.app_icon) else null,
+                                verified = current?.isOfficial == true
+                            )
                             Spacer(Modifier.size(10.dp))
                             Column {
                                 Text(current?.name ?: "", style = MaterialTheme.typography.titleMedium)

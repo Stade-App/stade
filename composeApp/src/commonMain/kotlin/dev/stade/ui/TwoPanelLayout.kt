@@ -96,11 +96,15 @@ import dev.stade.group.GroupInfo
 import dev.stade.identity.LocalIdentity
 import dev.stade.message.SearchResult
 import dev.stade.message.previewBody
+import dev.stade.stadium.isOfficial
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.BotBadge
 import dev.stade.ui.components.BrandMark
 import dev.stade.ui.components.ChatListFabMenu
 import dev.stade.ui.components.formatChatTime
+import org.jetbrains.compose.resources.painterResource
+import stade.composeapp.generated.resources.Res
+import stade.composeapp.generated.resources.app_icon
 import dev.stade.ui.screens.AboutScreen
 import dev.stade.ui.screens.AddContactScreen
 import dev.stade.ui.screens.ChatScreen
@@ -1434,7 +1438,13 @@ private fun PanelStadiumRow(
             )
             Spacer(Modifier.width(8.dp))
 
-            Avatar(name = stadium.name, size = 44.dp, icon = Icons.Default.Podcasts)
+            Avatar(
+                name = stadium.name,
+                size = 44.dp,
+                icon = Icons.Default.Podcasts,
+                image = if (stadium.isOfficial) painterResource(Res.drawable.app_icon) else null,
+                verified = stadium.isOfficial
+            )
 
             Spacer(Modifier.width(12.dp))
 

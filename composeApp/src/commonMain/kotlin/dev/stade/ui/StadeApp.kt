@@ -18,6 +18,7 @@ import dev.stade.BootContext
 import dev.stade.identity.LocalIdentity
 import dev.stade.security.SessionTimeout
 import dev.stade.ui.beginAcceptStadiumInvite
+import dev.stade.stadium.joinOfficialStadiumIfNeeded
 import dev.stade.ui.screens.AboutScreen
 import dev.stade.ui.screens.AddContactScreen
 import dev.stade.ui.screens.ChatScreen
@@ -263,6 +264,7 @@ private fun UnlockedApp(
             container.groupChat.start(current, this)
             container.stadiumChat.start(current, this)
             container.avatars.start(current, this)
+            launch { runCatching { joinOfficialStadiumIfNeeded(container, current) } }
         } else {
             container.connections.stop()
         }
