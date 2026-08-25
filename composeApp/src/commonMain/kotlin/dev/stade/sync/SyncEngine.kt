@@ -542,7 +542,7 @@ class SyncEngine(
                         bodyStr == PROMOTE_TO_CONTACT_PREFIX -> {
                             runCatching {
                                 val fresh = contacts.get(contact.id)
-                                if (fresh != null && fresh.kind != 0) contacts.setKind(contact.id, 0)
+                                if (fresh != null && fresh.kind == 1) contacts.setKind(contact.id, 0)
                             }
                         }
                         bodyStr.startsWith(REACTION_BODY_PREFIX) -> {

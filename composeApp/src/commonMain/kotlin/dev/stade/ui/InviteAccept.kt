@@ -1,6 +1,7 @@
 package dev.stade.ui
 
 import dev.stade.AppContainer
+import dev.stade.contact.Contact
 import dev.stade.contact.InviteParseResult
 import dev.stade.contact.InvitePayload
 import dev.stade.contact.PROMOTE_TO_CONTACT_PREFIX
@@ -16,6 +17,22 @@ import kotlinx.datetime.Clock
 private val STADE_ID_REGEX = Regex("^STADE-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}$")
 
 const val ACCEPT_INVITE_TIMEOUT_MS = 5 * 60_000L
+
+fun AppContainer.promoteOrAlreadyAdded(owner: LocalIdentity, existing: Contact, strings: AppStrings): String {
+    if (existing.kind == 0) return strings.alreadyAdded(existing.id)
+    runCatching { contacts.setKind(existing.id, 0) }
+    appScope.launch {
+        runCatching {
+            sync.queueOutgoing(
+                owner, existing,
+                Encoding.toHex(crypto.randomBytes(16)),
+                PROMOTE_TO_CONTACT_PREFIX,
+                Clock.System.now().toEpochMilliseconds()
+            )
+        }
+    }
+    return strings.contactAdded(existing.nickname)
+}
 
 fun inviteErrorText(result: InviteParseResult, strings: AppStrings): String? = when (result) {
     is InviteParseResult.Ok -> null
@@ -58,21 +75,8 @@ fun AppContainer.beginAcceptInvite(
     if (existing != null) {
         val a = alias.trim()
         if (a.isNotEmpty()) runCatching { contacts.rename(payload.stadeId, a) }
-        if (existing.kind != 0) {
-            runCatching { contacts.setKind(existing.id, 0) }
-            appScope.launch {
-                runCatching {
-                    sync.queueOutgoing(
-                        owner, existing,
-                        Encoding.toHex(crypto.randomBytes(16)),
-                        PROMOTE_TO_CONTACT_PREFIX,
-                        Clock.System.now().toEpochMilliseconds()
-                    )
-                }
-            }
-            return BeginAcceptResult.Error(strings.contactAdded(if (a.isNotEmpty()) a else existing.nickname))
-        }
-        return BeginAcceptResult.Error(strings.alreadyAdded(payload.stadeId))
+        val renamed = if (a.isNotEmpty()) existing.copy(nickname = a) else existing
+        return BeginAcceptResult.Error(promoteOrAlreadyAdded(owner, renamed, strings))
     }
 
     sync.unforget(payload.stadeId)

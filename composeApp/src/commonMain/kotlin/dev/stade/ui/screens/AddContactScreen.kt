@@ -52,13 +52,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.contact.InviteParseResult
-import dev.stade.contact.PROMOTE_TO_CONTACT_PREFIX
-import dev.stade.crypto.Encoding
 import dev.stade.identity.LocalIdentity
 import dev.stade.share.isShareSheetSupported
 import dev.stade.share.shareFile
 import dev.stade.transport.TransportType
 import dev.stade.ui.i18n.LocalStrings
+import dev.stade.ui.promoteOrAlreadyAdded
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -286,20 +285,12 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                                 }
                                 val existingContact = container.contacts.findByStadeId(parsed.stadeId)
                                 if (existingContact != null) {
-                                    status = if (existingContact.kind != 0) {
-                                        runCatching { container.contacts.setKind(existingContact.id, 0) }
-                                        runCatching {
-                                            container.sync.queueOutgoing(
-                                                owner, existingContact,
-                                                Encoding.toHex(container.crypto.randomBytes(16)),
-                                                PROMOTE_TO_CONTACT_PREFIX,
-                                                Clock.System.now().toEpochMilliseconds()
-                                            )
-                                        }
-                                        strings.contactAdded(existingContact.nickname)
-                                    } else {
-                                        strings.alreadyAdded(parsed.stadeId)
+                                    val trimmedAlias = alias.trim()
+                                    if (trimmedAlias.isNotEmpty()) {
+                                        runCatching { container.contacts.rename(existingContact.id, trimmedAlias) }
                                     }
+                                    val renamed = if (trimmedAlias.isNotEmpty()) existingContact.copy(nickname = trimmedAlias) else existingContact
+                                    status = container.promoteOrAlreadyAdded(owner, renamed, strings)
                                     return@launch
                                 }
                                 container.sync.unforget(parsed.stadeId)

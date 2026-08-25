@@ -92,6 +92,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.contact.Contact
+import dev.stade.contact.deleteContact
 import dev.stade.group.GroupInfo
 import dev.stade.identity.LocalIdentity
 import dev.stade.message.SearchResult
@@ -335,8 +336,7 @@ fun TwoPanelLayout(
                         scope.launch {
                             withContext(Dispatchers.Default) {
                                 runCatching {
-                                    container.sync.forgetContact(c.id)
-                                    container.contacts.purge(c.id)
+                                    container.deleteContact(owner.id, c.id)
                                 }
                             }
                             val currentRight = right

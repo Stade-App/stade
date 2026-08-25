@@ -137,6 +137,7 @@ import dev.stade.audio.RecordedClip
 import dev.stade.audio.rememberAudioPermissionState
 import dev.stade.audio.rememberAudioPlayer
 import dev.stade.audio.rememberAudioRecorder
+import dev.stade.contact.deleteContact
 import dev.stade.identity.LocalIdentity
 import dev.stade.link.LinkPreview
 import dev.stade.link.extractFirstUrl
@@ -444,8 +445,7 @@ fun ChatScreen(
                         scope.launch {
                             withContext(Dispatchers.Default) {
                                 runCatching {
-                                    container.sync.forgetContact(contact.id)
-                                    container.contacts.purge(contact.id)
+                                    container.deleteContact(owner.id, contact.id)
                                 }
                             }
                             showDeleteDialog = false

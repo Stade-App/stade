@@ -101,6 +101,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.contact.Contact
+import dev.stade.contact.deleteContact
 import dev.stade.identity.LocalIdentity
 import dev.stade.message.SearchResult
 import dev.stade.message.previewBody
@@ -358,8 +359,7 @@ fun ContactsScreen(
                         scope.launch {
                             withContext(Dispatchers.Default) {
                                 runCatching {
-                                    container.sync.forgetContact(c.id)
-                                    container.contacts.purge(c.id)
+                                    container.deleteContact(owner.id, c.id)
                                 }
                             }
                             showDeleteConfirm = false

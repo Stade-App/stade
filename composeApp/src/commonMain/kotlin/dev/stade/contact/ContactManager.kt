@@ -125,6 +125,15 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         removeConversationShortcut(ShortcutEntityKind.CONTACT, contactId)
     }
 
+    fun removeFromView(contactId: String) {
+        db.stadeDbQueries.transaction {
+            db.stadeDbQueries.deleteOutboxForContact(contactId)
+            db.stadeDbQueries.deleteMessagesForContact(contactId)
+            db.stadeDbQueries.setContactKind(2L, contactId)
+        }
+        removeConversationShortcut(ShortcutEntityKind.CONTACT, contactId)
+    }
+
     private fun dev.stade.db.Contact.toDomain(): Contact =
         Contact(
             id = id,
