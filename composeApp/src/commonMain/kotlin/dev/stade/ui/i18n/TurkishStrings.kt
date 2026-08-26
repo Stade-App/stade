@@ -569,5 +569,12 @@ object TurkishStrings : AppStrings() {
     override val removeAvatarAction = "Fotoğrafı kaldır"
     override val removeAvatarConfirmTitle = "Profil fotoğrafı kaldırılsın mı?"
     override val removeAvatarConfirmBody = "Profil fotoğrafın bağlı olduğun herkes için kaldırılacak ve varsayılan avatarına geri döneceksin."
+
+    override val moneroPaymentLabel = "Monero ödemesi"
+    override fun moneroAmountLabel(amount: String) = "$amount XMR istendi"
+    override val openInWalletAction = "Cüzdanda Aç"
+    override val copyAddressAction = "Adresi Kopyala"
+    override val addressCopied = "Adres kopyalandı"
+    override val noMoneroWalletFound = "Monero cüzdan uygulaması bulunamadı. QR kodu tarayabilir veya adresi kopyalayabilirsin."
 }
 

@@ -570,5 +570,12 @@ object EnglishStrings : AppStrings() {
     override val removeAvatarAction = "Remove photo"
     override val removeAvatarConfirmTitle = "Remove profile photo?"
     override val removeAvatarConfirmBody = "Your profile photo will be removed for everyone you're connected with, and you'll go back to your default avatar."
+
+    override val moneroPaymentLabel = "Monero payment"
+    override fun moneroAmountLabel(amount: String) = "$amount XMR requested"
+    override val openInWalletAction = "Open in Wallet"
+    override val copyAddressAction = "Copy Address"
+    override val addressCopied = "Address copied"
+    override val noMoneroWalletFound = "No Monero wallet app found. Scan the QR code or copy the address instead."
 }
 

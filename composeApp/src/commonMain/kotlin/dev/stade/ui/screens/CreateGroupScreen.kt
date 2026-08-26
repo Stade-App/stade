@@ -62,7 +62,8 @@ fun CreateGroupScreen(
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
-    val contacts by remember(owner.id) { container.contacts.observeContacts(owner.id) }.collectAsState(initial = emptyList())
+    val allContacts by remember(owner.id) { container.contacts.observeContacts(owner.id) }.collectAsState(initial = emptyList())
+    val contacts = remember(allContacts) { allContacts.filter { it.kind == 0 } }
     var groupName by remember { mutableStateOf("") }
     val selectedIds = remember { mutableStateOf(setOf<String>()) }
     var creating by remember { mutableStateOf(false) }

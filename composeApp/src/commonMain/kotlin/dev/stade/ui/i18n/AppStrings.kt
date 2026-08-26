@@ -508,6 +508,13 @@ abstract class AppStrings {
     abstract val removeAvatarAction: String
     abstract val removeAvatarConfirmTitle: String
     abstract val removeAvatarConfirmBody: String
+
+    abstract val moneroPaymentLabel: String
+    abstract fun moneroAmountLabel(amount: String): String
+    abstract val openInWalletAction: String
+    abstract val copyAddressAction: String
+    abstract val addressCopied: String
+    abstract val noMoneroWalletFound: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

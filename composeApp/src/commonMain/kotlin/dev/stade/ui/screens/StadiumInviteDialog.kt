@@ -150,7 +150,7 @@ private fun StadiumInviteContactPickerDialog(
     val scope = rememberCoroutineScope()
     val allContacts by remember(owner.id) { container.contacts.observeContacts(owner.id) }.collectAsState(initial = emptyList())
     val memberIds = remember(stadium.id) { container.stadiums.getMemberContactIds(stadium.id).toSet() }
-    val contacts = remember(allContacts, memberIds) { allContacts.filter { it.id !in memberIds } }
+    val contacts = remember(allContacts, memberIds) { allContacts.filter { it.kind == 0 && it.id !in memberIds } }
     var selectedContactIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     AlertDialog(

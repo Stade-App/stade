@@ -12,6 +12,7 @@ androidx-core = "1.13.1"
 bouncycastle = "1.84"
 slf4j = "2.0.16"
 concentus = "1.0.2"
+zxing = "3.5.3"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -31,6 +32,7 @@ androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx
 bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
 slf4j-nop = { module = "org.slf4j:slf4j-nop", version.ref = "slf4j" }
 concentus = { module = "io.github.jaredmdobson:concentus", version.ref = "concentus" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

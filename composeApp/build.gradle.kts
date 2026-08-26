@@ -60,6 +60,7 @@ kotlin {
                 implementation(libs.concentus)
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.cio)
+                implementation(libs.zxing.core)
             }
         }
         val androidMain by getting {

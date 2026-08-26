@@ -66,6 +66,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Stop
@@ -77,6 +78,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -150,9 +152,14 @@ import dev.stade.message.Message
 import dev.stade.message.MessageDirection
 import dev.stade.message.MessageType
 import dev.stade.message.previewBody
+import dev.stade.monero.MoneroPaymentRequest
+import dev.stade.monero.extractMoneroPayment
+import dev.stade.monero.moneroQrMatrix
 import dev.stade.notification.cancelMessagesNotification
 import dev.stade.notification.clearAllMessageNotifications
+import dev.stade.share.openExternalUri
 import dev.stade.sync.SyncEngine
+import dev.stade.ui.components.QrCodeView
 import dev.stade.transport.DialAttempt
 import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.Avatar
@@ -1560,6 +1567,10 @@ private fun Bubble(
                 if (currentPreview != null) {
                     LinkPreviewCard(currentPreview, outgoing, Modifier.padding(top = 6.dp))
                 }
+                val moneroPayment = remember(msg.id, msg.displayBody) { extractMoneroPayment(msg.displayBody) }
+                if (moneroPayment != null) {
+                    MoneroPaymentCard(moneroPayment, outgoing, Modifier.padding(top = 6.dp))
+                }
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (msg.vanishSessionId != null) {
@@ -1728,6 +1739,79 @@ private fun LinkPreviewCard(preview: LinkPreview, outgoing: Boolean, modifier: M
             color = fg.copy(alpha = 0.6f),
             style = MaterialTheme.typography.labelSmall
         )
+    }
+}
+
+@Composable
+private fun MoneroPaymentCard(payment: MoneroPaymentRequest, outgoing: Boolean, modifier: Modifier = Modifier) {
+    val strings = LocalStrings.current
+    val clipboard = LocalClipboardManager.current
+    val bg = if (outgoing) Color.White.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceContainerHigh
+    val fg = if (outgoing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val qrMatrix = remember(payment.paymentUri) { moneroQrMatrix(payment.paymentUri) }
+    var status by remember(payment.address) { mutableStateOf<String?>(null) }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Payments, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                strings.moneroPaymentLabel,
+                color = fg,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        payment.amount?.let {
+            Spacer(Modifier.height(2.dp))
+            Text(strings.moneroAmountLabel(it), color = fg, style = MaterialTheme.typography.bodySmall)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            payment.address.take(18) + "…" + payment.address.takeLast(6),
+            color = fg.copy(alpha = 0.7f),
+            style = MaterialTheme.typography.labelSmall
+        )
+        if (qrMatrix != null) {
+            Spacer(Modifier.height(8.dp))
+            QrCodeView(
+                matrix = qrMatrix,
+                modifier = Modifier
+                    .size(130.dp)
+                    .align(Alignment.CenterHorizontally)
+                    .clip(RoundedCornerShape(6.dp)),
+                foreground = Color.Black,
+                background = Color.White
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilledTonalButton(
+                onClick = { status = if (openExternalUri(payment.paymentUri)) null else strings.noMoneroWalletFound },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(strings.openInWalletAction, style = MaterialTheme.typography.labelSmall)
+            }
+            FilledTonalButton(
+                onClick = {
+                    clipboard.setText(AnnotatedString(payment.address))
+                    status = strings.addressCopied
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(strings.copyAddressAction, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        status?.let {
+            Spacer(Modifier.height(4.dp))
+            Text(it, color = fg.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 
