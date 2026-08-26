@@ -98,15 +98,22 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
 
     fun saveOutgoing(contactId: String, body: String, timestamp: Long, vanishSessionId: String? = null): Message {
         val id = Encoding.toHex(crypto.randomBytes(16))
-        db.stadeDbQueries.insertMessage(id, contactId, "OUT", body, timestamp, 0, 1, vanishSessionId)
-        return Message(id, contactId, MessageDirection.OUT, body, timestamp, false, true, vanishSessionId)
+        val ts = monotonicTimestamp(contactId, timestamp)
+        db.stadeDbQueries.insertMessage(id, contactId, "OUT", body, ts, 0, 1, vanishSessionId)
+        return Message(id, contactId, MessageDirection.OUT, body, ts, false, true, vanishSessionId)
     }
 
     fun saveIncoming(messageId: String, contactId: String, body: String, timestamp: Long, vanishSessionId: String? = null): Message? {
         val exists = db.stadeDbQueries.messageExists(messageId).executeAsOne() > 0L
         if (exists) return null
-        db.stadeDbQueries.insertMessage(messageId, contactId, "IN", body, timestamp, 1, 0, vanishSessionId)
-        return Message(messageId, contactId, MessageDirection.IN, body, timestamp, true, false, vanishSessionId)
+        val ts = monotonicTimestamp(contactId, timestamp)
+        db.stadeDbQueries.insertMessage(messageId, contactId, "IN", body, ts, 1, 0, vanishSessionId)
+        return Message(messageId, contactId, MessageDirection.IN, body, ts, true, false, vanishSessionId)
+    }
+
+    private fun monotonicTimestamp(contactId: String, timestamp: Long): Long {
+        val lastTs = db.stadeDbQueries.selectLastMessagePreview(contactId).executeAsOneOrNull()?.timestamp ?: return timestamp
+        return maxOf(timestamp, lastTs + 1)
     }
 
     fun deleteMessages(messageIds: Collection<String>) {

@@ -97,8 +97,8 @@ android {
         applicationId = "dev.stade"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "0.2.0"
+        versionCode = 15
+        versionName = "0.2.1"
     }
 
     val localProps = Properties().also { props ->
@@ -171,7 +171,7 @@ compose.desktop {
                 "java.desktop"
             )
             packageName = "Stade"
-            packageVersion = "0.2.0"
+            packageVersion = "0.2.1"
             windows {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.ico"))
                 menuGroup = "Stade"

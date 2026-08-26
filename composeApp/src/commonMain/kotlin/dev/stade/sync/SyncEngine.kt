@@ -285,20 +285,23 @@ class SyncEngine(
             return existing to false
         }
 
+        var priorKind: Int? = null
         if (existing != null && peerAuth.noExistingContact) {
             if (existing.ownerId != owner.id) return null
+            priorKind = existing.kind
             runCatching { ratchet.forget(existing.id) }
             runCatching { contacts.delete(existing.id) }
         }
 
-        return gatedNewContactHandshake(owner, connection, peerHello, peerAuth.isStadiumJoin)
+        return gatedNewContactHandshake(owner, connection, peerHello, peerAuth.isStadiumJoin, priorKind)
     }
 
     private suspend fun gatedNewContactHandshake(
         owner: LocalIdentity,
         connection: Connection,
         peerHello: HelloPayload,
-        peerClaimsStadiumJoin: Boolean
+        peerClaimsStadiumJoin: Boolean,
+        priorKind: Int?
     ): Pair<Contact, Boolean>? {
         val gateKey = peerHello.stadeId
         val (isLeader, gate) = pendingHandshakesLock.withLock {
@@ -309,7 +312,12 @@ class SyncEngine(
             return withTimeoutOrNull(50_000) { gate.await() }
         }
         try {
-            val result = performNewContactHandshake(owner, connection, peerHello, peerClaimsStadiumJoin)
+            val freshExisting = contacts.findByStadeId(peerHello.stadeId)?.takeIf { it.ownerId == owner.id }
+            val result = if (freshExisting != null) {
+                freshExisting to false
+            } else {
+                performNewContactHandshake(owner, connection, peerHello, peerClaimsStadiumJoin, priorKind)
+            }
             gate.complete(result)
             return result
         } catch (e: CancellationException) {
@@ -329,7 +337,8 @@ class SyncEngine(
         owner: LocalIdentity,
         connection: Connection,
         peerHello: HelloPayload,
-        peerClaimsStadiumJoin: Boolean
+        peerClaimsStadiumJoin: Boolean,
+        priorKind: Int?
     ): Pair<Contact, Boolean>? {
         val invite = InvitePayload(
             stadeId = peerHello.stadeId,
@@ -370,7 +379,11 @@ class SyncEngine(
 
         val nickname = peerHello.nickname.ifBlank { I18n.current.contactNameFallback(peerHello.stadeId.takeLast(4)) }
         val weAreStadiumJoining = stadiumManager?.getPendingJoinForContact(peerHello.stadeId) != null
-        val stadiumKind = if (weAreStadiumJoining || peerClaimsStadiumJoin) 1 else 0
+        val stadiumKind = when {
+            weAreStadiumJoining || peerClaimsStadiumJoin -> 1
+            priorKind != null -> priorKind
+            else -> 0
+        }
         val newContact = runCatching {
             contacts.addFromHandshake(
                 owner = owner,

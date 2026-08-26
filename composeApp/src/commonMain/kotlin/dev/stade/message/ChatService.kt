@@ -22,7 +22,7 @@ class ChatService(
                 encodeVanishTag(session.sessionId, session.deadlineAtMs, wireBody)
             } else wireBody
             runCatching {
-                sync.queueOutgoing(owner, contact, msg.id, sentBody, now)
+                sync.queueOutgoing(owner, contact, msg.id, sentBody, msg.timestamp)
             }
             msg
         }
