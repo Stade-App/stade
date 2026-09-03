@@ -1,5 +1,6 @@
 package dev.stade.group
 
+import dev.stade.audio.MIN_VOICE_DURATION_MS
 import dev.stade.contact.ContactManager
 import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
@@ -55,6 +56,7 @@ class GroupChatService(
     }
 
     suspend fun sendVoice(owner: LocalIdentity, groupId: String, opusBytes: ByteArray, durationMs: Int, replyToId: String? = null): Boolean {
+        if (durationMs < MIN_VOICE_DURATION_MS || opusBytes.isEmpty()) return false
         return sendMessage(owner, groupId, encodeVoiceBody(opusBytes, durationMs), replyToId)
     }
 

@@ -10,8 +10,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,7 +56,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -84,7 +85,9 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,7 +104,10 @@ import dev.stade.stadium.isOfficial
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.BotBadge
 import dev.stade.ui.components.BrandMark
-import dev.stade.ui.components.ChatListFabMenu
+import dev.stade.radar.isRadarSupported
+import dev.stade.ui.components.HomeActionBar
+import dev.stade.ui.components.TopBarPill
+import dev.stade.ui.screens.StadeRadarScreen
 import dev.stade.ui.components.formatChatTime
 import org.jetbrains.compose.resources.painterResource
 import stade.composeapp.generated.resources.Res
@@ -148,6 +154,7 @@ private sealed class PanelRight {
     data object About : PanelRight()
     data object Stadey : PanelRight()
     data object AddContact : PanelRight()
+    data object Radar : PanelRight()
     data class Verify(val contactId: String, val from: PanelRight = Chat(contactId)) : PanelRight()
     data class PinSetup(val requireCurrent: Boolean, val ret: PanelRight, val mode: dev.stade.ui.screens.PinSetupMode = dev.stade.ui.screens.PinSetupMode.Primary) : PanelRight()
 }
@@ -194,6 +201,7 @@ fun TwoPanelLayout(
     val stadiums by remember(owner.id) { container.stadiums.observeStadiums(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.stadiums.allStadiums(owner.id) })
     val connectedSet by container.sync.connectedContacts.collectAsState()
+    val typingSet by container.typing.typingContacts.collectAsState()
     val pinned by remember(owner.id) { container.pinnedChats.observePinned(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.pinnedChats.pinned(owner.id) })
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
@@ -414,7 +422,7 @@ fun TwoPanelLayout(
                         ),
                         title = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(name = owner.nickname, size = 32.dp, shape = RoundedCornerShape(25), keySeed = owner.publicSigningKey, avatarBytes = owner.avatar)
+                                Avatar(name = owner.nickname, size = 32.dp, keySeed = owner.publicSigningKey, avatarBytes = owner.avatar)
                                 Spacer(Modifier.size(10.dp))
                                 Column {
                                     Text(strings.appTitle, style = MaterialTheme.typography.titleMedium)
@@ -427,9 +435,12 @@ fun TwoPanelLayout(
                             }
                         },
                         actions = {
-                            IconButton(onClick = { right = PanelRight.Settings }) {
-                                Icon(Icons.Default.Settings, contentDescription = strings.settingsAction)
-                            }
+                            TopBarPill(
+                                icon = Icons.Default.Settings,
+                                contentDescription = strings.settingsAction,
+                                spinOnClick = true,
+                                onClick = { right = PanelRight.Settings }
+                            )
                         }
                     )
                 }
@@ -503,16 +514,6 @@ fun TwoPanelLayout(
                                                 Spacer(Modifier.width(8.dp))
                                                 Text(strings.addContactAction)
                                             }
-                                            FilledTonalButton(onClick = { right = PanelRight.CreateStadium }) {
-                                                Icon(Icons.Default.Podcasts, null, modifier = Modifier.size(18.dp))
-                                                Spacer(Modifier.width(8.dp))
-                                                Text(strings.createStadiumAction)
-                                            }
-                                            FilledTonalButton(onClick = { right = PanelRight.JoinStadium }) {
-                                                Icon(Icons.Default.Podcasts, null, modifier = Modifier.size(18.dp))
-                                                Spacer(Modifier.width(8.dp))
-                                                Text(strings.joinStadiumAction)
-                                            }
                                         }
                                     }
                                 }
@@ -541,6 +542,7 @@ fun TwoPanelLayout(
                                                 contact = contact,
                                                 selected = isSelected,
                                                 connected = connectedSet.contains(contact.id),
+                                                typing = typingSet.contains(contact.id),
                                                 pinned = item.pinnedAt != null,
                                                 lastMessage = preview,
                                                 lastMessageTs = lastMsg?.timestamp,
@@ -655,22 +657,18 @@ fun TwoPanelLayout(
                                         }
                                     }
                                 }
-                                item { Spacer(Modifier.height(80.dp)) }
+                                item { Spacer(Modifier.height(96.dp)) }
                             }
                         }
 
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(16.dp)
-                        ) {
-                            ChatListFabMenu(
-                                onAddContact = { right = PanelRight.AddContact },
-                                onCreateGroup = { right = PanelRight.CreateGroup },
-                                onCreateStadium = { right = PanelRight.CreateStadium },
-                                onJoinStadium = { right = PanelRight.JoinStadium }
-                            )
-                        }
+                        HomeActionBar(
+                            onAddContact = { right = PanelRight.AddContact },
+                            onCreateGroup = { right = PanelRight.CreateGroup },
+                            onCreateStadium = { right = PanelRight.CreateStadium },
+                            onJoinStadium = { right = PanelRight.JoinStadium },
+                            onOpenRadar = if (isRadarSupported) ({ right = PanelRight.Radar }) else null,
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        )
                     }
                 }
             }
@@ -772,6 +770,12 @@ fun TwoPanelLayout(
                         container.pendingInvite.value = null
                         right = PanelRight.Empty
                     }
+                )
+
+                is PanelRight.Radar -> StadeRadarScreen(
+                    container = container,
+                    owner = owner,
+                    onBack = { right = PanelRight.Empty }
                 )
 
                 is PanelRight.Verify -> VerifyContactScreen(
@@ -885,7 +889,7 @@ private fun PanelMessageSearchRow(result: SearchResult, onClick: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun PanelStadeyRow(
     selected: Boolean,
@@ -899,6 +903,7 @@ private fun PanelStadeyRow(
     var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
     var rowHeightPx by remember { mutableStateOf(0) }
     val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
 
     Box(modifier = Modifier.onSizeChanged { rowHeightPx = it.height }) {
         Row(
@@ -907,21 +912,28 @@ private fun PanelStadeyRow(
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(bg)
-                .clickable(onClick = onClick)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showContextMenu = true
+                    }
+                )
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
-                            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
-                                val pos = event.changes.firstOrNull()?.position
-                                if (pos != null) {
-                                    menuOffset = with(density) {
-                                        DpOffset(
-                                            x = pos.x.toDp(),
-                                            y = pos.y.toDp() - rowHeightPx.toDp()
-                                        )
-                                    }
+                            if (event.type != PointerEventType.Press) continue
+                            val pos = event.changes.firstOrNull()?.position
+                            if (pos != null) {
+                                menuOffset = with(density) {
+                                    DpOffset(
+                                        x = pos.x.toDp(),
+                                        y = pos.y.toDp() - rowHeightPx.toDp()
+                                    )
                                 }
+                            }
+                            if (event.buttons.isSecondaryPressed) {
                                 event.changes.forEach { it.consume() }
                                 showContextMenu = true
                             }
@@ -991,12 +1003,13 @@ private fun PanelStadeyRow(
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun PanelContactRow(
     contact: Contact,
     selected: Boolean,
     connected: Boolean,
+    typing: Boolean,
     pinned: Boolean,
     lastMessage: String?,
     lastMessageTs: Long?,
@@ -1014,6 +1027,7 @@ private fun PanelContactRow(
     var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
     var rowHeightPx by remember { mutableStateOf(0) }
     val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
 
     Box(modifier = Modifier.onSizeChanged { rowHeightPx = it.height }) {
         Row(
@@ -1022,21 +1036,28 @@ private fun PanelContactRow(
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(bg)
-                .clickable(onClick = onClick)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showContextMenu = true
+                    }
+                )
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
-                            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
-                                val pos = event.changes.firstOrNull()?.position
-                                if (pos != null) {
-                                    menuOffset = with(density) {
-                                        DpOffset(
-                                            x = pos.x.toDp(),
-                                            y = pos.y.toDp() - rowHeightPx.toDp()
-                                        )
-                                    }
+                            if (event.type != PointerEventType.Press) continue
+                            val pos = event.changes.firstOrNull()?.position
+                            if (pos != null) {
+                                menuOffset = with(density) {
+                                    DpOffset(
+                                        x = pos.x.toDp(),
+                                        y = pos.y.toDp() - rowHeightPx.toDp()
+                                    )
                                 }
+                            }
+                            if (event.buttons.isSecondaryPressed) {
                                 event.changes.forEach { it.consume() }
                                 showContextMenu = true
                             }
@@ -1111,9 +1132,9 @@ private fun PanelContactRow(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        lastMessage ?: "",
+                        if (typing) strings.typingIndicator else lastMessage ?: "",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (typing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -1216,7 +1237,7 @@ private fun PanelContactRow(
     }
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun PanelGroupRow(
     group: GroupInfo,
@@ -1236,6 +1257,7 @@ private fun PanelGroupRow(
     var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
     var rowHeightPx by remember { mutableStateOf(0) }
     val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
 
     Box(modifier = Modifier.onSizeChanged { rowHeightPx = it.height }) {
         Row(
@@ -1244,21 +1266,28 @@ private fun PanelGroupRow(
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(bg)
-                .clickable(onClick = onClick)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showContextMenu = true
+                    }
+                )
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
-                            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
-                                val pos = event.changes.firstOrNull()?.position
-                                if (pos != null) {
-                                    menuOffset = with(density) {
-                                        DpOffset(
-                                            x = pos.x.toDp(),
-                                            y = pos.y.toDp() - rowHeightPx.toDp()
-                                        )
-                                    }
+                            if (event.type != PointerEventType.Press) continue
+                            val pos = event.changes.firstOrNull()?.position
+                            if (pos != null) {
+                                menuOffset = with(density) {
+                                    DpOffset(
+                                        x = pos.x.toDp(),
+                                        y = pos.y.toDp() - rowHeightPx.toDp()
+                                    )
                                 }
+                            }
+                            if (event.buttons.isSecondaryPressed) {
                                 event.changes.forEach { it.consume() }
                                 showContextMenu = true
                             }
@@ -1380,6 +1409,7 @@ private fun PanelGroupRow(
         }
     }
 }
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PanelStadiumRow(
     stadium: dev.stade.stadium.StadiumInfo,
@@ -1396,6 +1426,7 @@ private fun PanelStadiumRow(
     var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
     var rowHeightPx by remember { mutableStateOf(0) }
     val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
 
     Box(modifier = Modifier.onSizeChanged { rowHeightPx = it.height }) {
         Row(
@@ -1404,21 +1435,28 @@ private fun PanelStadiumRow(
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(bg)
-                .clickable(onClick = onClick)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showContextMenu = true
+                    }
+                )
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent()
-                            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
-                                val pos = event.changes.firstOrNull()?.position
-                                if (pos != null) {
-                                    menuOffset = with(density) {
-                                        DpOffset(
-                                            x = pos.x.toDp(),
-                                            y = pos.y.toDp() - rowHeightPx.toDp()
-                                        )
-                                    }
+                            if (event.type != PointerEventType.Press) continue
+                            val pos = event.changes.firstOrNull()?.position
+                            if (pos != null) {
+                                menuOffset = with(density) {
+                                    DpOffset(
+                                        x = pos.x.toDp(),
+                                        y = pos.y.toDp() - rowHeightPx.toDp()
+                                    )
                                 }
+                            }
+                            if (event.buttons.isSecondaryPressed) {
                                 event.changes.forEach { it.consume() }
                                 showContextMenu = true
                             }

@@ -16,6 +16,7 @@ const val VANISH_START_PREFIX = "STADE_VST_V1:"
 const val VANISH_CANCEL_PREFIX = "STADE_VCL_V1:"
 const val VANISH_TAG_PREFIX = "STADE_VTG_V1:"
 const val AVATAR_BODY_PREFIX = "STADE_AVT_V1:"
+const val TYPING_BODY_PREFIX = "STADE_TYP_V1:"
 
 const val MAX_ATTACHMENT_BYTES = 1800 * 1024
 
@@ -126,6 +127,15 @@ fun parseAvatarBody(body: String): ByteArray? {
     val encoded = body.removePrefix(AVATAR_BODY_PREFIX)
     if (encoded.isEmpty()) return null
     return runCatching { Base64.Default.decode(encoded) }.getOrNull()
+}
+
+fun encodeTypingBody(typing: Boolean): String =
+    TYPING_BODY_PREFIX + if (typing) "1" else "0"
+
+fun parseTypingBody(body: String): Boolean? = when (body) {
+    TYPING_BODY_PREFIX + "1" -> true
+    TYPING_BODY_PREFIX + "0" -> false
+    else -> null
 }
 
 fun encodeReplyBody(replyToId: String, innerBody: String): String =

@@ -127,6 +127,36 @@ class StadiumManager(private val db: StadeDb, private val crypto: CryptoApi) {
         return stadiumId
     }
 
+    fun syncOwnMemberCount(stadiumId: String): Long {
+        val count = db.stadeDbQueries.countStadiumMembers(stadiumId).executeAsOne()
+        db.stadeDbQueries.setStadiumMemberCount(count, stadiumId)
+        return count
+    }
+
+    fun handleCountRequest(contactId: String, rawBody: String): String? {
+        val stadiumId = rawBody.removePrefix(STD_COUNT_REQUEST_PREFIX)
+        if (stadiumId.isBlank()) return null
+        val stadium = db.stadeDbQueries.selectStadium(stadiumId).executeAsOneOrNull() ?: return null
+        if (stadium.isOwner != 1L) return null
+        if (contactId !in getMemberContactIds(stadiumId)) return null
+        return "$STD_COUNT_PREFIX$stadiumId:${syncOwnMemberCount(stadiumId)}"
+    }
+
+    fun handleCountUpdate(contactId: String, rawBody: String): Boolean {
+        val stripped = rawBody.removePrefix(STD_COUNT_PREFIX)
+        val colonIdx = stripped.lastIndexOf(':')
+        if (colonIdx <= 0) return false
+        val stadiumId = stripped.substring(0, colonIdx)
+        val count = stripped.substring(colonIdx + 1).toLongOrNull() ?: return false
+        if (count < 0) return false
+        val stadium = db.stadeDbQueries.selectStadium(stadiumId).executeAsOneOrNull() ?: return false
+        if (stadium.isOwner == 1L) return false
+        if (stadium.creatorStadeId != contactId) return false
+        if (stadium.memberCount == count) return false
+        db.stadeDbQueries.setStadiumMemberCount(count, stadiumId)
+        return true
+    }
+
     fun handleIncomingBroadcast(stadiumId: String, messageId: String, memberCount: Long, body: String, timestamp: Long): Boolean {
         val stadium = db.stadeDbQueries.selectStadium(stadiumId).executeAsOneOrNull() ?: return false
         if (stadium.isOwner == 1L) return false

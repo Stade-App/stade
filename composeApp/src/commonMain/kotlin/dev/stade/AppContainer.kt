@@ -20,6 +20,9 @@ import dev.stade.identity.IdentityManager
 import dev.stade.message.ChatService
 import dev.stade.message.FingerprintService
 import dev.stade.message.MessageManager
+import dev.stade.message.ScheduledMessageManager
+import dev.stade.message.ScheduledMessageService
+import dev.stade.message.TypingTracker
 import dev.stade.security.SecretStore
 import dev.stade.security.Vault
 import dev.stade.stadium.StadiumChatService
@@ -170,6 +173,13 @@ class AppContainer(
         }.onFailure {
             runCatching { createdDriver.execute(null, "ALTER TABLE LocalIdentity ADD COLUMN avatar BLOB", 0) }
         }
+        runCatching {
+            createdDriver.executeQuery(null, "SELECT id FROM ScheduledMessage LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "CREATE TABLE IF NOT EXISTS ScheduledMessage (id TEXT NOT NULL PRIMARY KEY, contactId TEXT NOT NULL, body TEXT NOT NULL, replyToId TEXT, scheduledAt INTEGER NOT NULL, createdAt INTEGER NOT NULL)", 0) }
+            runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxScheduledMessageContact ON ScheduledMessage(contactId, scheduledAt)", 0) }
+        }
         db = database
     }
 
@@ -187,6 +197,9 @@ class AppContainer(
     val pinnedChats = PinnedChats(db)
     val sync = SyncEngine(crypto, pq, contacts, messages, ratchet, outbox, handshake, vanish, groups, stadiums)
     val chat = ChatService(messages, sync, vanish)
+    val typing = TypingTracker()
+    val scheduledMessages = ScheduledMessageManager(db, crypto)
+    val scheduler = ScheduledMessageService(scheduledMessages, chat, contacts)
     val groupChat = GroupChatService(groups, sync, contacts, crypto)
     val avatars = AvatarService(identities, sync, contacts, crypto)
     val stadiumChat = StadiumChatService(stadiums, sync, contacts, crypto, messages, groups)
@@ -248,6 +261,7 @@ class AppContainer(
                 db.stadeDbQueries.wipeStickers()
                 db.stadeDbQueries.wipeReactions()
                 db.stadeDbQueries.wipeVanishSessions()
+                db.stadeDbQueries.wipeScheduledMessages()
             }
         }
         runCatching { driver.close() }

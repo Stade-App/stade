@@ -16,6 +16,8 @@ import kotlinx.datetime.Clock
 
 const val PROMOTE_TO_CONTACT_PREFIX = "CTUP:"
 
+private const val FORGOTTEN_KV_KEY = "sync.forgotten"
+
 class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
 
     fun observeContacts(ownerId: String): Flow<List<Contact>> =
@@ -99,6 +101,22 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.setContactVerified(contactId)
     }
 
+    fun forgottenIds(): Set<String> =
+        db.stadeDbQueries.getKv(FORGOTTEN_KV_KEY).executeAsOneOrNull()
+            ?.decodeToString()
+            ?.split("\n")
+            ?.filter { it.isNotBlank() }
+            ?.toSet()
+            ?: emptySet()
+
+    fun setForgottenIds(ids: Set<String>) {
+        if (ids.isEmpty()) {
+            db.stadeDbQueries.deleteKv(FORGOTTEN_KV_KEY)
+        } else {
+            db.stadeDbQueries.putKv(FORGOTTEN_KV_KEY, ids.joinToString("\n").encodeToByteArray())
+        }
+    }
+
     fun setKind(contactId: String, kind: Int) {
         db.stadeDbQueries.setContactKind(kind.toLong(), contactId)
     }
@@ -120,6 +138,7 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.transaction {
             db.stadeDbQueries.deleteOutboxForContact(contactId)
             db.stadeDbQueries.deleteMessagesForContact(contactId)
+            db.stadeDbQueries.deleteScheduledForContact(contactId)
             db.stadeDbQueries.deleteContact(contactId)
         }
         removeConversationShortcut(ShortcutEntityKind.CONTACT, contactId)
@@ -129,6 +148,7 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.transaction {
             db.stadeDbQueries.deleteOutboxForContact(contactId)
             db.stadeDbQueries.deleteMessagesForContact(contactId)
+            db.stadeDbQueries.deleteScheduledForContact(contactId)
             db.stadeDbQueries.setContactKind(2L, contactId)
         }
         removeConversationShortcut(ShortcutEntityKind.CONTACT, contactId)

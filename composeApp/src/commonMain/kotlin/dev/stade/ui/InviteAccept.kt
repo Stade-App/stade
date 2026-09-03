@@ -76,10 +76,19 @@ fun AppContainer.beginAcceptInvite(
         val a = alias.trim()
         if (a.isNotEmpty()) runCatching { contacts.rename(payload.stadeId, a) }
         val renamed = if (a.isNotEmpty()) existing.copy(nickname = a) else existing
+        sync.markReAdd(payload.stadeId)
+        val fresh = payload.addresses
+        if (fresh.isNotEmpty()) {
+            val nonLan = (existing.addresses + fresh).filter { !it.startsWith("lan://") }
+            val currentLan = fresh.filter { it.startsWith("lan://") }
+            val merged = (nonLan + currentLan).distinct()
+            if (merged != existing.addresses) runCatching { contacts.setAddresses(existing.id, merged) }
+            connections.queueDial(fresh)
+        }
         return BeginAcceptResult.Error(promoteOrAlreadyAdded(owner, renamed, strings))
     }
 
-    sync.unforget(payload.stadeId)
+    sync.markReAdd(payload.stadeId)
     val addrs = payload.addresses
     if (addrs.isEmpty()) return BeginAcceptResult.NoAddress(payload)
 
@@ -94,7 +103,10 @@ fun AppContainer.beginAcceptInvite(
             true
         } ?: false
         if (added && a.isNotEmpty()) runCatching { contacts.rename(targetId, a) }
-        if (!added) connections.cancelPendingDial(addrs)
+        if (!added) {
+            connections.cancelPendingDial(addrs)
+            sync.clearReAdd(targetId)
+        }
     }
     return BeginAcceptResult.Dialing(payload, addrs.size, lanOnly)
 }
@@ -124,7 +136,7 @@ fun AppContainer.beginAcceptStadiumInvite(
         return BeginAcceptStadiumResult.Error(strings.selfInviteError)
     }
 
-    sync.unforget(payload.stadeId)
+    sync.markReAdd(payload.stadeId)
     val addrs = payload.addresses
     val pending = PendingStadiumJoin(stadiumData.stadiumId, stadiumData.stadiumName, stadiumData.inviteToken)
     stadiums.storePendingJoin(payload.stadeId, pending)

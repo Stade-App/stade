@@ -1,6 +1,7 @@
 package dev.stade.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +17,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -26,12 +30,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,8 +51,17 @@ import androidx.compose.ui.unit.sp
 import dev.stade.AppContainer
 import dev.stade.identity.LocalIdentity
 import dev.stade.ui.components.Avatar
+import dev.stade.ui.components.AvatarViewerDialog
+import dev.stade.ui.components.VanishDurationSheet
+import dev.stade.ui.components.formatVanishRemaining
 import dev.stade.ui.i18n.LocalStrings
+import dev.stade.ui.isTouchPrimaryInput
 import dev.stade.ui.theme.StadeColors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +79,66 @@ fun VerifyContactScreen(
     var verified by remember(contact?.id) { mutableStateOf(contact?.verified == true) }
     val connected by container.sync.connectedContacts.collectAsState()
     val isOnline = contact != null && connected.contains(contact.id)
+    val scope = rememberCoroutineScope()
+
+    val customAvatar = contact?.avatar?.takeIf { it.isNotEmpty() }
+    var showAvatarViewer by remember(contact?.id) { mutableStateOf(false) }
+
+    val activeVanishSession by remember(contactId) {
+        container.vanish.observeCurrentSession(contactId)
+    }.collectAsState(initial = null)
+    var showVanishDurationSheet by remember(contactId) { mutableStateOf(false) }
+    var showVanishCancelDialog by remember(contactId) { mutableStateOf(false) }
+    var vanishNow by remember(contactId) { mutableStateOf(Clock.System.now().toEpochMilliseconds()) }
+
+    LaunchedEffect(activeVanishSession?.sessionId) {
+        if (activeVanishSession == null) return@LaunchedEffect
+        while (true) {
+            vanishNow = Clock.System.now().toEpochMilliseconds()
+            delay(60_000L)
+        }
+    }
+
+    if (showAvatarViewer && customAvatar != null) {
+        AvatarViewerDialog(avatarBytes = customAvatar, onDismiss = { showAvatarViewer = false })
+    }
+
+    if (showVanishDurationSheet && contact != null) {
+        val c = contact
+        VanishDurationSheet(
+            onDismiss = { showVanishDurationSheet = false },
+            onPick = { durationMs ->
+                scope.launch {
+                    withContext(Dispatchers.Default) {
+                        runCatching { container.chat.startVanishMode(owner, c, durationMs) }
+                    }
+                    showVanishDurationSheet = false
+                }
+            }
+        )
+    }
+
+    if (showVanishCancelDialog && contact != null) {
+        val c = contact
+        AlertDialog(
+            onDismissRequest = { showVanishCancelDialog = false },
+            title = { Text(strings.vanishTurnOffConfirmTitle) },
+            text = { Text(strings.vanishTurnOffConfirmBody) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showVanishCancelDialog = false
+                    scope.launch {
+                        withContext(Dispatchers.Default) {
+                            runCatching { container.chat.cancelVanishMode(owner, c) }
+                        }
+                    }
+                }) { Text(strings.vanishTurnOffAction, color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showVanishCancelDialog = false }) { Text(strings.cancel) }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -97,7 +173,17 @@ fun VerifyContactScreen(
                     modifier = Modifier.padding(20.dp).fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Avatar(name = contact?.nickname ?: "?", size = 64.dp, keySeed = contact?.publicSigningKey, avatarBytes = contact?.avatar)
+                    Avatar(
+                        name = contact?.nickname ?: "?",
+                        modifier = if (customAvatar != null) {
+                            Modifier.clip(CircleShape).clickable { showAvatarViewer = true }
+                        } else {
+                            Modifier
+                        },
+                        size = 64.dp,
+                        keySeed = contact?.publicSigningKey,
+                        avatarBytes = contact?.avatar
+                    )
                     Spacer(Modifier.height(10.dp))
                     Text(contact?.nickname ?: "", style = MaterialTheme.typography.titleMedium)
                     if (contact != null) {
@@ -162,6 +248,55 @@ fun VerifyContactScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
+                }
+            }
+
+            if (!isTouchPrimaryInput && contact != null) {
+                val session = activeVanishSession
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    shape = MaterialTheme.shapes.large,
+                    onClick = {
+                        if (session != null) showVanishCancelDialog = true else showVanishDurationSheet = true
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp).fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = if (session != null) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                strings.vanishDurationSheetTitle,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                if (session != null) {
+                                    strings.vanishStateOn(formatVanishRemaining(session.deadlineAtMs - vanishNow))
+                                } else {
+                                    strings.vanishStateOff
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (session != null) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 

@@ -42,6 +42,9 @@ private val palette = listOf(
     Color(0xFF7A4D00) to Color(0xFFD9A24E)
 )
 
+fun avatarPaletteIndex(keySeed: ByteArray): Int =
+    keySeed.fold(0) { acc, byte -> (acc * 31 + byte.toInt()) and 0x7fffffff } % palette.size
+
 @Composable
 fun Avatar(
     name: String,
@@ -50,6 +53,7 @@ fun Avatar(
     shape: Shape = CircleShape,
     icon: ImageVector? = null,
     keySeed: ByteArray? = null,
+    paletteIndex: Int? = null,
     avatarBytes: ByteArray? = null,
     image: Painter? = null,
     verified: Boolean = false
@@ -75,12 +79,12 @@ fun Avatar(
                 )
             }
             else -> {
-                val seed = if (keySeed != null && keySeed.isNotEmpty()) {
-                    keySeed.fold(0) { acc, byte -> (acc * 31 + byte.toInt()) and 0x7fffffff }
-                } else {
-                    name.fold(0) { acc, c -> (acc * 31 + c.code) and 0x7fffffff }
+                val slot = when {
+                    paletteIndex != null -> paletteIndex.mod(palette.size)
+                    keySeed != null && keySeed.isNotEmpty() -> avatarPaletteIndex(keySeed)
+                    else -> name.fold(0) { acc, c -> (acc * 31 + c.code) and 0x7fffffff } % palette.size
                 }
-                val (a, b) = palette[seed % palette.size]
+                val (a, b) = palette[slot]
                 val initial = name.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "?"
                 val fontSize = (size.value * 0.42f).sp
 

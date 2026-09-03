@@ -53,13 +53,13 @@ object EnglishStrings : AppStrings() {
     override val duressPinMatchesRealPin = "Duress PIN can't match your real PIN"
 
     override val appTitle = "Stade"
-    override val searchContactsPlaceholder = "Search contacts…"
+    override val searchContactsPlaceholder = "Search"
     override val closeSearch = "Close search"
     override val searchAction = "Search"
     override val settingsAction = "Settings"
     override val addContactAction = "Add contact"
     override val noContactsTitle = "No contacts yet"
-    override val noContactsHint = "Tap the button in the bottom right to add a new contact."
+    override val noContactsHint = "Use the bar at the bottom to add your first contact."
     override val noSearchResults = "No matching contacts"
     override val searchResultsSectionMessages = "Messages"
     override val showVerificationCode = "Show verification code"
@@ -90,6 +90,7 @@ object EnglishStrings : AppStrings() {
     override val expandAction = "Expand"
     override val viewDetailsAction = "View details"
     override val closeAction = "Close"
+    override val scrollToBottomAction = "Scroll to latest"
     override val noConnectionInfo =
         "No connection info for this contact. Request a new invite code and paste below."
     override val connectionChannels = "Connection channels"
@@ -529,6 +530,8 @@ object EnglishStrings : AppStrings() {
     override val vanishTurnOffConfirmTitle = "Turn off vanishing messages?"
     override val vanishTurnOffConfirmBody = "Messages sent while vanishing mode was active will be deleted now, on both sides."
     override val vanishTurnOffAction = "Turn off"
+    override val vanishStateOff = "Off"
+    override fun vanishStateOn(remaining: String) = "On · expires in $remaining"
 
     override val stadeyRowSubtitle = "Help & FAQ"
     override val stadeyIntro = "Hi, I'm Stadey! Tap a topic below and I'll walk you through it."
@@ -546,15 +549,6 @@ object EnglishStrings : AppStrings() {
     override val stadeyFaqNetworkingAnswer = "Stade routes your messages over Tor by default, including support for bridges if your network is restricted. When you and a contact are on the same local network, Stade can also connect directly for a faster path. You can see each contact's connection status right in your chat list."
     override val stadeyFaqLockdownQuestion = "How do I lock down my account?"
     override val stadeyFaqLockdownAnswer = "Head to Settings → Security. You can set a PIN with auto-lock, add a separate duress PIN that wipes the app if you're ever forced to unlock it, block screenshots and screen recording, and require your PIN before transport settings can even be opened."
-
-    override val stadeyFaqAddFriendsKeywords = "friend, friends, add, contact, contacts, invite, invite code, add contact, add friend, connect, connect with someone, stade id, share code, paste code"
-    override val stadeyFaqSecurityKeywords = "secure, security, encryption, encrypted, safe, privacy, private, quantum, post-quantum, end to end, e2e, hacked, server, no server, spy, spying"
-    override val stadeyFaqGroupsStadiumsKeywords = "group, groups, stadium, stadiums, channel, channels, broadcast, multiple people, group chat, announcement, announcements, subscribers, members"
-    override val stadeyFaqMediaKeywords = "voice message, voice messages, sticker, stickers, vanish, vanishing, disappearing messages, self destruct, record audio, mic, timer, expire, expiring"
-    override val stadeyFaqNetworkingKeywords = "connect, connection, tor, network, no server, offline, bridge, bridges, lan, local network, how does it work, p2p, peer to peer, blocked, censorship, censored"
-    override val stadeyFaqLockdownKeywords = "lock, pin, password, security settings, duress, duress pin, screenshot, screen recording, wipe, forgot pin, protect account, lock app, auto lock, forced, forcing, coerce, coerced, coercion, threatened, threat"
-    override val stadeySupportKeywords = "support, help, discord, community, contact us, report bug, feedback, join discord, need help, issue, problem"
-    override val stadeyFallbackAnswer = "I'm not totally sure about that one — try tapping one of the topics below, or rephrasing your question."
 
     override val hideStadeyAction = "Hide Stadey"
     override val hideStadeyConfirm = "Hide"
@@ -577,5 +571,75 @@ object EnglishStrings : AppStrings() {
     override val copyAddressAction = "Copy Address"
     override val addressCopied = "Address copied"
     override val noMoneroWalletFound = "No Monero wallet app found. Scan the QR code or copy the address instead."
+
+    override val typingIndicator = "typing…"
+    override val voiceTooShort = "Voice message too short"
+
+    override val scheduleMessagePickDate = "Pick a date"
+    override val scheduleMessagePickTime = "Pick a time"
+    override val scheduleNextAction = "Next"
+    override val scheduleConfirmAction = "Schedule"
+    override val scheduleTimeInPast = "Pick a moment in the future"
+    override fun scheduleDeliveryAt(time: String) = "Will be sent on $time"
+    override val scheduleTextOnly = "Only text messages can be scheduled"
+    override fun messageScheduled(time: String) = "Scheduled for $time"
+    override fun scheduledMessagesBanner(count: Int) =
+        if (count == 1) "There is 1 scheduled message" else "There are $count scheduled messages"
+    override val scheduledMessagesSheetTitle = "Scheduled messages"
+    override val noScheduledMessages = "No scheduled messages"
+    override val deleteScheduledMessage = "Delete scheduled message"
+
+    override val radarTitle = "Stade™ Radar"
+    override val radarScanning = "Scanning nearby…"
+    override fun radarNearbyCount(count: Int) =
+        if (count == 1) "1 person nearby" else "$count people nearby"
+    override val radarEmptyTitle = "Nobody nearby yet"
+    override val radarEmptyBody =
+        "Keep this screen open. Anyone close by with Stade Radar open will show up here."
+    override val radarDiscoverable = "You are visible to nearby Stade users"
+    override val radarNotDiscoverable = "This device cannot broadcast, but you can still find others"
+    override val radarPermissionTitle = "Bluetooth access needed"
+    override val radarPermissionBody =
+        "Stade Radar uses Bluetooth to find people right next to you. Nothing is sent over the internet."
+    override val radarGrantAction = "Allow Bluetooth"
+    override val radarBluetoothOffTitle = "Bluetooth is off"
+    override val radarBluetoothOffBody = "Turn Bluetooth on to discover Stade users around you."
+    override val radarEnableBluetoothAction = "Turn on Bluetooth"
+    override val radarUnsupportedTitle = "Radar is not available"
+    override val radarUnsupportedBody = "This device has no Bluetooth Low Energy radio."
+    override fun radarConnectingTo(name: String) = "Connecting to $name…"
+    override val radarExchangeFailed = "Could not read that device. Move closer and try again."
+    override val radarUnknownPeer = "Stade user"
+    override val radarConfirmTitle = "Add this contact?"
+    override fun radarConfirmBody(name: String) =
+        "$name is nearby. Check the Stade ID below before adding."
+    override val radarProximityNear = "Very close"
+    override val radarProximityMedium = "Nearby"
+    override val radarProximityFar = "Far"
+    override val radarIntroTitle = "Welcome to Stade™ Radar"
+    override val radarIntroBody =
+        "Radar finds other Stade users within a few metres of you using Bluetooth. " +
+            "Nothing travels over the internet and your location is never used."
+    override val radarIntroStepOne =
+        "Your device sends out a short Bluetooth signal with your nickname so people around you can spot you."
+    override val radarIntroStepTwo =
+        "Tap anyone on the radar to swap invites and add them as a contact. You confirm before anything is saved."
+    override val radarIntroStepThree =
+        "Radar runs only while this screen is open. Use the gear icon to hide your nickname or disappear entirely."
+    override val radarIntroDontShowAgain = "Don't show this again"
+    override val radarIntroAction = "Start scanning"
+    override val radarSettingsTitle = "Radar settings"
+    override val radarAnonymousTitle = "Anonymous browsing"
+    override val radarAnonymousBody =
+        "Nearby users see you as \"Stade user\" instead of your nickname. Your name is still shared if you connect."
+    override val radarAnonymousLockedBody = "Not needed while ghost mode is on — nobody can see you at all."
+    override val radarAnonymousActive = "You appear as \"Stade user\" to nearby devices"
+    override val radarGhostTitle = "Ghost mode"
+    override val radarGhostBody = "Stop broadcasting entirely. Nobody can find you, but you can still find others."
+    override val radarGhostActive = "Ghost mode is on — nobody can see you"
+    override val navContact = "Contact"
+    override val navGroup = "Group"
+    override val navStadium = "Stadium"
+    override val navRadar = "Radar"
 }
 

@@ -33,6 +33,8 @@ import dev.stade.ui.screens.ManageStadiumScreen
 import dev.stade.ui.screens.OnboardingScreen
 import dev.stade.ui.screens.PinSetupMode
 import dev.stade.ui.screens.PinSetupScreen
+import dev.stade.radar.isRadarSupported
+import dev.stade.ui.screens.StadeRadarScreen
 import dev.stade.ui.screens.StadeyScreen
 import dev.stade.ui.screens.SecuritySettingsScreen
 import dev.stade.ui.screens.SettingsScreen
@@ -70,6 +72,7 @@ sealed interface Screen {
     data object About : Screen
     data object Stadey : Screen
     data object AddContact : Screen
+    data object Radar : Screen
     data class PinSetup(val requireCurrent: Boolean, val returnTo: Screen, val mode: PinSetupMode = PinSetupMode.Primary) : Screen
 }
 
@@ -264,8 +267,11 @@ private fun UnlockedApp(
             container.groupChat.start(current, this)
             container.stadiumChat.start(current, this)
             container.avatars.start(current, this)
+            container.typing.start(container.sync, this)
+            container.scheduler.start(current, container.appScope)
             launch { runCatching { joinOfficialStadiumIfNeeded(container, current) } }
         } else {
+            container.scheduler.stop()
             container.connections.stop()
         }
     }
@@ -368,6 +374,7 @@ private fun UnlockedApp(
                 Screen.About -> screen = Screen.Settings
                 Screen.Stadey -> screen = Screen.Contacts
                 Screen.AddContact -> screen = Screen.Contacts
+                Screen.Radar -> screen = Screen.Contacts
                 is Screen.PinSetup -> screen = s.returnTo
                 else -> {}
             }
@@ -441,6 +448,11 @@ private fun UnlockedApp(
                     container.pendingInvite.value = null
                     screen = Screen.Contacts
                 }
+            )
+            screen == Screen.Radar -> StadeRadarScreen(
+                container = container,
+                owner = identity!!,
+                onBack = { screen = Screen.Contacts }
             )
             screen is Screen.Verify -> VerifyContactScreen(
                 container = container,
@@ -543,6 +555,7 @@ private fun UnlockedApp(
                     onCreateGroup = { screen = Screen.CreateGroup },
                     onCreateStadium = { screen = Screen.CreateStadium },
                     onJoinStadium = { screen = Screen.JoinStadium },
+                    onOpenRadar = if (isRadarSupported) ({ screen = Screen.Radar }) else null,
                     onLongPressVerify = { contactId ->
                         screen = Screen.Verify(contactId = contactId, fromScreen = currentContactsScreen)
                     },

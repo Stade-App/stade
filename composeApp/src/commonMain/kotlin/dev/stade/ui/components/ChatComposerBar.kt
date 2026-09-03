@@ -11,9 +11,11 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +61,8 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,6 +76,7 @@ data class ChatComposerReplyPreview(val senderLabel: String, val snippet: String
 
 private enum class VoiceSendMode { MIC, STOP, SEND }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatComposerBar(
     draft: TextFieldValue,
@@ -87,6 +92,7 @@ fun ChatComposerBar(
     onRemoveVoiceClip: () -> Unit,
     onCancelReply: () -> Unit = {},
     onSend: () -> Unit,
+    onLongPressSend: (() -> Unit)? = null,
     onPickMedia: () -> Unit,
     onToggleRecording: () -> Unit,
     onOpenEmojiPicker: () -> Unit = {}
@@ -384,14 +390,25 @@ fun ChatComposerBar(
                 animationSpec = tween(220),
                 label = "voiceSendContent"
             )
+            val haptic = LocalHapticFeedback.current
             Box(
                 modifier = Modifier
                     .size(54.dp)
                     .clip(CircleShape)
                     .background(buttonContainerColor)
-                    .clickable {
-                        if (voiceButtonMode == VoiceSendMode.SEND) onSend() else onToggleRecording()
-                    },
+                    .combinedClickable(
+                        onClick = {
+                            if (voiceButtonMode == VoiceSendMode.SEND) onSend() else onToggleRecording()
+                        },
+                        onLongClick = if (onLongPressSend != null) {
+                            {
+                                if (voiceButtonMode == VoiceSendMode.SEND) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onLongPressSend()
+                                }
+                            }
+                        } else null
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 AnimatedContent(

@@ -96,6 +96,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import dev.stade.AppContainer
+import dev.stade.audio.MIN_VOICE_DURATION_MS
 import dev.stade.audio.RecordedClip
 import dev.stade.audio.rememberAudioPermissionState
 import dev.stade.audio.rememberAudioPlayer
@@ -116,6 +117,7 @@ import stade.composeapp.generated.resources.Res
 import stade.composeapp.generated.resources.app_icon
 import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.EmojiStickerDrawer
+import dev.stade.ui.components.ScrollToBottomButton
 import dev.stade.ui.components.StickerMakerDialog
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
@@ -148,6 +150,13 @@ fun StadiumScreen(
     val listState = rememberLazyListState()
     val clipboard = LocalClipboardManager.current
     var prevColumnHeight by remember { mutableStateOf(Int.MAX_VALUE) }
+
+    LaunchedEffect(stadiumId) {
+        val current = container.stadiums.getStadium(stadiumId) ?: return@LaunchedEffect
+        if (!current.isOwner) {
+            runCatching { container.stadiumChat.requestSubscriberCount(owner, current) }
+        }
+    }
 
     var draft by remember { mutableStateOf(TextFieldValue("")) }
     var showLeaveDialog by remember { mutableStateOf(false) }
@@ -226,10 +235,10 @@ fun StadiumScreen(
             isRecording = false
             scope.launch(Dispatchers.Default) {
                 val clip = recorder.stop()
-                if (clip != null) {
-                    pendingVoiceClip = clip
-                } else {
-                    notify(strings.voiceSendFailed, StadiumBannerKind.Error)
+                when {
+                    clip == null -> notify(strings.voiceSendFailed, StadiumBannerKind.Error)
+                    clip.durationMs < MIN_VOICE_DURATION_MS -> notify(strings.voiceTooShort, StadiumBannerKind.Error)
+                    else -> pendingVoiceClip = clip
                 }
             }
         } else {
@@ -507,72 +516,78 @@ fun StadiumScreen(
                             }
                         }
                     }
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxWidth().weight(1f).alpha(if (scrollReady) 1f else 0f),
-                        contentPadding = PaddingValues(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        items(messages, key = { it.id }) { msg ->
-                            val isSelected by remember(msg.id) { derivedStateOf { selectedMessageIds.contains(msg.id) } }
-                            val onShortClick: () -> Unit = { if (inSelectionMode) toggleSelection(msg.id) }
-                            val onLongClick: () -> Unit = { toggleSelection(msg.id) }
-                            when (msg.type) {
-                                MessageType.IMAGE -> StadiumImageBubble(
-                                    msg = msg,
-                                    selected = isSelected,
-                                    inSelectionMode = inSelectionMode,
-                                    onShortClick = onShortClick,
-                                    onLongClick = onLongClick,
-                                    onSaveImage = { bytes ->
-                                        scope.launch {
-                                            val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
-                                            notify(
-                                                if (ok) strings.imageSaved else strings.imageSaveFailed,
-                                                if (ok) StadiumBannerKind.Success else StadiumBannerKind.Error
-                                            )
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize().alpha(if (scrollReady) 1f else 0f),
+                            contentPadding = PaddingValues(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(messages, key = { it.id }) { msg ->
+                                val isSelected by remember(msg.id) { derivedStateOf { selectedMessageIds.contains(msg.id) } }
+                                val onShortClick: () -> Unit = { if (inSelectionMode) toggleSelection(msg.id) }
+                                val onLongClick: () -> Unit = { toggleSelection(msg.id) }
+                                when (msg.type) {
+                                    MessageType.IMAGE -> StadiumImageBubble(
+                                        msg = msg,
+                                        selected = isSelected,
+                                        inSelectionMode = inSelectionMode,
+                                        onShortClick = onShortClick,
+                                        onLongClick = onLongClick,
+                                        onSaveImage = { bytes ->
+                                            scope.launch {
+                                                val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
+                                                notify(
+                                                    if (ok) strings.imageSaved else strings.imageSaveFailed,
+                                                    if (ok) StadiumBannerKind.Success else StadiumBannerKind.Error
+                                                )
+                                            }
+                                        },
+                                        onCopyImage = { bytes ->
+                                            scope.launch {
+                                                val ok = copyImageToClipboard(bytes)
+                                                notify(
+                                                    if (ok) strings.imageCopied else strings.imageCopyFailed,
+                                                    if (ok) StadiumBannerKind.Success else StadiumBannerKind.Error
+                                                )
+                                            }
                                         }
-                                    },
-                                    onCopyImage = { bytes ->
-                                        scope.launch {
-                                            val ok = copyImageToClipboard(bytes)
-                                            notify(
-                                                if (ok) strings.imageCopied else strings.imageCopyFailed,
-                                                if (ok) StadiumBannerKind.Success else StadiumBannerKind.Error
-                                            )
-                                        }
-                                    }
-                                )
-                                MessageType.VOICE -> StadiumVoiceBubble(
-                                    msg = msg,
-                                    selected = isSelected,
-                                    inSelectionMode = inSelectionMode,
-                                    onShortClick = onShortClick,
-                                    onLongClick = onLongClick
-                                )
-                                MessageType.VIDEO -> StadiumVideoBubble(
-                                    msg = msg,
-                                    selected = isSelected,
-                                    inSelectionMode = inSelectionMode,
-                                    onShortClick = onShortClick,
-                                    onLongClick = onLongClick
-                                )
-                                MessageType.STICKER -> StadiumStickerBubble(
-                                    msg = msg,
-                                    selected = isSelected,
-                                    inSelectionMode = inSelectionMode,
-                                    onShortClick = onShortClick,
-                                    onLongClick = onLongClick
-                                )
-                                else -> StadiumTextBubble(
-                                    msg = msg,
-                                    selected = isSelected,
-                                    inSelectionMode = inSelectionMode,
-                                    onShortClick = onShortClick,
-                                    onLongClick = onLongClick
-                                )
+                                    )
+                                    MessageType.VOICE -> StadiumVoiceBubble(
+                                        msg = msg,
+                                        selected = isSelected,
+                                        inSelectionMode = inSelectionMode,
+                                        onShortClick = onShortClick,
+                                        onLongClick = onLongClick
+                                    )
+                                    MessageType.VIDEO -> StadiumVideoBubble(
+                                        msg = msg,
+                                        selected = isSelected,
+                                        inSelectionMode = inSelectionMode,
+                                        onShortClick = onShortClick,
+                                        onLongClick = onLongClick
+                                    )
+                                    MessageType.STICKER -> StadiumStickerBubble(
+                                        msg = msg,
+                                        selected = isSelected,
+                                        inSelectionMode = inSelectionMode,
+                                        onShortClick = onShortClick,
+                                        onLongClick = onLongClick
+                                    )
+                                    else -> StadiumTextBubble(
+                                        msg = msg,
+                                        selected = isSelected,
+                                        inSelectionMode = inSelectionMode,
+                                        onShortClick = onShortClick,
+                                        onLongClick = onLongClick
+                                    )
+                                }
                             }
                         }
+                        ScrollToBottomButton(
+                            listState = listState,
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 14.dp)
+                        )
                     }
                     if (current.isOwner) {
                         ChatComposerBar(

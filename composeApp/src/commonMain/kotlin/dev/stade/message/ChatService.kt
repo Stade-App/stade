@@ -1,5 +1,6 @@
 package dev.stade.message
 
+import dev.stade.audio.MIN_VOICE_DURATION_MS
 import dev.stade.contact.Contact
 import dev.stade.identity.LocalIdentity
 import dev.stade.sync.SyncEngine
@@ -34,6 +35,7 @@ class ChatService(
     }
 
     suspend fun sendVoice(owner: LocalIdentity, contact: Contact, opusBytes: ByteArray, durationMs: Int, replyToId: String? = null): Message {
+        require(durationMs >= MIN_VOICE_DURATION_MS && opusBytes.isNotEmpty()) { "voice clip too short" }
         val body = encodeVoiceBody(opusBytes, durationMs)
         return send(owner, contact, body, replyToId)
     }
@@ -53,6 +55,15 @@ class ChatService(
         val now = Clock.System.now().toEpochMilliseconds()
         runCatching {
             sync.queueOutgoing(owner, contact, messages.newId(), body, now)
+        }
+    }
+
+    suspend fun sendTyping(owner: LocalIdentity, contact: Contact, typing: Boolean) {
+        if (contact.kind != 0) return
+        if (!sync.isConnected(contact.id)) return
+        val now = Clock.System.now().toEpochMilliseconds()
+        runCatching {
+            sync.queueOutgoing(owner, contact, messages.newId(), encodeTypingBody(typing), now)
         }
     }
 

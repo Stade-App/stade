@@ -43,7 +43,8 @@ data class HelloPayload(
     val mldsaPublicKey: ByteArray,
     val nonce: ByteArray,
     val transcriptCommitment: ByteArray,
-    val addresses: List<String> = emptyList()
+    val addresses: List<String> = emptyList(),
+    val reAddRequest: Boolean = false
 )
 
 @Serializable

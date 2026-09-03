@@ -1,11 +1,10 @@
 package dev.stade.ui.screens
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -19,6 +18,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -37,17 +38,16 @@ import androidx.compose.material.icons.Icons
 import dev.stade.stadium.isOfficial
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.BotBadge
-import dev.stade.ui.components.ChatListFabMenu
+import dev.stade.ui.components.HomeActionBar
+import dev.stade.ui.components.TOP_PILL_GAP
+import dev.stade.ui.components.TOP_PILL_SIZE
+import dev.stade.ui.components.TopBarPill
 import org.jetbrains.compose.resources.painterResource
 import stade.composeapp.generated.resources.Res
 import stade.composeapp.generated.resources.app_icon
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.GroupAdd
-import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
@@ -64,7 +64,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -73,8 +72,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import dev.stade.ui.theme.StadeColors
@@ -94,10 +91,17 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.contact.Contact
@@ -140,6 +144,112 @@ private sealed class ChatListItem {
     }
 }
 
+private val HOME_BAR_CLEARANCE = 96.dp
+private const val SEARCH_FOCUS_DELAY_MS = 80L
+private const val SEARCH_UNMOUNT_DELAY_MS = 180L
+
+@Composable
+private fun SearchPill(
+    expanded: Boolean,
+    query: String,
+    expandedWidth: Dp,
+    focusRequester: FocusRequester,
+    onQueryChange: (String) -> Unit,
+    onToggle: () -> Unit
+) {
+    val strings = LocalStrings.current
+    val target = expandedWidth.coerceAtLeast(TOP_PILL_SIZE)
+    val progress = animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "searchExpand"
+    )
+
+    var fieldMounted by remember { mutableStateOf(expanded) }
+    LaunchedEffect(expanded) {
+        if (expanded) {
+            fieldMounted = true
+            delay(SEARCH_FOCUS_DELAY_MS)
+            runCatching { focusRequester.requestFocus() }
+        } else {
+            delay(SEARCH_UNMOUNT_DELAY_MS)
+            fieldMounted = false
+        }
+    }
+
+    Surface(
+        modifier = Modifier
+            .height(TOP_PILL_SIZE)
+            .layout { measurable, constraints ->
+                val w = lerp(TOP_PILL_SIZE, target, progress.value)
+                    .roundToPx()
+                    .coerceIn(0, constraints.maxWidth)
+                val placeable = measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
+                layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+            },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shadowElevation = 2.dp
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (fieldMounted) {
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 18.dp)
+                        .graphicsLayer {
+                            alpha = ((progress.value - 0.35f) / 0.45f).coerceIn(0f, 1f)
+                        }
+                        .focusRequester(focusRequester),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    decorationBox = { inner ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (query.isEmpty()) {
+                                Text(
+                                    strings.searchContactsPlaceholder,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            inner()
+                        }
+                    }
+                )
+            }
+            IconButton(onClick = onToggle, modifier = Modifier.size(TOP_PILL_SIZE)) {
+                Box(
+                    modifier = Modifier.graphicsLayer { rotationZ = progress.value * 90f },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AnimatedContent(
+                        targetState = expanded,
+                        transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(220)) },
+                        label = "searchIcon"
+                    ) { open ->
+                        Icon(
+                            imageVector = if (open) Icons.Default.Close else Icons.Default.Search,
+                            contentDescription = if (open) strings.closeSearch else strings.searchAction,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactsScreen(
@@ -154,6 +264,7 @@ fun ContactsScreen(
     onCreateGroup: () -> Unit,
     onCreateStadium: () -> Unit = {},
     onJoinStadium: () -> Unit = {},
+    onOpenRadar: (() -> Unit)? = null,
     onLongPressVerify: (String) -> Unit,
     onOpenChatMessage: (String, String) -> Unit = { _, _ -> },
     onOpenGroupMessage: (String, String) -> Unit = { _, _ -> },
@@ -167,6 +278,7 @@ fun ContactsScreen(
     val stadiums by remember(owner.id) { container.stadiums.observeStadiums(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.stadiums.allStadiums(owner.id) })
     val connectedSet by container.sync.connectedContacts.collectAsState()
+    val typingSet by container.typing.typingContacts.collectAsState()
     val pinned by remember(owner.id) { container.pinnedChats.observePinned(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.pinnedChats.pinned(owner.id) })
     val scope = rememberCoroutineScope()
@@ -462,10 +574,6 @@ fun ContactsScreen(
         }
     }
 
-    LaunchedEffect(searchActive) {
-        if (searchActive) focusRequester.requestFocus()
-    }
-
     PlatformBackHandler(enabled = searchActive) {
         searchActive = false
         query = ""
@@ -529,207 +637,182 @@ fun ContactsScreen(
                     actionIconContentColor = MaterialTheme.colorScheme.onSurface,
                     navigationIconContentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                navigationIcon = {
-                    AnimatedVisibility(
-                        visible = searchActive,
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
-                        IconButton(onClick = { searchActive = false; query = "" }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.closeSearch)
-                        }
-                    }
-                },
                 title = {
-                    AnimatedContent(
-                        targetState = searchActive,
-                        transitionSpec = { fadeIn() togetherWith fadeOut() }
-                    ) { active ->
-                        if (active) {
-                            TextField(
-                                value = query,
-                                onValueChange = { query = it },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(focusRequester),
-                                placeholder = {
-                                    Text(
-                                        strings.searchContactsPlaceholder,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                },
-                                singleLine = true,
-                                textStyle = MaterialTheme.typography.bodyLarge,
-                                trailingIcon = {
-                                    if (query.isNotEmpty()) {
-                                        IconButton(onClick = { query = "" }) {
-                                            Icon(Icons.Default.Close, contentDescription = strings.closeSearch)
+                    BoxWithConstraints(
+                        modifier = Modifier.fillMaxWidth().padding(end = 24.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        val barWidth = maxWidth
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(
+                                name = owner.nickname,
+                                size = 38.dp,
+                                keySeed = owner.publicSigningKey,
+                                avatarBytes = owner.avatar
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    strings.appTitle,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    owner.nickname,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.align(Alignment.CenterEnd),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(TOP_PILL_GAP)
+                        ) {
+                            if (contacts.isNotEmpty()) {
+                                SearchPill(
+                                    expanded = searchActive,
+                                    query = query,
+                                    expandedWidth = barWidth - TOP_PILL_SIZE - TOP_PILL_GAP,
+                                    focusRequester = focusRequester,
+                                    onQueryChange = { query = it },
+                                    onToggle = {
+                                        if (searchActive) {
+                                            searchActive = false
+                                            query = ""
+                                        } else {
+                                            searchActive = true
                                         }
                                     }
-                                },
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = Color.Transparent,
-                                    unfocusedContainerColor = Color.Transparent,
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                    disabledIndicatorColor = Color.Transparent,
                                 )
+                            }
+                            TopBarPill(
+                                icon = Icons.Default.Settings,
+                                contentDescription = strings.settingsAction,
+                                spinOnClick = true,
+                                onClick = onOpenSettings
                             )
-                        } else {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(
-                                    name = owner.nickname,
-                                    size = 38.dp,
-                                    shape = RoundedCornerShape(25),
-                                    keySeed = owner.publicSigningKey,
-                                    avatarBytes = owner.avatar
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        strings.appTitle,
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                    Text(
-                                        owner.nickname,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                },
-                actions = {
-                    AnimatedVisibility(
-                        visible = !searchActive,
-                        enter = fadeIn(),
-                        exit = fadeOut()
-                    ) {
-                        Row {
-                            if (contacts.isNotEmpty()) {
-                                IconButton(onClick = { searchActive = true }) {
-                                    Icon(Icons.Default.Search, contentDescription = strings.searchAction)
-                                }
-                            }
-                            IconButton(onClick = onOpenSettings) {
-                                Icon(Icons.Default.Settings, contentDescription = strings.settingsAction)
-                            }
                         }
                     }
                 }
             )
         },
-        floatingActionButton = {
-            ChatListFabMenu(
+    ) { padding ->
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                if (stadeyVisible && !(searchActive && query.isNotBlank())) {
+                    item(key = "stadey") {
+                        StadeyRow(
+                            onClick = onOpenStadey,
+                            onLongPress = { showHideStadeyMenu = true }
+                        )
+                    }
+                }
+                if (contacts.isEmpty() && groups.isEmpty() && stadiums.isEmpty()) {
+                    item {
+                        EmptyContacts(Modifier.fillMaxWidth().fillParentMaxHeight())
+                    }
+                } else {
+                    items(combinedItems, key = { it.key }) { item ->
+                        when (item) {
+                            is ChatListItem.ContactItem -> {
+                                val contact = item.contact
+                                val lastMsg by remember(contact.id) { container.messages.observeLastMessage(contact.id) }
+                                    .collectAsState(initial = remember(contact.id) { container.messages.lastMessage(contact.id) })
+                                val unread by remember(contact.id) { container.messages.observeUnreadCount(contact.id) }
+                                    .collectAsState(initial = remember(contact.id) { container.messages.unreadCount(contact.id) })
+                                val preview by remember(lastMsg?.id) {
+                                    derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage) } }
+                                }
+                                ContactRow(
+                                    contact = contact,
+                                    connected = connectedSet.contains(contact.id),
+                                    typing = typingSet.contains(contact.id),
+                                    lastMessage = preview,
+                                    unread = unread,
+                                    pinned = item.pinnedAt != null,
+                                    onClick = { onOpenChat(contact.id) },
+                                    onLongPress = { actionItem = item }
+                                )
+                            }
+                            is ChatListItem.GroupItem -> {
+                                val group = item.group
+                                val lastMsg by remember(group.id) { container.groups.observeLastMessage(group.id) }
+                                    .collectAsState(initial = remember(group.id) { container.groups.lastMessage(group.id) })
+                                val unread by remember(group.id) { container.groups.observeUnreadCount(group.id) }
+                                    .collectAsState(initial = remember(group.id) { container.groups.unreadCount(group.id) })
+                                val preview by remember(lastMsg?.id) {
+                                    derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage) } }
+                                }
+                                GroupRow(
+                                    group = group,
+                                    lastMessage = preview,
+                                    unread = unread,
+                                    pinned = item.pinnedAt != null,
+                                    onClick = { onOpenGroupChat(group.id) },
+                                    onLongPress = { actionItem = item }
+                                )
+                            }
+                            is ChatListItem.StadiumItem -> {
+                                val stadium = item.stadium
+                                StadiumRow(
+                                    stadium = stadium,
+                                    pinned = item.pinnedAt != null,
+                                    onClick = { onOpenStadium(stadium.id) },
+                                    onLongPress = { actionItem = item }
+                                )
+                            }
+                        }
+                    }
+                    if (searchActive && query.isNotBlank() && messageResults.isNotEmpty()) {
+                        item {
+                            Text(
+                                strings.searchResultsSectionMessages,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                        }
+                        items(messageResults, key = { "msg_" + it.messageId }) { result ->
+                            MessageSearchRow(
+                                result = result,
+                                onClick = {
+                                    when {
+                                        result.isStadium -> onOpenStadiumMessage(result.chatId, result.messageId)
+                                        result.isGroup -> onOpenGroupMessage(result.chatId, result.messageId)
+                                        else -> onOpenChatMessage(result.chatId, result.messageId)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    if (searchActive && query.isNotBlank() && combinedItems.isEmpty() && messageResults.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    strings.noSearchResults,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    item { Spacer(Modifier.height(HOME_BAR_CLEARANCE)) }
+                }
+            }
+
+            HomeActionBar(
                 onAddContact = onAddContact,
                 onCreateGroup = onCreateGroup,
                 onCreateStadium = onCreateStadium,
-                onJoinStadium = onJoinStadium
+                onJoinStadium = onJoinStadium,
+                onOpenRadar = onOpenRadar,
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
-        }
-    ) { padding ->
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (stadeyVisible && !(searchActive && query.isNotBlank())) {
-                item(key = "stadey") {
-                    StadeyRow(
-                        onClick = onOpenStadey,
-                        onLongPress = { showHideStadeyMenu = true }
-                    )
-                }
-            }
-            if (contacts.isEmpty() && groups.isEmpty() && stadiums.isEmpty()) {
-                item {
-                    EmptyContacts(Modifier.fillMaxWidth().fillParentMaxHeight())
-                }
-            } else {
-                items(combinedItems, key = { it.key }) { item ->
-                    when (item) {
-                        is ChatListItem.ContactItem -> {
-                            val contact = item.contact
-                            val lastMsg by remember(contact.id) { container.messages.observeLastMessage(contact.id) }
-                                .collectAsState(initial = remember(contact.id) { container.messages.lastMessage(contact.id) })
-                            val unread by remember(contact.id) { container.messages.observeUnreadCount(contact.id) }
-                                .collectAsState(initial = remember(contact.id) { container.messages.unreadCount(contact.id) })
-                            val preview by remember(lastMsg?.id) {
-                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage) } }
-                            }
-                            ContactRow(
-                                contact = contact,
-                                connected = connectedSet.contains(contact.id),
-                                lastMessage = preview,
-                                unread = unread,
-                                pinned = item.pinnedAt != null,
-                                onClick = { onOpenChat(contact.id) },
-                                onLongPress = { actionItem = item }
-                            )
-                        }
-                        is ChatListItem.GroupItem -> {
-                            val group = item.group
-                            val lastMsg by remember(group.id) { container.groups.observeLastMessage(group.id) }
-                                .collectAsState(initial = remember(group.id) { container.groups.lastMessage(group.id) })
-                            val unread by remember(group.id) { container.groups.observeUnreadCount(group.id) }
-                                .collectAsState(initial = remember(group.id) { container.groups.unreadCount(group.id) })
-                            val preview by remember(lastMsg?.id) {
-                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage) } }
-                            }
-                            GroupRow(
-                                group = group,
-                                lastMessage = preview,
-                                unread = unread,
-                                pinned = item.pinnedAt != null,
-                                onClick = { onOpenGroupChat(group.id) },
-                                onLongPress = { actionItem = item }
-                            )
-                        }
-                        is ChatListItem.StadiumItem -> {
-                            val stadium = item.stadium
-                            StadiumRow(
-                                stadium = stadium,
-                                pinned = item.pinnedAt != null,
-                                onClick = { onOpenStadium(stadium.id) },
-                                onLongPress = { actionItem = item }
-                            )
-                        }
-                    }
-                }
-                if (searchActive && query.isNotBlank() && messageResults.isNotEmpty()) {
-                    item {
-                        Text(
-                            strings.searchResultsSectionMessages,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                    }
-                    items(messageResults, key = { "msg_" + it.messageId }) { result ->
-                        MessageSearchRow(
-                            result = result,
-                            onClick = {
-                                when {
-                                    result.isStadium -> onOpenStadiumMessage(result.chatId, result.messageId)
-                                    result.isGroup -> onOpenGroupMessage(result.chatId, result.messageId)
-                                    else -> onOpenChatMessage(result.chatId, result.messageId)
-                                }
-                            }
-                        )
-                    }
-                }
-                if (searchActive && query.isNotBlank() && combinedItems.isEmpty() && messageResults.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                strings.noSearchResults,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -864,6 +947,7 @@ private fun StadeyRow(onClick: () -> Unit, onLongPress: () -> Unit) {
 private fun ContactRow(
     contact: Contact,
     connected: Boolean,
+    typing: Boolean,
     lastMessage: String?,
     unread: Long,
     pinned: Boolean,
@@ -943,9 +1027,9 @@ private fun ContactRow(
                 Spacer(Modifier.height(2.dp))
 
                 Text(
-                    lastMessage ?: strings.noMessages,
+                    if (typing) strings.typingIndicator else lastMessage ?: strings.noMessages,
                     style = MaterialTheme.typography.bodySmall,
-                    color = subtleColor,
+                    color = if (typing) MaterialTheme.colorScheme.primary else subtleColor,
                     maxLines = 1
                 )
             }

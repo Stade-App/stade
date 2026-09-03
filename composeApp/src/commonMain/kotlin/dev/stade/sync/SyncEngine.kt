@@ -22,13 +22,17 @@ import dev.stade.identity.StadeId
 import dev.stade.message.AVATAR_BODY_PREFIX
 import dev.stade.message.MessageManager
 import dev.stade.message.REACTION_BODY_PREFIX
+import dev.stade.message.TYPING_BODY_PREFIX
 import dev.stade.message.VANISH_CANCEL_PREFIX
 import dev.stade.message.VANISH_START_PREFIX
 import dev.stade.message.parseAvatarBody
 import dev.stade.message.parseReactionWrapper
+import dev.stade.message.parseTypingBody
 import dev.stade.message.parseVanishCancelBody
 import dev.stade.message.parseVanishStartBody
 import dev.stade.message.parseVanishTag
+import dev.stade.stadium.STD_COUNT_PREFIX
+import dev.stade.stadium.STD_COUNT_REQUEST_PREFIX
 import dev.stade.stadium.STD_DELETE_PREFIX
 import dev.stade.stadium.STD_INV_PREFIX
 import dev.stade.stadium.STD_MSG_DELETE_PREFIX
@@ -82,6 +86,8 @@ class SyncEngine(
     val connectedContacts: StateFlow<Set<String>> = _connected.asStateFlow()
     @Volatile var selfAddressesProvider: () -> List<String> = { emptyList() }
     @Volatile private var forgottenIds = emptySet<String>()
+    @Volatile private var forgottenLoaded = false
+    @Volatile private var pendingReAdds = emptySet<String>()
     private val pendingHandshakes = mutableMapOf<String, CompletableDeferred<Pair<Contact, Boolean>?>>()
     private val pendingHandshakesLock = Mutex()
 
@@ -98,6 +104,7 @@ class SyncEngine(
         data class SendFailed(val contactId: String, val reason: String) : SyncEvent
         data class ReactionUpdated(val messageId: String) : SyncEvent
         data class AvatarUpdated(val contactId: String) : SyncEvent
+        data class TypingChanged(val contactId: String, val typing: Boolean) : SyncEvent
         data class StadiumMessageReceived(val stadiumId: String) : SyncEvent
         data class StadiumContactReleased(val contactId: String, val forget: Boolean) : SyncEvent
         data class StadiumDeleted(val stadiumId: String) : SyncEvent
@@ -183,7 +190,8 @@ class SyncEngine(
             mldsaPublicKey = owner.publicMlDsaKey,
             nonce = ourNonce,
             transcriptCommitment = ourTc,
-            addresses = runCatching { selfAddressesProvider() }.getOrDefault(emptyList())
+            addresses = runCatching { selfAddressesProvider() }.getOrDefault(emptyList()),
+            reAddRequest = pendingReAdds.isNotEmpty()
         )
         runCatching {
             connection.send(FrameCodec.encode(SyncRecord(RecordType.HELLO, json.encodeToString(HelloPayload.serializer(), ourHello).encodeToByteArray())))
@@ -218,7 +226,10 @@ class SyncEngine(
             _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsStadeIdMismatch))
             return null
         }
-        if (peerHello.stadeId in forgottenIds) return null
+        if (peerHello.stadeId in forgotten()) {
+            if (!peerHello.reAddRequest) return null
+            unforget(peerHello.stadeId)
+        }
 
         val expectedPeerTc = transcriptCommitment(
             protocolVersion,
@@ -282,6 +293,7 @@ class SyncEngine(
                     runCatching { contacts.setAddresses(existing.id, merged) }
                 }
             }
+            pendingReAdds = pendingReAdds - peerHello.stadeId
             return existing to false
         }
 
@@ -293,7 +305,9 @@ class SyncEngine(
             runCatching { contacts.delete(existing.id) }
         }
 
-        return gatedNewContactHandshake(owner, connection, peerHello, peerAuth.isStadiumJoin, priorKind)
+        val established = gatedNewContactHandshake(owner, connection, peerHello, peerAuth.isStadiumJoin, priorKind)
+        if (established != null) pendingReAdds = pendingReAdds - peerHello.stadeId
+        return established
     }
 
     private suspend fun gatedNewContactHandshake(
@@ -379,9 +393,11 @@ class SyncEngine(
 
         val nickname = peerHello.nickname.ifBlank { I18n.current.contactNameFallback(peerHello.stadeId.takeLast(4)) }
         val weAreStadiumJoining = stadiumManager?.getPendingJoinForContact(peerHello.stadeId) != null
+        val reAdd = peerHello.reAddRequest || peerHello.stadeId in pendingReAdds
         val stadiumKind = when {
             weAreStadiumJoining || peerClaimsStadiumJoin -> 1
-            priorKind != null -> priorKind
+            priorKind == 1 -> 1
+            priorKind == 2 && !reAdd -> 2
             else -> 0
         }
         val newContact = runCatching {
@@ -555,7 +571,7 @@ class SyncEngine(
                         bodyStr == PROMOTE_TO_CONTACT_PREFIX -> {
                             runCatching {
                                 val fresh = contacts.get(contact.id)
-                                if (fresh != null && fresh.kind == 1) contacts.setKind(contact.id, 0)
+                                if (fresh != null && fresh.kind != 0) contacts.setKind(contact.id, 0)
                             }
                         }
                         bodyStr.startsWith(REACTION_BODY_PREFIX) -> {
@@ -571,6 +587,10 @@ class SyncEngine(
                                 contacts.setAvatar(contact.id, parseAvatarBody(bodyStr))
                                 _events.tryEmit(SyncEvent.AvatarUpdated(contact.id))
                             }
+                        }
+                        bodyStr.startsWith(TYPING_BODY_PREFIX) -> {
+                            val typing = if ((contacts.get(contact.id)?.kind ?: 0) == 0) parseTypingBody(bodyStr) else null
+                            if (typing != null) _events.tryEmit(SyncEvent.TypingChanged(contact.id, typing))
                         }
                         bodyStr.startsWith(VANISH_START_PREFIX) -> {
                             val wrapper = if ((contacts.get(contact.id)?.kind ?: 0) == 0) parseVanishStartBody(bodyStr) else null
@@ -718,6 +738,23 @@ class SyncEngine(
                                 _events.tryEmit(SyncEvent.StadiumInviteReceived(bodyStr.removePrefix(STD_INV_PREFIX)))
                             }
                         }
+                        stadiumManager != null && bodyStr.startsWith(STD_COUNT_REQUEST_PREFIX) -> {
+                            val reply = stadiumManager.handleCountRequest(contact.id, bodyStr)
+                            if (reply != null) {
+                                runCatching {
+                                    val msgId = Encoding.toHex(crypto.randomBytes(16))
+                                    val ts = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+                                    val sealed = ratchet.seal(owner, contact, reply.encodeToByteArray())
+                                    val mp = MessagePayload(msgId, ts, sealed)
+                                    val frame = json.encodeToString(MessagePayload.serializer(), mp).encodeToByteArray()
+                                    outbox.enqueue(contact.id, msgId, frame)
+                                    outboxSignal.tryEmit(Unit)
+                                }
+                            }
+                        }
+                        stadiumManager != null && bodyStr.startsWith(STD_COUNT_PREFIX) -> {
+                            stadiumManager.handleCountUpdate(contact.id, bodyStr)
+                        }
                         stadiumManager != null && bodyStr.startsWith(STD_MSG_DELETE_PREFIX) -> {
                             val stripped = bodyStr.removePrefix(STD_MSG_DELETE_PREFIX)
                             val colonIdx = stripped.indexOf(':')
@@ -788,9 +825,18 @@ class SyncEngine(
 
     fun isConnected(contactId: String): Boolean = _connected.value.contains(contactId)
 
+    private fun forgotten(): Set<String> {
+        if (!forgottenLoaded) {
+            forgottenIds = runCatching { contacts.forgottenIds() }.getOrDefault(emptySet())
+            forgottenLoaded = true
+        }
+        return forgottenIds
+    }
+
     suspend fun forgetContact(contactId: String) {
         sessionsLock.withLock {
-            forgottenIds = forgottenIds + contactId
+            forgottenIds = forgotten() + contactId
+            runCatching { contacts.setForgottenIds(forgottenIds) }
             sessions.remove(contactId)?.let { runCatching { it.cancel() } }
             _connected.value = sessions.keys.toSet()
         }
@@ -798,7 +844,17 @@ class SyncEngine(
     }
 
     fun unforget(stadeId: String) {
-        forgottenIds = forgottenIds - stadeId
+        forgottenIds = forgotten() - stadeId
+        runCatching { contacts.setForgottenIds(forgottenIds) }
+    }
+
+    fun markReAdd(stadeId: String) {
+        pendingReAdds = pendingReAdds + stadeId
+        unforget(stadeId)
+    }
+
+    fun clearReAdd(stadeId: String) {
+        pendingReAdds = pendingReAdds - stadeId
     }
 
     suspend fun disconnectContact(contactId: String) {

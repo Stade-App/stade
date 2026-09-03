@@ -30,6 +30,30 @@ fun formatChatTime(epochMillis: Long): String {
     return "$dd.$mo.$yy $timeOnly"
 }
 
+fun formatScheduledTime(epochMillis: Long): String {
+    val tz = TimeZone.currentSystemDefault()
+    val target = kotlinx.datetime.Instant.fromEpochMilliseconds(epochMillis).toLocalDateTime(tz)
+    val now = Clock.System.now().toLocalDateTime(tz)
+    val dd = target.dayOfMonth.toString().padStart(2, '0')
+    val mo = target.monthNumber.toString().padStart(2, '0')
+    val hh = target.hour.toString().padStart(2, '0')
+    val mm = target.minute.toString().padStart(2, '0')
+    if (target.year != now.year) {
+        val yy = (target.year % 100).toString().padStart(2, '0')
+        return "$dd.$mo.$yy $hh:$mm"
+    }
+    return "$dd.$mo $hh:$mm"
+}
+
+fun formatVanishRemaining(remainingMs: Long): String {
+    val totalMinutes = remainingMs.coerceAtLeast(0L) / 60_000L
+    return when {
+        totalMinutes >= 60 && totalMinutes % 60 > 0 -> "${totalMinutes / 60}h ${totalMinutes % 60}m"
+        totalMinutes >= 60 -> "${totalMinutes / 60}h"
+        else -> "${totalMinutes}m"
+    }
+}
+
 fun formatVoiceDuration(ms: Int): String {
     val totalSeconds = ms / 1000
     val m = totalSeconds / 60

@@ -53,13 +53,13 @@ object TurkishStrings : AppStrings() {
     override val duressPinMatchesRealPin = "Tehlike PIN'i gerçek PIN'inizle aynı olamaz"
 
     override val appTitle = "Stade"
-    override val searchContactsPlaceholder = "Kişi ara…"
+    override val searchContactsPlaceholder = "Ara"
     override val closeSearch = "Aramayı kapat"
     override val searchAction = "Ara"
     override val settingsAction = "Ayarlar"
     override val addContactAction = "Kişi ekle"
     override val noContactsTitle = "Henüz kişin yok"
-    override val noContactsHint = "Yeni bir kişi eklemek için sağ alttaki butona dokun."
+    override val noContactsHint = "İlk kişini eklemek için alttaki çubuğu kullan."
     override val noSearchResults = "Eşleşen kişi yok"
     override val searchResultsSectionMessages = "Mesajlar"
     override val showVerificationCode = "Doğrulama kodunu göster"
@@ -90,6 +90,7 @@ object TurkishStrings : AppStrings() {
     override val expandAction = "Genişlet"
     override val viewDetailsAction = "Ayrıntıları gör"
     override val closeAction = "Kapat"
+    override val scrollToBottomAction = "En sona git"
     override val noConnectionInfo =
         "Bu kişinin kayıtlı bağlantı bilgisi yok. Karşı taraftan yeni bir davet kodu iste ve aşağıya yapıştır."
     override val connectionChannels = "Bağlantı kanalları"
@@ -528,6 +529,8 @@ object TurkishStrings : AppStrings() {
     override val vanishTurnOffConfirmTitle = "Kaybolan mesajlar kapatılsın mı?"
     override val vanishTurnOffConfirmBody = "Kaybolan mesaj modu aktifken gönderilen mesajlar şimdi, her iki tarafta da silinecek."
     override val vanishTurnOffAction = "Kapat"
+    override val vanishStateOff = "Kapalı"
+    override fun vanishStateOn(remaining: String) = "Açık · $remaining sonra sona erer"
 
     override val stadeyRowSubtitle = "Yardım ve SSS"
     override val stadeyIntro = "Merhaba, ben Stadey! Aşağıdan bir konuya dokun, sana anlatayım."
@@ -545,15 +548,6 @@ object TurkishStrings : AppStrings() {
     override val stadeyFaqNetworkingAnswer = "Stade, mesajlarını varsayılan olarak Tor üzerinden yönlendirir; ağın kısıtlıysa köprü desteği de vardır. Sen ve bir kişi aynı yerel ağdaysanız, Stade daha hızlı bir yol için doğrudan da bağlanabilir. Her kişinin bağlantı durumunu sohbet listende görebilirsin."
     override val stadeyFaqLockdownQuestion = "Hesabımı nasıl güvenceye alırım?"
     override val stadeyFaqLockdownAnswer = "Ayarlar → Güvenlik bölümüne git. Otomatik kilitlenmeli bir PIN belirleyebilir, seni kilidi açmaya zorlarlarsa uygulamayı silen ayrı bir tehdit PIN'i ekleyebilir, ekran görüntüsü ve ekran kaydını engelleyebilir, aktarım ayarlarının açılması için bile PIN zorunlu kılabilirsin."
-
-    override val stadeyFaqAddFriendsKeywords = "arkadaş, arkadaşlar, ekle, kişi, kişiler, davet, davet kodu, arkadaş ekle, kişi ekle, bağlan, stade id, kod paylaş, kod yapıştır"
-    override val stadeyFaqSecurityKeywords = "güvenli, güvenlik, şifreleme, şifreli, gizlilik, kuantum, uçtan uca, sunucu, sunucu yok, hacklenir mi, casus, casusluk"
-    override val stadeyFaqGroupsStadiumsKeywords = "grup, gruplar, stadyum, stadyumlar, kanal, kanallar, yayın, grup sohbeti, duyuru, duyurular, abone, üyeler"
-    override val stadeyFaqMediaKeywords = "sesli mesaj, sesli mesajlar, çıkartma, çıkartmalar, kaybolan mesaj, kaybolan mesajlar, kendini imha, ses kaydet, mikrofon, süre, zamanlayıcı"
-    override val stadeyFaqNetworkingKeywords = "bağlantı, bağlan, tor, ağ, sunucu yok, çevrimdışı, köprü, köprüler, yerel ağ, nasıl çalışır, p2p, eşler arası, engelli, sansür"
-    override val stadeyFaqLockdownKeywords = "kilit, pin, şifre, güvenlik ayarları, tehdit pin, ekran görüntüsü, ekran kaydı, sil, pin unuttum, hesabı koru, uygulamayı kilitle, otomatik kilit, zorluyor, zorla, tehdit, tehdit ediyor, zorlanıyorum"
-    override val stadeySupportKeywords = "destek, yardım, discord, topluluk, bize ulaşın, hata bildir, geri bildirim, discord'a katıl, yardıma ihtiyacım var, sorun, problem"
-    override val stadeyFallbackAnswer = "Bundan tam olarak emin değilim — aşağıdaki konulardan birine dokunmayı dene ya da sorunu farklı şekilde sorabilirsin."
 
     override val hideStadeyAction = "Stadey'i Gizle"
     override val hideStadeyConfirm = "Gizle"
@@ -576,5 +570,75 @@ object TurkishStrings : AppStrings() {
     override val copyAddressAction = "Adresi Kopyala"
     override val addressCopied = "Adres kopyalandı"
     override val noMoneroWalletFound = "Monero cüzdan uygulaması bulunamadı. QR kodu tarayabilir veya adresi kopyalayabilirsin."
+
+    override val typingIndicator = "yazıyor…"
+    override val voiceTooShort = "Sesli mesaj çok kısa"
+
+    override val scheduleMessagePickDate = "Tarih seç"
+    override val scheduleMessagePickTime = "Saat seç"
+    override val scheduleNextAction = "İleri"
+    override val scheduleConfirmAction = "Planla"
+    override val scheduleTimeInPast = "İleri bir zaman seç"
+    override fun scheduleDeliveryAt(time: String) = "$time tarihinde gönderilecek"
+    override val scheduleTextOnly = "Yalnızca metin mesajları planlanabilir"
+    override fun messageScheduled(time: String) = "$time için planlandı"
+    override fun scheduledMessagesBanner(count: Int) =
+        if (count == 1) "1 planlanmış mesajın var" else "$count planlanmış mesajın var"
+    override val scheduledMessagesSheetTitle = "Planlanmış mesajlar"
+    override val noScheduledMessages = "Planlanmış mesaj yok"
+    override val deleteScheduledMessage = "Planlanmış mesajı sil"
+
+    override val radarTitle = "Stade™ Radar"
+    override val radarScanning = "Yakınlar taranıyor…"
+    override fun radarNearbyCount(count: Int) =
+        if (count == 1) "1 kişi yakınında" else "$count kişi yakınında"
+    override val radarEmptyTitle = "Henüz kimse yok"
+    override val radarEmptyBody =
+        "Bu ekranı açık tut. Yakınında Stade Radar'ı açık olan herkes burada görünecek."
+    override val radarDiscoverable = "Yakındaki Stade kullanıcılarına görünürsün"
+    override val radarNotDiscoverable = "Bu cihaz yayın yapamıyor ama yine de başkalarını bulabilirsin"
+    override val radarPermissionTitle = "Bluetooth izni gerekli"
+    override val radarPermissionBody =
+        "Stade Radar, hemen yanındaki kişileri bulmak için Bluetooth kullanır. İnternete hiçbir şey gönderilmez."
+    override val radarGrantAction = "Bluetooth'a izin ver"
+    override val radarBluetoothOffTitle = "Bluetooth kapalı"
+    override val radarBluetoothOffBody = "Çevrendeki Stade kullanıcılarını keşfetmek için Bluetooth'u aç."
+    override val radarEnableBluetoothAction = "Bluetooth'u aç"
+    override val radarUnsupportedTitle = "Radar kullanılamıyor"
+    override val radarUnsupportedBody = "Bu cihazda Bluetooth Low Energy radyosu yok."
+    override fun radarConnectingTo(name: String) = "$name kişisine bağlanılıyor…"
+    override val radarExchangeFailed = "Cihaz okunamadı. Yaklaşıp tekrar dene."
+    override val radarUnknownPeer = "Stade kullanıcısı"
+    override val radarConfirmTitle = "Bu kişi eklensin mi?"
+    override fun radarConfirmBody(name: String) =
+        "$name yakınında. Eklemeden önce aşağıdaki Stade ID'yi kontrol et."
+    override val radarProximityNear = "Çok yakın"
+    override val radarProximityMedium = "Yakın"
+    override val radarProximityFar = "Uzak"
+    override val radarIntroTitle = "Stade™ Radar'a hoş geldin"
+    override val radarIntroBody =
+        "Radar, Bluetooth kullanarak birkaç metre yakınındaki diğer Stade kullanıcılarını bulur. " +
+            "Hiçbir şey internet üzerinden gitmez ve konumun asla kullanılmaz."
+    override val radarIntroStepOne =
+        "Cihazın, çevrendekilerin seni görebilmesi için takma adını taşıyan kısa bir Bluetooth sinyali yayınlar."
+    override val radarIntroStepTwo =
+        "Radardaki birine dokunarak davetleri değiştirip onu kişi olarak ekleyebilirsin. Hiçbir şey onayın olmadan kaydedilmez."
+    override val radarIntroStepThree =
+        "Radar yalnızca bu ekran açıkken çalışır. Takma adını gizlemek ya da tamamen kaybolmak için dişli simgesini kullan."
+    override val radarIntroDontShowAgain = "Bunu bir daha gösterme"
+    override val radarIntroAction = "Taramayı başlat"
+    override val radarSettingsTitle = "Radar ayarları"
+    override val radarAnonymousTitle = "Anonim gezinme"
+    override val radarAnonymousBody =
+        "Yakındakiler seni takma adın yerine \"Stade kullanıcısı\" olarak görür. Bağlanırsan adın yine paylaşılır."
+    override val radarAnonymousLockedBody = "Hayalet mod açıkken gerekmez — zaten kimse seni göremiyor."
+    override val radarAnonymousActive = "Yakındaki cihazlara \"Stade kullanıcısı\" olarak görünüyorsun"
+    override val radarGhostTitle = "Hayalet mod"
+    override val radarGhostBody = "Yayını tamamen durdurur. Kimse seni bulamaz ama sen başkalarını bulabilirsin."
+    override val radarGhostActive = "Hayalet mod açık — kimse seni göremiyor"
+    override val navContact = "Kişi"
+    override val navGroup = "Grup"
+    override val navStadium = "Stadyum"
+    override val navRadar = "Radar"
 }
 

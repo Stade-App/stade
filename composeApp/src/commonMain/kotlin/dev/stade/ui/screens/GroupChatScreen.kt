@@ -121,6 +121,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import dev.stade.AppContainer
+import dev.stade.audio.MIN_VOICE_DURATION_MS
 import dev.stade.audio.RecordedClip
 import dev.stade.audio.rememberAudioPermissionState
 import dev.stade.audio.rememberAudioPlayer
@@ -140,6 +141,7 @@ import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.ChatComposerReplyPreview
 import dev.stade.ui.components.EmojiStickerDrawer
+import dev.stade.ui.components.ScrollToBottomButton
 import dev.stade.ui.components.StickerMakerDialog
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
@@ -328,10 +330,10 @@ fun GroupChatScreen(
             isRecording = false
             scope.launch(Dispatchers.Default) {
                 val clip = recorder.stop()
-                if (clip != null) {
-                    pendingVoiceClip = clip
-                } else {
-                    notify(strings.voiceSendFailed, GroupBannerKind.Error)
+                when {
+                    clip == null -> notify(strings.voiceSendFailed, GroupBannerKind.Error)
+                    clip.durationMs < MIN_VOICE_DURATION_MS -> notify(strings.voiceTooShort, GroupBannerKind.Error)
+                    else -> pendingVoiceClip = clip
                 }
             }
         } else {
@@ -749,164 +751,169 @@ fun GroupChatScreen(
                     }
                 } else {
                     val messagesById = remember(messages) { messages.associateBy { it.id } }
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp)
-                            .alpha(if (scrollReady) 1f else 0f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                        contentPadding = PaddingValues(vertical = 12.dp)
-                    ) {
-                        itemsIndexed(messages, key = { _, msg -> msg.id }) { idx, msg ->
-                            val prev = messages.getOrNull(idx - 1)
-                            val tight = prev != null &&
-                                    prev.senderId == msg.senderId &&
-                                    (msg.timestamp - prev.timestamp) < 60_000L
-                            val senderName = remember(msg.senderId) {
-                                if (msg.isOwn) owner.nickname
-                                else container.contacts.get(msg.senderId)?.nickname ?: msg.senderId.takeLast(6)
-                            }
-                            val isSelected by remember(msg.id) { derivedStateOf { selectedMessageIds.contains(msg.id) } }
-                            val isHighlighted = flashedMessageId == msg.id
-                            val reactions by remember(msg.id) { container.messages.observeReactionsForMessage(msg.id) }.collectAsState(initial = emptyList())
-                            val quotedMsg = remember(msg.id, msg.replyToId, messagesById) {
-                                msg.replyToId?.let { rid -> messagesById[rid] }
-                            }
-                            val quoted = remember(msg.id, quotedMsg) {
-                                when {
-                                    msg.replyToId == null -> null
-                                    quotedMsg != null -> {
-                                        val quotedSenderName = if (quotedMsg.isOwn) owner.nickname
-                                            else container.contacts.get(quotedMsg.senderId)?.nickname ?: quotedMsg.senderId.takeLast(6)
-                                        GroupReplyQuoteInfo(
-                                            senderLabel = quotedSenderName,
-                                            snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage)
-                                        ) {
-                                            val target = messages.indexOfFirst { it.id == quotedMsg.id }
-                                            if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
-                                        }
-                                    }
-                                    else -> GroupReplyQuoteInfo(
-                                        senderLabel = "",
-                                        snippet = strings.originalMessageUnavailable,
-                                        onClick = {}
-                                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 8.dp)
+                                .alpha(if (scrollReady) 1f else 0f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) {
+                            itemsIndexed(messages, key = { _, msg -> msg.id }) { idx, msg ->
+                                val prev = messages.getOrNull(idx - 1)
+                                val tight = prev != null &&
+                                        prev.senderId == msg.senderId &&
+                                        (msg.timestamp - prev.timestamp) < 60_000L
+                                val senderName = remember(msg.senderId) {
+                                    if (msg.isOwn) owner.nickname
+                                    else container.contacts.get(msg.senderId)?.nickname ?: msg.senderId.takeLast(6)
                                 }
-                            }
-                            GroupSwipeToReplyRow(
-                                enabled = !inSelectionMode,
-                                onReply = { replyTarget = msg }
-                            ) {
-                                if (msg.type == MessageType.IMAGE) {
-                                    GroupImageBubble(
-                                        msg = msg,
-                                        senderName = senderName,
-                                        tightWithPrev = tight,
-                                        selected = isSelected,
-                                        highlighted = isHighlighted,
-                                        inSelectionMode = inSelectionMode,
-                                        quoted = quoted,
-                                        reactions = reactions,
-                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
-                                        onLongClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            toggleSelection(msg.id)
-                                        },
-                                        onDoubleTap = { toggleReaction(msg.id, reactions) },
-                                        onSaveImage = { bytes ->
-                                            scope.launch {
-                                                val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
-                                                notify(
-                                                    if (ok) strings.imageSaved else strings.imageSaveFailed,
-                                                    if (ok) GroupBannerKind.Success else GroupBannerKind.Error
-                                                )
-                                            }
-                                        },
-                                        onCopyImage = { bytes ->
-                                            scope.launch {
-                                                val ok = copyImageToClipboard(bytes)
-                                                notify(
-                                                    if (ok) strings.imageCopied else strings.imageCopyFailed,
-                                                    if (ok) GroupBannerKind.Success else GroupBannerKind.Error
-                                                )
+                                val isSelected by remember(msg.id) { derivedStateOf { selectedMessageIds.contains(msg.id) } }
+                                val isHighlighted = flashedMessageId == msg.id
+                                val reactions by remember(msg.id) { container.messages.observeReactionsForMessage(msg.id) }.collectAsState(initial = emptyList())
+                                val quotedMsg = remember(msg.id, msg.replyToId, messagesById) {
+                                    msg.replyToId?.let { rid -> messagesById[rid] }
+                                }
+                                val quoted = remember(msg.id, quotedMsg) {
+                                    when {
+                                        msg.replyToId == null -> null
+                                        quotedMsg != null -> {
+                                            val quotedSenderName = if (quotedMsg.isOwn) owner.nickname
+                                                else container.contacts.get(quotedMsg.senderId)?.nickname ?: quotedMsg.senderId.takeLast(6)
+                                            GroupReplyQuoteInfo(
+                                                senderLabel = quotedSenderName,
+                                                snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage)
+                                            ) {
+                                                val target = messages.indexOfFirst { it.id == quotedMsg.id }
+                                                if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
                                             }
                                         }
-                                    )
-                                } else if (msg.type == MessageType.VOICE) {
-                                    GroupVoiceBubble(
-                                        msg = msg,
-                                        senderName = senderName,
-                                        tightWithPrev = tight,
-                                        selected = isSelected,
-                                        highlighted = isHighlighted,
-                                        inSelectionMode = inSelectionMode,
-                                        quoted = quoted,
-                                        reactions = reactions,
-                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
-                                        onLongClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            toggleSelection(msg.id)
-                                        },
-                                        onDoubleTap = { toggleReaction(msg.id, reactions) }
-                                    )
-                                } else if (msg.type == MessageType.VIDEO) {
-                                    GroupVideoBubble(
-                                        msg = msg,
-                                        senderName = senderName,
-                                        tightWithPrev = tight,
-                                        selected = isSelected,
-                                        highlighted = isHighlighted,
-                                        inSelectionMode = inSelectionMode,
-                                        quoted = quoted,
-                                        reactions = reactions,
-                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
-                                        onLongClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            toggleSelection(msg.id)
-                                        },
-                                        onDoubleTap = { toggleReaction(msg.id, reactions) }
-                                    )
-                                } else if (msg.type == MessageType.STICKER) {
-                                    GroupStickerBubble(
-                                        msg = msg,
-                                        senderName = senderName,
-                                        tightWithPrev = tight,
-                                        selected = isSelected,
-                                        highlighted = isHighlighted,
-                                        inSelectionMode = inSelectionMode,
-                                        quoted = quoted,
-                                        reactions = reactions,
-                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
-                                        onLongClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            toggleSelection(msg.id)
-                                        },
-                                        onDoubleTap = { toggleReaction(msg.id, reactions) }
-                                    )
-                                } else {
-                                    GroupTextBubble(
-                                        msg = msg,
-                                        senderName = senderName,
-                                        tightWithPrev = tight,
-                                        selected = isSelected,
-                                        highlighted = isHighlighted,
-                                        inSelectionMode = inSelectionMode,
-                                        quoted = quoted,
-                                        reactions = reactions,
-                                        onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
-                                        onLongClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            toggleSelection(msg.id)
-                                        },
-                                        onDoubleTap = { toggleReaction(msg.id, reactions) },
-                                        container = container,
-                                        linkPreviewsEnabled = linkPreviewsEnabled
-                                    )
+                                        else -> GroupReplyQuoteInfo(
+                                            senderLabel = "",
+                                            snippet = strings.originalMessageUnavailable,
+                                            onClick = {}
+                                        )
+                                    }
+                                }
+                                GroupSwipeToReplyRow(
+                                    enabled = !inSelectionMode,
+                                    onReply = { replyTarget = msg }
+                                ) {
+                                    if (msg.type == MessageType.IMAGE) {
+                                        GroupImageBubble(
+                                            msg = msg,
+                                            senderName = senderName,
+                                            tightWithPrev = tight,
+                                            selected = isSelected,
+                                            highlighted = isHighlighted,
+                                            inSelectionMode = inSelectionMode,
+                                            quoted = quoted,
+                                            reactions = reactions,
+                                            onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                            onLongClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                toggleSelection(msg.id)
+                                            },
+                                            onDoubleTap = { toggleReaction(msg.id, reactions) },
+                                            onSaveImage = { bytes ->
+                                                scope.launch {
+                                                    val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
+                                                    notify(
+                                                        if (ok) strings.imageSaved else strings.imageSaveFailed,
+                                                        if (ok) GroupBannerKind.Success else GroupBannerKind.Error
+                                                    )
+                                                }
+                                            },
+                                            onCopyImage = { bytes ->
+                                                scope.launch {
+                                                    val ok = copyImageToClipboard(bytes)
+                                                    notify(
+                                                        if (ok) strings.imageCopied else strings.imageCopyFailed,
+                                                        if (ok) GroupBannerKind.Success else GroupBannerKind.Error
+                                                    )
+                                                }
+                                            }
+                                        )
+                                    } else if (msg.type == MessageType.VOICE) {
+                                        GroupVoiceBubble(
+                                            msg = msg,
+                                            senderName = senderName,
+                                            tightWithPrev = tight,
+                                            selected = isSelected,
+                                            highlighted = isHighlighted,
+                                            inSelectionMode = inSelectionMode,
+                                            quoted = quoted,
+                                            reactions = reactions,
+                                            onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                            onLongClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                toggleSelection(msg.id)
+                                            },
+                                            onDoubleTap = { toggleReaction(msg.id, reactions) }
+                                        )
+                                    } else if (msg.type == MessageType.VIDEO) {
+                                        GroupVideoBubble(
+                                            msg = msg,
+                                            senderName = senderName,
+                                            tightWithPrev = tight,
+                                            selected = isSelected,
+                                            highlighted = isHighlighted,
+                                            inSelectionMode = inSelectionMode,
+                                            quoted = quoted,
+                                            reactions = reactions,
+                                            onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                            onLongClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                toggleSelection(msg.id)
+                                            },
+                                            onDoubleTap = { toggleReaction(msg.id, reactions) }
+                                        )
+                                    } else if (msg.type == MessageType.STICKER) {
+                                        GroupStickerBubble(
+                                            msg = msg,
+                                            senderName = senderName,
+                                            tightWithPrev = tight,
+                                            selected = isSelected,
+                                            highlighted = isHighlighted,
+                                            inSelectionMode = inSelectionMode,
+                                            quoted = quoted,
+                                            reactions = reactions,
+                                            onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                            onLongClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                toggleSelection(msg.id)
+                                            },
+                                            onDoubleTap = { toggleReaction(msg.id, reactions) }
+                                        )
+                                    } else {
+                                        GroupTextBubble(
+                                            msg = msg,
+                                            senderName = senderName,
+                                            tightWithPrev = tight,
+                                            selected = isSelected,
+                                            highlighted = isHighlighted,
+                                            inSelectionMode = inSelectionMode,
+                                            quoted = quoted,
+                                            reactions = reactions,
+                                            onShortClick = { if (inSelectionMode) toggleSelection(msg.id) },
+                                            onLongClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                toggleSelection(msg.id)
+                                            },
+                                            onDoubleTap = { toggleReaction(msg.id, reactions) },
+                                            container = container,
+                                            linkPreviewsEnabled = linkPreviewsEnabled
+                                        )
+                                    }
                                 }
                             }
                         }
+                        ScrollToBottomButton(
+                            listState = listState,
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 14.dp)
+                        )
                     }
                 }
 

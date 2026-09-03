@@ -564,3 +564,36 @@ SELECT id FROM Message WHERE vanishSessionId = ?;
 wipeVanishSessions:
 DELETE FROM VanishSession;
 
+
+CREATE TABLE ScheduledMessage (
+    id TEXT NOT NULL PRIMARY KEY,
+    contactId TEXT NOT NULL,
+    body TEXT NOT NULL,
+    replyToId TEXT,
+    scheduledAt INTEGER NOT NULL,
+    createdAt INTEGER NOT NULL,
+    FOREIGN KEY(contactId) REFERENCES Contact(id)
+);
+
+CREATE INDEX idxScheduledMessageContact ON ScheduledMessage(contactId, scheduledAt);
+
+insertScheduledMessage:
+INSERT INTO ScheduledMessage(id, contactId, body, replyToId, scheduledAt, createdAt) VALUES (?, ?, ?, ?, ?, ?);
+
+selectScheduledForContact:
+SELECT * FROM ScheduledMessage WHERE contactId = ? ORDER BY scheduledAt ASC;
+
+countScheduledForContact:
+SELECT COUNT(*) FROM ScheduledMessage WHERE contactId = ?;
+
+selectDueScheduled:
+SELECT * FROM ScheduledMessage WHERE scheduledAt <= ? ORDER BY scheduledAt ASC;
+
+deleteScheduledMessage:
+DELETE FROM ScheduledMessage WHERE id = ?;
+
+deleteScheduledForContact:
+DELETE FROM ScheduledMessage WHERE contactId = ?;
+
+wipeScheduledMessages:
+DELETE FROM ScheduledMessage;

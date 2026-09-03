@@ -79,6 +79,7 @@ abstract class AppStrings {
     abstract val expandAction: String
     abstract val viewDetailsAction: String
     abstract val closeAction: String
+    abstract val scrollToBottomAction: String
     abstract val noConnectionInfo: String
     abstract val connectionChannels: String
     abstract val trying: String
@@ -468,6 +469,8 @@ abstract class AppStrings {
     abstract val vanishTurnOffConfirmTitle: String
     abstract val vanishTurnOffConfirmBody: String
     abstract val vanishTurnOffAction: String
+    abstract val vanishStateOff: String
+    abstract fun vanishStateOn(remaining: String): String
 
     abstract val stadeyRowSubtitle: String
     abstract val stadeyIntro: String
@@ -485,15 +488,6 @@ abstract class AppStrings {
     abstract val stadeyFaqNetworkingAnswer: String
     abstract val stadeyFaqLockdownQuestion: String
     abstract val stadeyFaqLockdownAnswer: String
-
-    abstract val stadeyFaqAddFriendsKeywords: String
-    abstract val stadeyFaqSecurityKeywords: String
-    abstract val stadeyFaqGroupsStadiumsKeywords: String
-    abstract val stadeyFaqMediaKeywords: String
-    abstract val stadeyFaqNetworkingKeywords: String
-    abstract val stadeyFaqLockdownKeywords: String
-    abstract val stadeySupportKeywords: String
-    abstract val stadeyFallbackAnswer: String
 
     abstract val hideStadeyAction: String
     abstract val hideStadeyConfirm: String
@@ -515,6 +509,65 @@ abstract class AppStrings {
     abstract val copyAddressAction: String
     abstract val addressCopied: String
     abstract val noMoneroWalletFound: String
+
+    abstract val typingIndicator: String
+    abstract val voiceTooShort: String
+
+    abstract val scheduleMessagePickDate: String
+    abstract val scheduleMessagePickTime: String
+    abstract val scheduleNextAction: String
+    abstract val scheduleConfirmAction: String
+    abstract val scheduleTimeInPast: String
+    abstract fun scheduleDeliveryAt(time: String): String
+    abstract val scheduleTextOnly: String
+    abstract fun messageScheduled(time: String): String
+    abstract fun scheduledMessagesBanner(count: Int): String
+    abstract val scheduledMessagesSheetTitle: String
+    abstract val noScheduledMessages: String
+    abstract val deleteScheduledMessage: String
+
+    abstract val radarTitle: String
+    abstract val radarScanning: String
+    abstract fun radarNearbyCount(count: Int): String
+    abstract val radarEmptyTitle: String
+    abstract val radarEmptyBody: String
+    abstract val radarDiscoverable: String
+    abstract val radarNotDiscoverable: String
+    abstract val radarPermissionTitle: String
+    abstract val radarPermissionBody: String
+    abstract val radarGrantAction: String
+    abstract val radarBluetoothOffTitle: String
+    abstract val radarBluetoothOffBody: String
+    abstract val radarEnableBluetoothAction: String
+    abstract val radarUnsupportedTitle: String
+    abstract val radarUnsupportedBody: String
+    abstract fun radarConnectingTo(name: String): String
+    abstract val radarExchangeFailed: String
+    abstract val radarUnknownPeer: String
+    abstract val radarConfirmTitle: String
+    abstract fun radarConfirmBody(name: String): String
+    abstract val radarProximityNear: String
+    abstract val radarProximityMedium: String
+    abstract val radarProximityFar: String
+    abstract val radarIntroTitle: String
+    abstract val radarIntroBody: String
+    abstract val radarIntroStepOne: String
+    abstract val radarIntroStepTwo: String
+    abstract val radarIntroStepThree: String
+    abstract val radarIntroDontShowAgain: String
+    abstract val radarIntroAction: String
+    abstract val radarSettingsTitle: String
+    abstract val radarAnonymousTitle: String
+    abstract val radarAnonymousBody: String
+    abstract val radarAnonymousLockedBody: String
+    abstract val radarAnonymousActive: String
+    abstract val radarGhostTitle: String
+    abstract val radarGhostBody: String
+    abstract val radarGhostActive: String
+    abstract val navContact: String
+    abstract val navGroup: String
+    abstract val navStadium: String
+    abstract val navRadar: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

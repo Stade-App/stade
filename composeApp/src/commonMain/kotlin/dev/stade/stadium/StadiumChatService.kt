@@ -1,5 +1,7 @@
 package dev.stade.stadium
 
+import dev.stade.audio.MIN_VOICE_DURATION_MS
+import dev.stade.contact.Contact
 import dev.stade.contact.ContactManager
 import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
@@ -31,6 +33,7 @@ class StadiumChatService(
             when (event) {
                 is SyncEngine.SyncEvent.ContactConnected -> {
                     val contact = contacts.get(event.contactId) ?: return@onEach
+                    syncSubscriberCounts(owner, contact)
                     val pending = stadiums.getPendingJoinForContact(contact.id) ?: return@onEach
                     if (event.isNew) runCatching { contacts.setKind(contact.id, 1) }
                     sendJoinRequest(owner, contact.id, pending)
@@ -57,6 +60,42 @@ class StadiumChatService(
         }.launchIn(scope)
     }
 
+    private suspend fun syncSubscriberCounts(owner: LocalIdentity, contact: Contact) {
+        stadiums.stadiumsForContact(contact.id)
+            .mapNotNull { stadiums.getStadium(it) }
+            .filter { it.isOwner }
+            .forEach { pushSubscriberCount(owner, contact, it) }
+        stadiums.allStadiums(owner.id)
+            .filter { !it.isOwner && it.creatorStadeId == contact.id }
+            .forEach { requestSubscriberCount(owner, it) }
+    }
+
+    private suspend fun pushSubscriberCount(owner: LocalIdentity, contact: Contact, stadium: StadiumInfo) {
+        val body = "$STD_COUNT_PREFIX${stadium.id}:${stadiums.syncOwnMemberCount(stadium.id)}"
+        runCatching {
+            sync.queueOutgoing(
+                owner, contact,
+                Encoding.toHex(crypto.randomBytes(16)),
+                body,
+                Clock.System.now().toEpochMilliseconds()
+            )
+        }
+    }
+
+    suspend fun requestSubscriberCount(owner: LocalIdentity, stadium: StadiumInfo) {
+        if (stadium.isOwner) return
+        val creator = contacts.get(stadium.creatorStadeId) ?: return
+        val body = "$STD_COUNT_REQUEST_PREFIX${stadium.id}"
+        runCatching {
+            sync.queueOutgoing(
+                owner, creator,
+                Encoding.toHex(crypto.randomBytes(16)),
+                body,
+                Clock.System.now().toEpochMilliseconds()
+            )
+        }
+    }
+
     suspend fun post(owner: LocalIdentity, stadium: StadiumInfo, body: String): Boolean {
         if (!stadium.isOwner) return false
         val members = stadiums.getMemberContactIds(stadium.id)
@@ -76,8 +115,10 @@ class StadiumChatService(
     suspend fun postImage(owner: LocalIdentity, stadium: StadiumInfo, imageBytes: ByteArray, caption: String = ""): Boolean =
         post(owner, stadium, encodeImageBody(imageBytes, caption))
 
-    suspend fun postVoice(owner: LocalIdentity, stadium: StadiumInfo, opusBytes: ByteArray, durationMs: Int): Boolean =
-        post(owner, stadium, encodeVoiceBody(opusBytes, durationMs))
+    suspend fun postVoice(owner: LocalIdentity, stadium: StadiumInfo, opusBytes: ByteArray, durationMs: Int): Boolean {
+        if (durationMs < MIN_VOICE_DURATION_MS || opusBytes.isEmpty()) return false
+        return post(owner, stadium, encodeVoiceBody(opusBytes, durationMs))
+    }
 
     suspend fun postVideo(owner: LocalIdentity, stadium: StadiumInfo, videoBytes: ByteArray, caption: String = ""): Boolean =
         post(owner, stadium, encodeVideoBody(videoBytes, caption))
