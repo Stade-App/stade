@@ -108,7 +108,8 @@ import dev.stade.contact.Contact
 import dev.stade.contact.deleteContact
 import dev.stade.identity.LocalIdentity
 import dev.stade.message.SearchResult
-import dev.stade.message.previewBody
+import dev.stade.ui.directChatPreview
+import dev.stade.ui.groupChatPreview
 import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.i18n.LocalStrings
@@ -723,7 +724,7 @@ fun ContactsScreen(
                                 val unread by remember(contact.id) { container.messages.observeUnreadCount(contact.id) }
                                     .collectAsState(initial = remember(contact.id) { container.messages.unreadCount(contact.id) })
                                 val preview by remember(lastMsg?.id) {
-                                    derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage) } }
+                                    derivedStateOf { directChatPreview(lastMsg, strings) }
                                 }
                                 ContactRow(
                                     contact = contact,
@@ -743,7 +744,7 @@ fun ContactsScreen(
                                 val unread by remember(group.id) { container.groups.observeUnreadCount(group.id) }
                                     .collectAsState(initial = remember(group.id) { container.groups.unreadCount(group.id) })
                                 val preview by remember(lastMsg?.id) {
-                                    derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage) } }
+                                    derivedStateOf { container.groupChatPreview(group.id, lastMsg, owner, strings) }
                                 }
                                 GroupRow(
                                     group = group,

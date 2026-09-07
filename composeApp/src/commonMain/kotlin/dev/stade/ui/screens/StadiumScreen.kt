@@ -94,7 +94,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import dev.stade.AppContainer
 import dev.stade.audio.MIN_VOICE_DURATION_MS
 import dev.stade.audio.RecordedClip
@@ -116,6 +115,7 @@ import org.jetbrains.compose.resources.painterResource
 import stade.composeapp.generated.resources.Res
 import stade.composeapp.generated.resources.app_icon
 import dev.stade.ui.components.ChatComposerBar
+import dev.stade.ui.components.FullScreenImageViewer
 import dev.stade.ui.components.EmojiStickerDrawer
 import dev.stade.ui.components.ScrollToBottomButton
 import dev.stade.ui.components.StickerMakerDialog
@@ -820,33 +820,16 @@ private fun StadiumImageBubble(
     }
 
     if (showFullscreen && currentBitmap != null && currentBytes != null) {
-        Dialog(onDismissRequest = { showFullscreen = false }) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.92f)),
-                contentAlignment = Alignment.Center
-            ) {
-                androidx.compose.foundation.Image(
-                    bitmap = currentBitmap,
-                    contentDescription = strings.photoMessage,
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    contentScale = ContentScale.Fit
-                )
-                Row(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    IconButton(onClick = { onSaveImage(currentBytes) }) {
-                        Icon(Icons.Default.Download, contentDescription = strings.saveImageAction, tint = Color.White)
-                    }
-                    IconButton(onClick = { onCopyImage(currentBytes) }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = strings.copyImageAction, tint = Color.White)
-                    }
-                    IconButton(onClick = { showFullscreen = false }) {
-                        Icon(Icons.Default.Close, contentDescription = strings.closePhoto, tint = Color.White)
-                    }
-                }
+        FullScreenImageViewer(
+            bitmap = currentBitmap,
+            contentDescription = strings.photoMessage,
+            onDismiss = { showFullscreen = false }
+        ) {
+            IconButton(onClick = { onSaveImage(currentBytes) }) {
+                Icon(Icons.Default.Download, contentDescription = strings.saveImageAction, tint = Color.White)
+            }
+            IconButton(onClick = { onCopyImage(currentBytes) }) {
+                Icon(Icons.Default.ContentCopy, contentDescription = strings.copyImageAction, tint = Color.White)
             }
         }
     }

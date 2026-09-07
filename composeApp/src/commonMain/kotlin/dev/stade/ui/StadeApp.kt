@@ -16,7 +16,6 @@ import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.BootContext
 import dev.stade.identity.LocalIdentity
-import dev.stade.security.SessionTimeout
 import dev.stade.ui.beginAcceptStadiumInvite
 import dev.stade.stadium.joinOfficialStadiumIfNeeded
 import dev.stade.ui.screens.AboutScreen
@@ -87,7 +86,7 @@ fun StadeApp(boot: BootContext) {
     StadeTheme {
         CompositionLocalProvider(LocalStrings provides activeStrings) {
             var initialized by remember { mutableStateOf(vault.isInitialized()) }
-            var unlocked by remember { mutableStateOf(vault.isUnlocked()) }
+            var unlocked by remember { mutableStateOf(boot.resolveUnlocked()) }
             var autoUnlockTried by remember { mutableStateOf(false) }
             var container by remember { mutableStateOf<AppContainer?>(null) }
             var pendingNickname by remember { mutableStateOf<String?>(null) }
@@ -97,7 +96,7 @@ fun StadeApp(boot: BootContext) {
                 if (initialized && !unlocked && !autoUnlockTried) {
                     val ok = withContext(Dispatchers.Default) { vault.tryAutoUnlock() }
                     autoUnlockTried = true
-                    if (ok) unlocked = true
+                    if (ok && boot.resolveUnlocked()) unlocked = true
                 }
             }
 
@@ -113,6 +112,7 @@ fun StadeApp(boot: BootContext) {
                             tip = activeStrings.onboardingPinTip,
                             onDone = {
                                 initialized = true
+                                boot.markUnlocked()
                                 unlocked = true
                             },
                             onCancel = { pendingNickname = null }
@@ -122,7 +122,10 @@ fun StadeApp(boot: BootContext) {
                 !unlocked -> {
                     LockScreen(
                         vault = vault,
-                        onUnlocked = { unlocked = true },
+                        onUnlocked = {
+                            boot.markUnlocked()
+                            unlocked = true
+                        },
                         onPrepareWipe = {
                             (container ?: boot.activeContainer())?.let { runCatching { it.close() } }
                             container = null
@@ -135,6 +138,7 @@ fun StadeApp(boot: BootContext) {
                         onDuressTriggered = {
                             (container ?: boot.activeContainer())?.let { runCatching { it.close() } }
                             container = null
+                            boot.markLocked()
                             unlocked = false
                             runCatching { vault.wipe() }
                             initialized = vault.isInitialized()
@@ -147,10 +151,12 @@ fun StadeApp(boot: BootContext) {
                     val active = container ?: remember { boot.buildContainer() }.also { container = it }
                     UnlockedApp(
                         container = active,
+                        boot = boot,
                         presetNickname = pendingNickname,
                         onLockRequested = {
                             scope.launch {
                                 withContext(Dispatchers.Default) { vault.flushAndKeep() }
+                                boot.markLocked()
                                 unlocked = false
                             }
                         },
@@ -158,6 +164,7 @@ fun StadeApp(boot: BootContext) {
                             scope.launch {
                                 val toWipe = container
                                 container = null
+                                boot.markLocked()
                                 unlocked = false
                                 kotlinx.coroutines.delay(120)
                                 if (toWipe != null) {
@@ -179,6 +186,7 @@ fun StadeApp(boot: BootContext) {
 @Composable
 private fun UnlockedApp(
     container: AppContainer,
+    boot: BootContext,
     presetNickname: String?,
     onLockRequested: () -> Unit,
     onWipeRequested: () -> Unit
@@ -189,25 +197,11 @@ private fun UnlockedApp(
     val settingsListState = rememberLazyListState()
 
     val isInForeground by container.isAppInForeground.collectAsState()
-    var leftForegroundAt by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(isInForeground) {
         if (!isInForeground) {
-            leftForegroundAt = container.vault.nowMillis()
-        } else {
-            val left = leftForegroundAt
-            leftForegroundAt = null
-            if (left != null) {
-                val timeout = container.vault.sessionTimeoutSeconds()
-                val elapsedMs = container.vault.nowMillis() - left
-                val shouldRelock = when (timeout) {
-                    SessionTimeout.NEVER -> false
-                    SessionTimeout.IMMEDIATE -> true
-                    else -> elapsedMs >= timeout.toLong() * 1000L
-                }
-                if (shouldRelock) {
-                    onLockRequested()
-                }
-            }
+            boot.noteLeftForeground()
+        } else if (!boot.resolveUnlocked()) {
+            onLockRequested()
         }
     }
 

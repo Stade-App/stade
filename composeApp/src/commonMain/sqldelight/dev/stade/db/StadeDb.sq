@@ -31,6 +31,7 @@ CREATE TABLE Contact (
     kind INTEGER NOT NULL DEFAULT 0,
     muted INTEGER NOT NULL DEFAULT 0,
     avatar BLOB,
+    groupProto INTEGER NOT NULL DEFAULT 1,
     FOREIGN KEY(ownerId) REFERENCES LocalIdentity(id)
 );
 
@@ -143,6 +144,9 @@ UPDATE Contact SET muted = ? WHERE id = ?;
 setContactAvatar:
 UPDATE Contact SET avatar = ? WHERE id = ?;
 
+setContactGroupProto:
+UPDATE Contact SET groupProto = ? WHERE id = ?;
+
 deleteContact:
 DELETE FROM Contact WHERE id = ?;
 
@@ -245,6 +249,9 @@ INSERT OR IGNORE INTO ProcessedEnvelope(messageId, contactId, processedAt) VALUE
 pruneProcessedEnvelope:
 DELETE FROM ProcessedEnvelope WHERE processedAt < ?;
 
+forgetProcessedEnvelope:
+DELETE FROM ProcessedEnvelope WHERE messageId = ?;
+
 wipeMessages:
 DELETE FROM Message;
 
@@ -283,6 +290,9 @@ CREATE TABLE GroupMember (
     groupId TEXT NOT NULL,
     contactId TEXT NOT NULL,
     joinedAt INTEGER NOT NULL,
+    nickname TEXT NOT NULL DEFAULT '',
+    signingKey BLOB,
+    mldsaKey BLOB,
     PRIMARY KEY(groupId, contactId)
 );
 
@@ -297,6 +307,12 @@ CREATE TABLE GroupMessage (
 );
 
 CREATE INDEX idxGroupMessage ON GroupMessage(groupId, timestamp);
+
+CREATE TABLE GroupDelivery (
+    messageId TEXT NOT NULL,
+    memberId TEXT NOT NULL,
+    PRIMARY KEY(messageId, memberId)
+);
 
 insertGroup:
 INSERT INTO StadeGroup(id, ownerId, name, inviteToken, createdAt, creatorStadeId) VALUES (?, ?, ?, ?, ?, ?);
@@ -321,6 +337,12 @@ INSERT OR IGNORE INTO GroupMember(groupId, contactId, joinedAt) VALUES (?, ?, ?)
 
 selectGroupMembers:
 SELECT * FROM GroupMember WHERE groupId = ?;
+
+setGroupMemberIdentity:
+UPDATE GroupMember SET nickname = ?, signingKey = ?, mldsaKey = ? WHERE groupId = ? AND contactId = ?;
+
+selectGroupMemberIdentity:
+SELECT * FROM GroupMember WHERE groupId = ? AND contactId = ?;
 
 memberGroupIds:
 SELECT groupId FROM GroupMember WHERE contactId = ?;
@@ -351,6 +373,23 @@ UPDATE GroupMessage SET read = 1 WHERE groupId = ?;
 
 groupMessageExists:
 SELECT COUNT(*) FROM GroupMessage WHERE id = ?;
+
+selectGroupMessageById:
+SELECT * FROM GroupMessage WHERE id = ?;
+
+insertGroupDelivery:
+INSERT OR IGNORE INTO GroupDelivery(messageId, memberId) VALUES (?, ?);
+
+groupDeliveryCounts:
+SELECT gd.messageId AS messageId, COUNT(*) AS deliveredCount FROM GroupDelivery gd
+JOIN GroupMessage gm ON gm.id = gd.messageId
+WHERE gm.groupId = ? GROUP BY gd.messageId;
+
+deleteGroupDeliveries:
+DELETE FROM GroupDelivery WHERE messageId IN (SELECT id FROM GroupMessage WHERE groupId = ?);
+
+wipeGroupDeliveries:
+DELETE FROM GroupDelivery;
 
 isGroupMember:
 SELECT COUNT(*) FROM GroupMember WHERE groupId = ? AND contactId = ?;

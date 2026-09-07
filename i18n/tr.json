@@ -457,8 +457,8 @@
   "stadeyFaqAddFriendsAnswer": "+ düğmesine dokunup davet kodunu birisiyle paylaşabilir ya da onların kodunu yapıştırabilirsin. Telefon numarasıyla arama veya bir rehber yok — doğrudan, kişiden kişiye bağlanırsın. Bağlandıktan sonra, ekstra güvence için birbirinizin güvenlik numarasını doğrulayabilirsiniz.",
   "stadeyFaqSecurityQuestion": "Stade'i güvenli yapan nedir?",
   "stadeyFaqSecurityAnswer": "Her sohbet, klasik kriptografiyi kuantum sonrası algoritmalarla (ML-KEM ve ML-DSA) birleştiren hibrit bir şifreleme yöntemiyle korunur; böylece mesajların gelecekteki kuantum bilgisayarlara karşı bile güvende kalır. Stade ayrıca tamamen eşler arası çalışır — mesajlarını hiçbir zaman gören bir sunucu yoktur.",
-  "stadeyFaqGroupsStadiumsQuestion": "Gruplar ve Stadyumlar nasıl çalışır?",
-  "stadeyFaqGroupsStadiumsAnswer": "Gruplar, senin ve davet ettiğin birden fazla kişi arasındaki özel sohbetlerdir. Stadyumlar ise yayın kanallarıdır — bir sahip güncelleme paylaşır, katılan herkes bunları alır. Bir grup sohbetine dönüşmeden duyuru yapmak için idealdir.",
+  "stadeyFaqGroupsStadiumsQuestion": "Gruplar ve Stadium'lar nasıl çalışır?",
+  "stadeyFaqGroupsStadiumsAnswer": "Gruplar, senin ve davet ettiğin birden fazla kişi arasındaki özel sohbetlerdir. Stadium'lar ise yayın kanallarıdır — bir sahip güncelleme paylaşır, katılan herkes bunları alır. Bir grup sohbetine dönüşmeden duyuru yapmak için idealdir.",
   "stadeyFaqMediaQuestion": "Sesli mesajlar, çıkartmalar ve kaybolan mesajlar nasıl kullanılır?",
   "stadeyFaqMediaAnswer": "Sesli mesaj kaydedip gönderebilir, bir fotoğraftan kendi çıkartmalarını oluşturabilirsin. Ayrıca herhangi bir sohbette kaybolan mesajları açabilirsin — 30 dakikadan bir güne kadar bir süre seç, süre dolduğunda mesajlar her iki tarafta da silinir.",
   "stadeyFaqNetworkingQuestion": "Stade, merkezi bir sunucu olmadan nasıl bağlanır?",
@@ -541,5 +541,6 @@
   "navContact": "Kişi",
   "navGroup": "Grup",
   "navStadium": "Stadium",
-  "navRadar": "Radar"
+  "navRadar": "Radar",
+  "previewYouPrefix": "Siz"
 }

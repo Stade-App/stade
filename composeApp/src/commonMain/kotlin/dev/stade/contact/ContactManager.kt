@@ -129,6 +129,10 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.setContactAvatar(avatar, contactId)
     }
 
+    fun setGroupProto(contactId: String, version: Int) {
+        db.stadeDbQueries.setContactGroupProto(version.toLong(), contactId)
+    }
+
     fun delete(contactId: String) {
         db.stadeDbQueries.deleteContact(contactId)
         removeConversationShortcut(ShortcutEntityKind.CONTACT, contactId)
@@ -172,6 +176,7 @@ class ContactManager(private val db: StadeDb, private val crypto: CryptoApi) {
             addresses = addresses.split("\n").filter { it.isNotBlank() },
             kind = kind.toInt(),
             muted = muted == 1L,
-            avatar = avatar
+            avatar = avatar,
+            groupProto = groupProto.toInt()
         )
 }

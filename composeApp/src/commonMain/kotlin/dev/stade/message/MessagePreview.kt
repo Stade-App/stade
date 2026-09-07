@@ -12,3 +12,6 @@ fun previewBody(body: String, photoLabel: String, voiceLabel: String? = null, vi
     return if (firstLine.length > PREVIEW_MAX) firstLine.substring(0, PREVIEW_MAX) else firstLine
 }
 
+fun previewWithSender(senderLabel: String?, preview: String): String =
+    if (senderLabel.isNullOrBlank()) preview else "$senderLabel: $preview"
+

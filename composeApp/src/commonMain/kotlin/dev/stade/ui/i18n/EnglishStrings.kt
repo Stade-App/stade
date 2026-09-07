@@ -641,5 +641,6 @@ object EnglishStrings : AppStrings() {
     override val navGroup = "Group"
     override val navStadium = "Stadium"
     override val navRadar = "Radar"
+    override val previewYouPrefix = "You"
 }
 

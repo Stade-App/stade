@@ -110,6 +110,7 @@ class StadeApplication : Application() {
                 if (--startedCount <= 0) {
                     startedCount = 0
                     activeContainer?.isAppInForeground?.value = false
+                    boot.noteLeftForeground()
                 }
             }
             override fun onActivityCreated(a: Activity, b: Bundle?) {}

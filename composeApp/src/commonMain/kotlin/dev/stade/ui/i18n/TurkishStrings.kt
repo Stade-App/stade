@@ -540,8 +540,8 @@ object TurkishStrings : AppStrings() {
     override val stadeyFaqAddFriendsAnswer = "+ düğmesine dokunup davet kodunu birisiyle paylaşabilir ya da onların kodunu yapıştırabilirsin. Telefon numarasıyla arama veya bir rehber yok — doğrudan, kişiden kişiye bağlanırsın. Bağlandıktan sonra, ekstra güvence için birbirinizin güvenlik numarasını doğrulayabilirsiniz."
     override val stadeyFaqSecurityQuestion = "Stade'i güvenli yapan nedir?"
     override val stadeyFaqSecurityAnswer = "Her sohbet, klasik kriptografiyi kuantum sonrası algoritmalarla (ML-KEM ve ML-DSA) birleştiren hibrit bir şifreleme yöntemiyle korunur; böylece mesajların gelecekteki kuantum bilgisayarlara karşı bile güvende kalır. Stade ayrıca tamamen eşler arası çalışır — mesajlarını hiçbir zaman gören bir sunucu yoktur."
-    override val stadeyFaqGroupsStadiumsQuestion = "Gruplar ve Stadyumlar nasıl çalışır?"
-    override val stadeyFaqGroupsStadiumsAnswer = "Gruplar, senin ve davet ettiğin birden fazla kişi arasındaki özel sohbetlerdir. Stadyumlar ise yayın kanallarıdır — bir sahip güncelleme paylaşır, katılan herkes bunları alır. Bir grup sohbetine dönüşmeden duyuru yapmak için idealdir."
+    override val stadeyFaqGroupsStadiumsQuestion = "Gruplar ve Stadium'lar nasıl çalışır?"
+    override val stadeyFaqGroupsStadiumsAnswer = "Gruplar, senin ve davet ettiğin birden fazla kişi arasındaki özel sohbetlerdir. Stadium'lar ise yayın kanallarıdır — bir sahip güncelleme paylaşır, katılan herkes bunları alır. Bir grup sohbetine dönüşmeden duyuru yapmak için idealdir."
     override val stadeyFaqMediaQuestion = "Sesli mesajlar, çıkartmalar ve kaybolan mesajlar nasıl kullanılır?"
     override val stadeyFaqMediaAnswer = "Sesli mesaj kaydedip gönderebilir, bir fotoğraftan kendi çıkartmalarını oluşturabilirsin. Ayrıca herhangi bir sohbette kaybolan mesajları açabilirsin — 30 dakikadan bir güne kadar bir süre seç, süre dolduğunda mesajlar her iki tarafta da silinir."
     override val stadeyFaqNetworkingQuestion = "Stade, merkezi bir sunucu olmadan nasıl bağlanır?"
@@ -638,7 +638,8 @@ object TurkishStrings : AppStrings() {
     override val radarGhostActive = "Hayalet mod açık — kimse seni göremiyor"
     override val navContact = "Kişi"
     override val navGroup = "Grup"
-    override val navStadium = "Stadyum"
+    override val navStadium = "Stadium"
     override val navRadar = "Radar"
+    override val previewYouPrefix = "Siz"
 }
 

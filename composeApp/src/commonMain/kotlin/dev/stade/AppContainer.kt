@@ -174,6 +174,26 @@ class AppContainer(
             runCatching { createdDriver.execute(null, "ALTER TABLE LocalIdentity ADD COLUMN avatar BLOB", 0) }
         }
         runCatching {
+            createdDriver.executeQuery(null, "SELECT messageId FROM GroupDelivery LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "CREATE TABLE IF NOT EXISTS GroupDelivery (messageId TEXT NOT NULL, memberId TEXT NOT NULL, PRIMARY KEY(messageId, memberId))", 0) }
+        }
+        runCatching {
+            createdDriver.executeQuery(null, "SELECT groupProto FROM Contact LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "ALTER TABLE Contact ADD COLUMN groupProto INTEGER NOT NULL DEFAULT 1", 0) }
+        }
+        runCatching {
+            createdDriver.executeQuery(null, "SELECT signingKey FROM GroupMember LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "ALTER TABLE GroupMember ADD COLUMN nickname TEXT NOT NULL DEFAULT ''", 0) }
+            runCatching { createdDriver.execute(null, "ALTER TABLE GroupMember ADD COLUMN signingKey BLOB", 0) }
+            runCatching { createdDriver.execute(null, "ALTER TABLE GroupMember ADD COLUMN mldsaKey BLOB", 0) }
+        }
+        runCatching {
             createdDriver.executeQuery(null, "SELECT id FROM ScheduledMessage LIMIT 0",
                 { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
         }.onFailure {
@@ -246,6 +266,7 @@ class AppContainer(
             db.stadeDbQueries.transaction {
                 db.stadeDbQueries.wipeGroupMessages()
                 db.stadeDbQueries.wipeGroupMembers()
+                db.stadeDbQueries.wipeGroupDeliveries()
                 db.stadeDbQueries.wipeGroups()
                 db.stadeDbQueries.wipeStadiumMessages()
                 db.stadeDbQueries.wipeStadiumMembers()

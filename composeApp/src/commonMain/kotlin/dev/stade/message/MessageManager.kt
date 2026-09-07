@@ -85,6 +85,10 @@ class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
         db.stadeDbQueries.pruneProcessedEnvelope(timestamp - PROCESSED_ENVELOPE_RETENTION_MS)
     }
 
+    fun forgetEnvelope(messageId: String) {
+        db.stadeDbQueries.forgetProcessedEnvelope(messageId)
+    }
+
     fun newId(): String = Encoding.toHex(crypto.randomBytes(16))
 
     fun markRead(contactId: String) {

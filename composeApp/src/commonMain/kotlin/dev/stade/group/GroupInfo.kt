@@ -92,6 +92,33 @@ data class GroupMessage(
         else null
 }
 
+data class GroupMemberEntry(
+    val memberId: String,
+    val nickname: String,
+    val signingKey: ByteArray?,
+    val mldsaKey: ByteArray?
+) {
+    val hasIdentity: Boolean get() = signingKey != null && mldsaKey != null
+
+    override fun equals(other: Any?): Boolean =
+        other is GroupMemberEntry && other.memberId == memberId && other.nickname == nickname &&
+            other.signingKey.contentEquals(signingKey) && other.mldsaKey.contentEquals(mldsaKey)
+
+    override fun hashCode(): Int = memberId.hashCode() * 31 + nickname.hashCode()
+}
+
+data class GroupFrame(
+    val groupId: String,
+    val senderId: String,
+    val messageId: String,
+    val timestamp: Long,
+    val needsRelayTo: List<String>,
+    val signature: ByteArray,
+    val payload: String
+)
+
+data class RosterUpdate(val groupId: String, val changed: Boolean)
+
 data class GroupInviteData(
     val groupId: String,
     val groupName: String,
@@ -119,4 +146,31 @@ const val GRP_KICK_PREFIX = "GRPK:"
 const val GRP_LEAVE_PREFIX = "GRPL:"
 const val GRP_RXN_PREFIX = "GRPR:"
 const val GROUP_INVITE_PREFIX = "STADE-GRP:"
+
+const val GROUP_PROTOCOL_VERSION = 2
+
+const val GRP_FRAME_PREFIX = "\u0002GRP2:"
+const val GRP_ROSTER_PREFIX = "\u0002GRPX:"
+
+const val GRP_ACT_REACTION = "\u0002R:"
+const val GRP_ACT_LEAVE = "\u0002L:"
+const val GRP_ACT_KICK = "\u0002K:"
+const val GRP_ACT_RECEIPT = "\u0002D:"
+
+const val GRP_ROSTER_FIELD_SEP = '\u0001'
+private const val GRP_SIG_CONTEXT = "stade-grp-v2\u0000"
+
+const val GRP_NEEDS_SEP = ","
+
+fun groupSigningMaterial(
+    groupId: String,
+    senderId: String,
+    messageId: String,
+    timestamp: Long,
+    needsRelayTo: List<String>,
+    payload: String
+): ByteArray =
+    (GRP_SIG_CONTEXT + groupId + "\u0000" + senderId + "\u0000" + messageId + "\u0000" +
+        timestamp.toString() + "\u0000" + needsRelayTo.joinToString(GRP_NEEDS_SEP) + "\u0000" +
+        payload).encodeToByteArray()
 

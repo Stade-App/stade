@@ -119,7 +119,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import dev.stade.AppContainer
 import dev.stade.audio.MIN_VOICE_DURATION_MS
 import dev.stade.audio.RecordedClip
@@ -139,10 +138,12 @@ import dev.stade.message.previewBody
 import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.ChatComposerBar
+import dev.stade.ui.components.FullScreenImageViewer
 import dev.stade.ui.components.ChatComposerReplyPreview
 import dev.stade.ui.components.EmojiStickerDrawer
 import dev.stade.ui.components.ScrollToBottomButton
 import dev.stade.ui.components.StickerMakerDialog
+import dev.stade.ui.components.DeliveryStatusDots
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.copyImageToClipboard
@@ -187,6 +188,23 @@ fun GroupChatScreen(
 
     val isOwner = remember(group?.creatorStadeId) {
         group != null && (group.creatorStadeId == owner.stadeId || group.creatorStadeId.isEmpty())
+    }
+
+    val roster by remember(groupId) { container.groups.observeRoster(groupId) }
+        .collectAsState(initial = remember(groupId) { container.groups.roster(groupId) })
+    val deliveryCounts by remember(groupId) { container.groups.observeDeliveryCounts(groupId) }
+        .collectAsState(initial = remember(groupId) { container.groups.deliveryCounts(groupId) })
+    val recipientCount = remember(memberIds) { memberIds.count { it != owner.stadeId } }
+    val rosterNames = remember(roster) {
+        roster.filter { it.nickname.isNotBlank() }.associate { it.memberId to it.nickname }
+    }
+    val memberName: (String, Boolean) -> String = remember(rosterNames, contacts, owner.nickname) {
+        { senderId, isOwn ->
+            if (isOwn || senderId == owner.stadeId) owner.nickname
+            else container.contacts.get(senderId)?.nickname
+                ?: rosterNames[senderId]
+                ?: senderId.takeLast(6)
+        }
     }
 
     LaunchedEffect(groupId) {
@@ -356,7 +374,7 @@ fun GroupChatScreen(
             container.groups.getMembers(groupId).toSet()
         }
         val candidates = remember(contacts, currentMembers) {
-            contacts.filter { it.id !in currentMembers }
+            contacts.filter { it.kind == 0 && it.id !in currentMembers }
         }
         var selectedContactIds by remember { mutableStateOf<Set<String>>(emptySet()) }
         AlertDialog(
@@ -766,10 +784,11 @@ fun GroupChatScreen(
                                 val tight = prev != null &&
                                         prev.senderId == msg.senderId &&
                                         (msg.timestamp - prev.timestamp) < 60_000L
-                                val senderName = remember(msg.senderId) {
-                                    if (msg.isOwn) owner.nickname
-                                    else container.contacts.get(msg.senderId)?.nickname ?: msg.senderId.takeLast(6)
+                                val senderName = remember(msg.senderId, memberName) {
+                                    memberName(msg.senderId, msg.isOwn)
                                 }
+                                val delivered = recipientCount > 0 &&
+                                        (deliveryCounts[msg.id] ?: 0) >= recipientCount
                                 val isSelected by remember(msg.id) { derivedStateOf { selectedMessageIds.contains(msg.id) } }
                                 val isHighlighted = flashedMessageId == msg.id
                                 val reactions by remember(msg.id) { container.messages.observeReactionsForMessage(msg.id) }.collectAsState(initial = emptyList())
@@ -780,8 +799,7 @@ fun GroupChatScreen(
                                     when {
                                         msg.replyToId == null -> null
                                         quotedMsg != null -> {
-                                            val quotedSenderName = if (quotedMsg.isOwn) owner.nickname
-                                                else container.contacts.get(quotedMsg.senderId)?.nickname ?: quotedMsg.senderId.takeLast(6)
+                                            val quotedSenderName = memberName(quotedMsg.senderId, quotedMsg.isOwn)
                                             GroupReplyQuoteInfo(
                                                 senderLabel = quotedSenderName,
                                                 snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage)
@@ -805,6 +823,7 @@ fun GroupChatScreen(
                                         GroupImageBubble(
                                             msg = msg,
                                             senderName = senderName,
+                                            delivered = delivered,
                                             tightWithPrev = tight,
                                             selected = isSelected,
                                             highlighted = isHighlighted,
@@ -840,6 +859,7 @@ fun GroupChatScreen(
                                         GroupVoiceBubble(
                                             msg = msg,
                                             senderName = senderName,
+                                            delivered = delivered,
                                             tightWithPrev = tight,
                                             selected = isSelected,
                                             highlighted = isHighlighted,
@@ -857,6 +877,7 @@ fun GroupChatScreen(
                                         GroupVideoBubble(
                                             msg = msg,
                                             senderName = senderName,
+                                            delivered = delivered,
                                             tightWithPrev = tight,
                                             selected = isSelected,
                                             highlighted = isHighlighted,
@@ -891,6 +912,7 @@ fun GroupChatScreen(
                                         GroupTextBubble(
                                             msg = msg,
                                             senderName = senderName,
+                                            delivered = delivered,
                                             tightWithPrev = tight,
                                             selected = isSelected,
                                             highlighted = isHighlighted,
@@ -924,8 +946,7 @@ fun GroupChatScreen(
                     pendingVoiceClip = pendingVoiceClip,
                     isRecording = isRecording,
                     replyPreview = replyTarget?.let { target ->
-                        val targetSenderName = if (target.isOwn) owner.nickname
-                            else container.contacts.get(target.senderId)?.nickname ?: target.senderId.takeLast(6)
+                        val targetSenderName = memberName(target.senderId, target.isOwn)
                         ChatComposerReplyPreview(
                             senderLabel = targetSenderName,
                             snippet = previewBody(target.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage)
@@ -1195,6 +1216,7 @@ private fun GroupReactionPill(reactions: List<dev.stade.db.MessageReaction>) {
 private fun GroupTextBubble(
     msg: GroupMessage,
     senderName: String,
+    delivered: Boolean,
     tightWithPrev: Boolean,
     selected: Boolean,
     highlighted: Boolean,
@@ -1302,12 +1324,20 @@ private fun GroupTextBubble(
                     GroupLinkPreviewCard(currentPreview, outgoing, Modifier.padding(top = 6.dp))
                 }
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    formatChatTime(msg.timestamp),
-                    color = sub,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.align(Alignment.End)
-                )
+                Row(
+                    modifier = Modifier.align(Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        formatChatTime(msg.timestamp),
+                        color = sub,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    if (outgoing) {
+                        Spacer(Modifier.size(6.dp))
+                        DeliveryStatusDots(delivered = delivered, tint = sub)
+                    }
+                }
             }
         }
         GroupReactionPill(reactions)
@@ -1439,6 +1469,7 @@ private fun GroupLinkPreviewCard(preview: LinkPreview, outgoing: Boolean, modifi
 private fun GroupImageBubble(
     msg: GroupMessage,
     senderName: String,
+    delivered: Boolean,
     tightWithPrev: Boolean,
     selected: Boolean,
     highlighted: Boolean,
@@ -1588,6 +1619,10 @@ private fun GroupImageBubble(
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.weight(1f)
                     )
+                    if (outgoing) {
+                        Spacer(Modifier.size(6.dp))
+                        DeliveryStatusDots(delivered = delivered, tint = sub)
+                    }
                 }
             }
         }
@@ -1595,49 +1630,24 @@ private fun GroupImageBubble(
     }
 
     if (showFullscreen && currentBitmap != null && currentBytes != null) {
-        Dialog(onDismissRequest = { showFullscreen = false }) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.92f)),
-                contentAlignment = Alignment.Center
-            ) {
-                androidx.compose.foundation.Image(
-                    bitmap = currentBitmap,
-                    contentDescription = strings.photoMessage,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentScale = ContentScale.Fit
+        FullScreenImageViewer(
+            bitmap = currentBitmap,
+            contentDescription = strings.photoMessage,
+            onDismiss = { showFullscreen = false }
+        ) {
+            IconButton(onClick = { onSaveImage(currentBytes) }) {
+                Icon(
+                    Icons.Default.Download,
+                    contentDescription = strings.saveImageAction,
+                    tint = Color.White
                 )
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    IconButton(onClick = { onSaveImage(currentBytes) }) {
-                        Icon(
-                            Icons.Default.Download,
-                            contentDescription = strings.saveImageAction,
-                            tint = Color.White
-                        )
-                    }
-                    IconButton(onClick = { onCopyImage(currentBytes) }) {
-                        Icon(
-                            Icons.Default.ContentCopy,
-                            contentDescription = strings.copyImageAction,
-                            tint = Color.White
-                        )
-                    }
-                    IconButton(onClick = { showFullscreen = false }) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = strings.closePhoto,
-                            tint = Color.White
-                        )
-                    }
-                }
+            }
+            IconButton(onClick = { onCopyImage(currentBytes) }) {
+                Icon(
+                    Icons.Default.ContentCopy,
+                    contentDescription = strings.copyImageAction,
+                    tint = Color.White
+                )
             }
         }
     }
@@ -1648,6 +1658,7 @@ private fun GroupImageBubble(
 private fun GroupVoiceBubble(
     msg: GroupMessage,
     senderName: String,
+    delivered: Boolean,
     tightWithPrev: Boolean,
     selected: Boolean,
     highlighted: Boolean,
@@ -1782,12 +1793,20 @@ private fun GroupVoiceBubble(
                     }
                 }
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    formatChatTime(msg.timestamp),
-                    color = sub,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.align(Alignment.End)
-                )
+                Row(
+                    modifier = Modifier.align(Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        formatChatTime(msg.timestamp),
+                        color = sub,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    if (outgoing) {
+                        Spacer(Modifier.size(6.dp))
+                        DeliveryStatusDots(delivered = delivered, tint = sub)
+                    }
+                }
             }
         }
         GroupReactionPill(reactions)
@@ -1798,6 +1817,7 @@ private fun GroupVoiceBubble(
 private fun GroupVideoBubble(
     msg: GroupMessage,
     senderName: String,
+    delivered: Boolean,
     tightWithPrev: Boolean,
     selected: Boolean,
     highlighted: Boolean,
@@ -1921,12 +1941,20 @@ private fun GroupVideoBubble(
                     Text(msg.caption, color = fg, style = MaterialTheme.typography.bodyMedium)
                 }
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    formatChatTime(msg.timestamp),
-                    color = sub,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.align(Alignment.End)
-                )
+                Row(
+                    modifier = Modifier.align(Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        formatChatTime(msg.timestamp),
+                        color = sub,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    if (outgoing) {
+                        Spacer(Modifier.size(6.dp))
+                        DeliveryStatusDots(delivered = delivered, tint = sub)
+                    }
+                }
             }
         }
         GroupReactionPill(reactions)

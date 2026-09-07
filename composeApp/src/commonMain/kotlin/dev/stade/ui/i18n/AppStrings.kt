@@ -568,6 +568,7 @@ abstract class AppStrings {
     abstract val navGroup: String
     abstract val navStadium: String
     abstract val navRadar: String
+    abstract val previewYouPrefix: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

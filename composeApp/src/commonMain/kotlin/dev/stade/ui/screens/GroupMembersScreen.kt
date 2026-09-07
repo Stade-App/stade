@@ -62,8 +62,10 @@ fun GroupMembersScreen(
     val scope = rememberCoroutineScope()
 
     val group = remember(groupId) { container.groups.getGroup(groupId) }
-    val memberIds by remember(groupId) { container.groups.observeMembers(groupId) }
-        .collectAsState(initial = group?.memberIds ?: emptyList())
+    val roster by remember(groupId) { container.groups.observeRoster(groupId) }
+        .collectAsState(initial = remember(groupId) { container.groups.roster(groupId) })
+    val memberIds = remember(roster) { roster.map { it.memberId } }
+    val rosterById = remember(roster) { roster.associateBy { it.memberId } }
     val contacts by remember(owner.id) { container.contacts.observeContacts(owner.id) }.collectAsState(initial = emptyList())
     val contactsById = remember(contacts) { contacts.associateBy { it.id } }
 
@@ -91,11 +93,13 @@ fun GroupMembersScreen(
 
     fun nameFor(memberId: String): String =
         if (memberId == owner.stadeId) owner.nickname
-        else contactsById[memberId]?.nickname ?: memberId.takeLast(6)
+        else contactsById[memberId]?.nickname
+            ?: rosterById[memberId]?.nickname?.takeIf { it.isNotBlank() }
+            ?: memberId.takeLast(6)
 
     fun keySeedFor(memberId: String): ByteArray? =
         if (memberId == owner.stadeId) owner.publicSigningKey
-        else contactsById[memberId]?.publicSigningKey
+        else contactsById[memberId]?.publicSigningKey ?: rosterById[memberId]?.signingKey
 
     fun avatarFor(memberId: String): ByteArray? =
         if (memberId == owner.stadeId) owner.avatar

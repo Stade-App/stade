@@ -168,6 +168,7 @@ import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.isTouchPrimaryInput
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.ChatComposerBar
+import dev.stade.ui.components.FullScreenImageViewer
 import dev.stade.ui.components.ChatComposerReplyPreview
 import dev.stade.ui.components.DeliveryStatusDots
 import dev.stade.ui.components.EmojiStickerDrawer
@@ -2119,49 +2120,24 @@ private fun ImageBubble(
     }
 
     if (showFullscreen && currentBitmap != null && currentBytes != null) {
-        Dialog(onDismissRequest = { showFullscreen = false }) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.92f)),
-                contentAlignment = Alignment.Center
-            ) {
-                androidx.compose.foundation.Image(
-                    bitmap = currentBitmap,
-                    contentDescription = strings.photoMessage,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentScale = ContentScale.Fit
+        FullScreenImageViewer(
+            bitmap = currentBitmap,
+            contentDescription = strings.photoMessage,
+            onDismiss = { showFullscreen = false }
+        ) {
+            IconButton(onClick = { onSaveImage(currentBytes) }) {
+                Icon(
+                    Icons.Default.Download,
+                    contentDescription = strings.saveImageAction,
+                    tint = Color.White
                 )
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    IconButton(onClick = { onSaveImage(currentBytes) }) {
-                        Icon(
-                            Icons.Default.Download,
-                            contentDescription = strings.saveImageAction,
-                            tint = Color.White
-                        )
-                    }
-                    IconButton(onClick = { onCopyImage(currentBytes) }) {
-                        Icon(
-                            Icons.Default.ContentCopy,
-                            contentDescription = strings.copyImageAction,
-                            tint = Color.White
-                        )
-                    }
-                    IconButton(onClick = { showFullscreen = false }) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = strings.closePhoto,
-                            tint = Color.White
-                        )
-                    }
-                }
+            }
+            IconButton(onClick = { onCopyImage(currentBytes) }) {
+                Icon(
+                    Icons.Default.ContentCopy,
+                    contentDescription = strings.copyImageAction,
+                    tint = Color.White
+                )
             }
         }
     }

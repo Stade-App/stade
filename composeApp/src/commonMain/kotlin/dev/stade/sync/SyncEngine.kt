@@ -9,14 +9,23 @@ import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
 import dev.stade.crypto.PqCrypto
 import dev.stade.crypto.RatchetSessions
+import dev.stade.group.GRP_ACT_KICK
+import dev.stade.group.GRP_ACT_LEAVE
+import dev.stade.group.GRP_ACT_REACTION
+import dev.stade.group.GRP_ACT_RECEIPT
+import dev.stade.group.GRP_FRAME_PREFIX
 import dev.stade.group.GRP_INV_PREFIX
 import dev.stade.group.GRP_JOIN_PREFIX
 import dev.stade.group.GRP_KICK_PREFIX
 import dev.stade.group.GRP_LEAVE_PREFIX
 import dev.stade.group.GRP_MSG_PREFIX
+import dev.stade.group.GRP_ROSTER_PREFIX
 import dev.stade.group.GRP_RXN_PREFIX
 import dev.stade.group.GRP_WELCOME_PREFIX
+import dev.stade.group.GROUP_PROTOCOL_VERSION
+import dev.stade.group.GroupFrame
 import dev.stade.group.GroupManager
+import dev.stade.group.GroupMemberEntry
 import dev.stade.identity.LocalIdentity
 import dev.stade.identity.StadeId
 import dev.stade.message.AVATAR_BODY_PREFIX
@@ -98,6 +107,7 @@ class SyncEngine(
         data class GroupMessageReceived(val groupId: String) : SyncEvent
         data class GroupInviteReceived(val groupId: String, val groupName: String) : SyncEvent
         data class GroupMemberRemoved(val groupId: String) : SyncEvent
+        data class GroupRosterUpdated(val groupId: String) : SyncEvent
         data class RemovedFromGroup(val groupId: String, val groupName: String) : SyncEvent
         data class HandshakeRejected(val reason: String) : SyncEvent
         data class DecryptFailed(val contactId: String) : SyncEvent
@@ -191,7 +201,8 @@ class SyncEngine(
             nonce = ourNonce,
             transcriptCommitment = ourTc,
             addresses = runCatching { selfAddressesProvider() }.getOrDefault(emptyList()),
-            reAddRequest = pendingReAdds.isNotEmpty()
+            reAddRequest = pendingReAdds.isNotEmpty(),
+            groupProtocol = GROUP_PROTOCOL_VERSION
         )
         runCatching {
             connection.send(FrameCodec.encode(SyncRecord(RecordType.HELLO, json.encodeToString(HelloPayload.serializer(), ourHello).encodeToByteArray())))
@@ -294,6 +305,7 @@ class SyncEngine(
                 }
             }
             pendingReAdds = pendingReAdds - peerHello.stadeId
+            noteGroupProtocol(existing.id, peerHello.groupProtocol)
             return existing to false
         }
 
@@ -306,8 +318,28 @@ class SyncEngine(
         }
 
         val established = gatedNewContactHandshake(owner, connection, peerHello, peerAuth.isStadiumJoin, priorKind)
-        if (established != null) pendingReAdds = pendingReAdds - peerHello.stadeId
+        if (established != null) {
+            pendingReAdds = pendingReAdds - peerHello.stadeId
+            noteGroupProtocol(established.first.id, peerHello.groupProtocol)
+        }
         return established
+    }
+
+    private val rosterPushedAhead = mutableSetOf<String>()
+
+    private fun markRosterPushed(contactId: String, groupId: String): Boolean =
+        synchronized(rosterPushedAhead) { rosterPushedAhead.add("$contactId|$groupId") }
+
+    private fun rosterEntryFromContact(memberId: String): GroupMemberEntry? =
+        contacts.get(memberId)?.takeIf { it.kind == 0 }?.let {
+            GroupMemberEntry(it.id, "", it.publicSigningKey, it.publicMlDsaKey)
+        }
+
+    private fun noteGroupProtocol(contactId: String, advertised: Int) {
+        val supported = advertised.coerceIn(1, GROUP_PROTOCOL_VERSION)
+        runCatching {
+            if (contacts.get(contactId)?.groupProto != supported) contacts.setGroupProto(contactId, supported)
+        }
     }
 
     private suspend fun gatedNewContactHandshake(
@@ -546,6 +578,124 @@ class SyncEngine(
             }
         }
 
+        private fun peerGroupProto(contactId: String): Int =
+            runCatching { contacts.get(contactId)?.groupProto }.getOrNull() ?: 1
+
+        private suspend fun handleGroupFrame(
+            groups: GroupManager,
+            rawFrame: String,
+            envelopeId: String,
+            envelopeTimestamp: Long
+        ): Boolean {
+            val frame = groups.parseFrame(rawFrame) ?: return true
+            if (frame.messageId != envelopeId || frame.timestamp != envelopeTimestamp) return true
+            if (frame.senderId == owner.stadeId) return true
+            if (groups.getGroup(frame.groupId)?.ownerId != owner.id) return true
+            if (!groups.isMember(frame.groupId, contact.id)) return true
+            if (!groups.isMember(frame.groupId, frame.senderId)) return true
+
+            if (groups.memberIdentity(frame.groupId, frame.senderId)?.hasIdentity != true) {
+                val adopted = rosterEntryFromContact(frame.senderId)?.let {
+                    runCatching { groups.setMemberIdentity(frame.groupId, it) }.getOrDefault(false)
+                } ?: false
+                if (!adopted) return false
+            }
+            if (!groups.verifyFrame(frame)) return true
+
+            val payload = frame.payload
+            val accepted = when {
+                payload.startsWith(GRP_ACT_REACTION) -> {
+                    val wrapper = parseReactionWrapper(payload.removePrefix(GRP_ACT_REACTION))
+                    if (wrapper == null) false else {
+                        if (wrapper.add) messages.upsertReaction(wrapper.targetMessageId, frame.senderId, wrapper.emoji)
+                        else messages.deleteReaction(wrapper.targetMessageId, frame.senderId)
+                        _events.tryEmit(SyncEvent.ReactionUpdated(wrapper.targetMessageId))
+                        true
+                    }
+                }
+                payload.startsWith(GRP_ACT_RECEIPT) -> {
+                    val target = payload.removePrefix(GRP_ACT_RECEIPT)
+                    if (target.isEmpty()) false else {
+                        runCatching { groups.recordDelivery(target, frame.senderId) }
+                        true
+                    }
+                }
+                payload.startsWith(GRP_ACT_KICK) -> {
+                    val outcome = groups.applyKick(
+                        frame.groupId, frame.senderId, payload.removePrefix(GRP_ACT_KICK), owner.stadeId
+                    )
+                    if (outcome == null) false else {
+                        _events.tryEmit(
+                            if (outcome.wasSelf) SyncEvent.RemovedFromGroup(outcome.groupId, outcome.groupName)
+                            else SyncEvent.GroupMemberRemoved(outcome.groupId)
+                        )
+                        true
+                    }
+                }
+                payload == GRP_ACT_LEAVE -> {
+                    val groupId = groups.applyMemberLeft(frame.groupId, frame.senderId)
+                    if (groupId == null) false else {
+                        _events.tryEmit(SyncEvent.GroupMemberRemoved(groupId))
+                        true
+                    }
+                }
+                else -> {
+                    val saved = groups.saveIncomingGroupMessage(
+                        frame.groupId, frame.messageId, frame.senderId, payload, frame.timestamp
+                    )
+                    if (saved) {
+                        _events.tryEmit(SyncEvent.GroupMessageReceived(frame.groupId))
+                        if (contact.id != frame.senderId) sendDeliveryReceipt(groups, frame)
+                    }
+                    saved
+                }
+            }
+            if (accepted) relayGroupFrame(groups, frame, rawFrame)
+            return true
+        }
+
+        private fun relayTarget(memberId: String): Contact? =
+            contacts.get(memberId)
+                ?.takeIf { it.ownerId == owner.id && it.groupProto >= GROUP_PROTOCOL_VERSION }
+
+        private suspend fun sendDeliveryReceipt(groups: GroupManager, frame: GroupFrame) {
+            val via = relayTarget(contact.id) ?: return
+            val messageId = Encoding.toHex(crypto.randomBytes(16))
+            val timestamp = Clock.System.now().toEpochMilliseconds()
+            val signed = groups.signFrame(
+                owner, frame.groupId, messageId, timestamp,
+                listOf(frame.senderId), GRP_ACT_RECEIPT + frame.messageId
+            )
+            runCatching { queueOutgoing(owner, via, messageId, signed, timestamp) }
+        }
+
+        private suspend fun relayGroupFrame(groups: GroupManager, frame: GroupFrame, rawFrame: String) {
+            if (frame.needsRelayTo.isEmpty()) return
+            val members = groups.getMembers(frame.groupId)
+            val skip = setOf(owner.stadeId, contact.id, frame.senderId)
+            val pending = frame.needsRelayTo.filter { it in members && it !in skip }
+            if (pending.isEmpty()) return
+            val reachable = pending.filter { relayTarget(it) != null }
+            val targets = if (reachable.size == pending.size) reachable else members.filter { it !in skip }
+            for (memberId in targets) {
+                val member = relayTarget(memberId) ?: continue
+                pushRosterAhead(groups, member, frame.groupId)
+                runCatching { queueOutgoing(owner, member, frame.messageId, rawFrame, frame.timestamp) }
+            }
+        }
+
+        private suspend fun pushRosterAhead(groups: GroupManager, member: Contact, groupId: String) {
+            if (!markRosterPushed(member.id, groupId)) return
+            val group = groups.getGroup(groupId) ?: return
+            val entries = groups.rosterSnapshot(owner, groupId, ::rosterEntryFromContact)
+            if (entries.isEmpty()) return
+            val body = groups.encodeRoster(group.id, group.name, entries)
+            val msgId = Encoding.toHex(crypto.randomBytes(16))
+            runCatching {
+                queueOutgoing(owner, member, msgId, body, Clock.System.now().toEpochMilliseconds())
+            }
+        }
+
         private suspend fun handleRecord(record: SyncRecord) {
             when (record.type) {
                 RecordType.MESSAGE -> {
@@ -611,6 +761,22 @@ class SyncEngine(
                                 }
                             }
                         }
+                        groupManager != null && bodyStr.startsWith(GRP_FRAME_PREFIX) -> {
+                            if (!handleGroupFrame(groupManager, bodyStr, payload.messageId, payload.timestamp)) {
+                                runCatching { messages.forgetEnvelope(payload.messageId) }
+                                return
+                            }
+                        }
+                        groupManager != null && bodyStr.startsWith(GRP_ROSTER_PREFIX) -> {
+                            val update = groupManager.handleRoster(owner.id, contact.id, bodyStr)
+                            if (update != null) {
+                                runCatching {
+                                    groupManager.setMemberIdentity(update.groupId, groupManager.selfRosterEntry(owner))
+                                }
+                                groupManager.adoptIdentities(owner, update.groupId, ::rosterEntryFromContact)
+                                if (update.changed) _events.tryEmit(SyncEvent.GroupRosterUpdated(update.groupId))
+                            }
+                        }
                         groupManager != null && bodyStr.startsWith(GRP_RXN_PREFIX) -> {
                             val stripped = bodyStr.removePrefix(GRP_RXN_PREFIX)
                             val colonIdx = stripped.indexOf(':')
@@ -630,28 +796,45 @@ class SyncEngine(
                         groupManager != null && bodyStr.startsWith(GRP_JOIN_PREFIX) -> {
                             val welcomeBody = groupManager.handleJoinRequest(contact.id, bodyStr)
                             if (welcomeBody != null) {
+                                val joinedGroupId = bodyStr.removePrefix(GRP_JOIN_PREFIX).substringBefore(':')
+                                runCatching {
+                                    groupManager.setMemberIdentity(joinedGroupId, groupManager.selfRosterEntry(owner))
+                                }
+                                groupManager.adoptIdentities(owner, joinedGroupId, ::rosterEntryFromContact)
+                                val rosterBody = groupManager.getGroup(joinedGroupId)?.let { joined ->
+                                    val entries = groupManager.rosterSnapshot(owner, joined.id, ::rosterEntryFromContact)
+                                    if (entries.isEmpty()) null else groupManager.encodeRoster(joined.id, joined.name, entries)
+                                }
                                 runCatching {
                                     val msgId = Encoding.toHex(crypto.randomBytes(16))
                                     val ts = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
-                                    val sealed = ratchet.seal(owner, contact, welcomeBody.encodeToByteArray())
+                                    val joinerBody = if (rosterBody != null && peerGroupProto(contact.id) >= GROUP_PROTOCOL_VERSION) rosterBody else welcomeBody
+                                    val sealed = ratchet.seal(owner, contact, joinerBody.encodeToByteArray())
                                     val mp = MessagePayload(msgId, ts, sealed)
                                     val frame = json.encodeToString(MessagePayload.serializer(), mp).encodeToByteArray()
                                     outbox.enqueue(contact.id, msgId, frame)
                                     outboxSignal.tryEmit(Unit)
                                 }
-                                val joinedGroupId = bodyStr.removePrefix(GRP_JOIN_PREFIX).substringBefore(':')
                                 val ts2 = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
                                 for (memberId in groupManager.getMembers(joinedGroupId)) {
                                     if (memberId == contact.id) continue
                                     val member = contacts.get(memberId) ?: continue
                                     if (member.ownerId != owner.id) continue
+                                    val body = if (rosterBody != null && member.groupProto >= GROUP_PROTOCOL_VERSION) rosterBody else welcomeBody
                                     val msgId2 = Encoding.toHex(crypto.randomBytes(16))
-                                    runCatching { queueOutgoing(owner, member, msgId2, welcomeBody, ts2) }
+                                    runCatching { queueOutgoing(owner, member, msgId2, body, ts2) }
                                 }
                             }
                         }
                         groupManager != null && bodyStr.startsWith(GRP_WELCOME_PREFIX) -> {
                             groupManager.handleGroupWelcome(owner.id, contact.id, bodyStr)
+                            val welcomedGroupId = bodyStr.removePrefix(GRP_WELCOME_PREFIX).substringBefore(':')
+                            if (groupManager.getGroup(welcomedGroupId) != null) {
+                                runCatching {
+                                    groupManager.setMemberIdentity(welcomedGroupId, groupManager.selfRosterEntry(owner))
+                                }
+                                groupManager.adoptIdentities(owner, welcomedGroupId, ::rosterEntryFromContact)
+                            }
                         }
                         groupManager != null && bodyStr.startsWith(GRP_INV_PREFIX) -> {
                             runCatching {
@@ -811,6 +994,7 @@ class SyncEngine(
                     }.getOrNull() ?: return
                     messages.markDelivered(ack.messageId, contact.id)
                     outbox.removeForMessage(ack.messageId, contact.id)
+                    runCatching { groupManager?.recordDelivery(ack.messageId, contact.id) }
                     val farewellForget = stadiumManager?.takeFarewellIfMatches(contact.id, ack.messageId)
                     if (farewellForget != null) {
                         _events.tryEmit(SyncEvent.StadiumContactReleased(contact.id, forget = farewellForget))

@@ -7,6 +7,8 @@ import app.cash.sqldelight.coroutines.mapToOneOrNull
 import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
 import dev.stade.db.StadeDb
+import dev.stade.identity.LocalIdentity
+import dev.stade.identity.StadeId
 import dev.stade.message.SearchResult
 import dev.stade.message.previewBody
 import dev.stade.notification.ShortcutEntityKind
@@ -16,6 +18,16 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
+
+private const val MAX_ROSTER_FIELD_LEN = 120
+
+private fun sanitizeRosterField(value: String): String =
+    value.asSequence()
+        .filter { it != GRP_ROSTER_FIELD_SEP && it != '\n' && it != '\r' }
+        .take(MAX_ROSTER_FIELD_LEN)
+        .joinToString("")
 
 class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
 
@@ -72,6 +84,64 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
     fun getMembers(groupId: String): List<String> =
         db.stadeDbQueries.selectGroupMembers(groupId).executeAsList().map { it.contactId }
 
+    fun isMember(groupId: String, memberId: String): Boolean =
+        db.stadeDbQueries.isGroupMember(groupId, memberId).executeAsOne() > 0L
+
+    fun roster(groupId: String): List<GroupMemberEntry> =
+        db.stadeDbQueries.selectGroupMembers(groupId).executeAsList().map {
+            GroupMemberEntry(it.contactId, it.nickname, it.signingKey, it.mldsaKey)
+        }
+
+    fun observeRoster(groupId: String): Flow<List<GroupMemberEntry>> =
+        db.stadeDbQueries.selectGroupMembers(groupId)
+            .asFlow()
+            .mapToList(Dispatchers.Default)
+            .map { rows -> rows.map { GroupMemberEntry(it.contactId, it.nickname, it.signingKey, it.mldsaKey) } }
+
+    fun memberIdentity(groupId: String, memberId: String): GroupMemberEntry? =
+        db.stadeDbQueries.selectGroupMemberIdentity(groupId, memberId).executeAsOneOrNull()?.let {
+            GroupMemberEntry(it.contactId, it.nickname, it.signingKey, it.mldsaKey)
+        }
+
+    fun setMemberIdentity(groupId: String, entry: GroupMemberEntry): Boolean {
+        val signing = entry.signingKey ?: return false
+        val mldsa = entry.mldsaKey ?: return false
+        if (StadeId.derive(signing, mldsa, crypto::hash) != entry.memberId) return false
+        addMember(groupId, entry.memberId)
+        val announced = sanitizeRosterField(entry.nickname)
+        val nickname = announced.ifBlank {
+            memberIdentity(groupId, entry.memberId)?.nickname.orEmpty()
+        }
+        db.stadeDbQueries.setGroupMemberIdentity(nickname, signing, mldsa, groupId, entry.memberId)
+        return true
+    }
+
+    fun selfRosterEntry(owner: LocalIdentity): GroupMemberEntry =
+        GroupMemberEntry(owner.stadeId, owner.nickname, owner.publicSigningKey, owner.publicMlDsaKey)
+
+    fun rosterSnapshot(
+        owner: LocalIdentity,
+        groupId: String,
+        lookup: (String) -> GroupMemberEntry?
+    ): List<GroupMemberEntry> {
+        val stored = roster(groupId).associateBy { it.memberId }
+        return getMembers(groupId).mapNotNull { memberId ->
+            when {
+                memberId == owner.stadeId -> selfRosterEntry(owner)
+                stored[memberId]?.hasIdentity == true -> stored[memberId]
+                else -> lookup(memberId)
+            }
+        }.filter { it.hasIdentity }
+    }
+
+    fun adoptIdentities(owner: LocalIdentity, groupId: String, lookup: (String) -> GroupMemberEntry?) {
+        rosterSnapshot(owner, groupId, lookup).forEach { entry ->
+            if (memberIdentity(groupId, entry.memberId)?.hasIdentity != true) {
+                runCatching { setMemberIdentity(groupId, entry) }
+            }
+        }
+    }
+
     fun observeMembers(groupId: String): Flow<List<String>> =
         db.stadeDbQueries.selectGroupMembers(groupId)
             .asFlow()
@@ -80,6 +150,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
 
     fun deleteGroup(groupId: String) {
         db.stadeDbQueries.transaction {
+            db.stadeDbQueries.deleteGroupDeliveries(groupId)
             db.stadeDbQueries.deleteGroupMessages(groupId)
             db.stadeDbQueries.deleteGroupMembers(groupId)
             db.stadeDbQueries.deleteGroup(groupId)
@@ -134,6 +205,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
 
     fun leaveGroupLocally(groupId: String) {
         db.stadeDbQueries.transaction {
+            db.stadeDbQueries.deleteGroupDeliveries(groupId)
             db.stadeDbQueries.deleteGroupMessages(groupId)
             db.stadeDbQueries.deleteGroupMembers(groupId)
             db.stadeDbQueries.deleteGroup(groupId)
@@ -157,8 +229,7 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
         val isMember = db.stadeDbQueries.isGroupMember(groupId, contactId).executeAsOne() > 0L
         if (!isMember) return null
 
-        if (db.stadeDbQueries.groupMessageExists(messageId).executeAsOne() > 0L) return groupId
-        db.stadeDbQueries.insertGroupMessage(messageId, groupId, senderId, body, timestamp, 0L, 0L)
+        saveIncomingGroupMessage(groupId, messageId, senderId, body, timestamp)
         return groupId
     }
 
@@ -208,15 +279,155 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
         }
     }
 
+    @OptIn(ExperimentalEncodingApi::class)
+    fun encodeRoster(groupId: String, groupName: String, entries: List<GroupMemberEntry>): String {
+        val lines = entries.filter { it.hasIdentity }.joinToString("\n") { entry ->
+            listOf(
+                entry.memberId,
+                sanitizeRosterField(entry.nickname),
+                Base64.Default.encode(entry.signingKey!!),
+                Base64.Default.encode(entry.mldsaKey!!)
+            ).joinToString(GRP_ROSTER_FIELD_SEP.toString())
+        }
+        return "$GRP_ROSTER_PREFIX$groupId:${sanitizeRosterField(groupName)}\n$lines"
+    }
+
+    @OptIn(ExperimentalEncodingApi::class)
+    private fun parseRosterEntry(line: String): GroupMemberEntry? {
+        val parts = line.split(GRP_ROSTER_FIELD_SEP)
+        if (parts.size != 4) return null
+        if (!StadeId.isValid(parts[0])) return null
+        val signing = runCatching { Base64.Default.decode(parts[2]) }.getOrNull() ?: return null
+        val mldsa = runCatching { Base64.Default.decode(parts[3]) }.getOrNull() ?: return null
+        if (signing.size != 32 || mldsa.size != 1952) return null
+        return GroupMemberEntry(parts[0], parts[1], signing, mldsa)
+    }
+
+    fun handleRoster(ownerId: String, fromContactId: String, rawBody: String): RosterUpdate? {
+        val stripped = rawBody.removePrefix(GRP_ROSTER_PREFIX)
+        val colonIdx = stripped.indexOf(':')
+        if (colonIdx < 0) return null
+        val groupId = stripped.substring(0, colonIdx)
+        val rest = stripped.substring(colonIdx + 1)
+        val newlineIdx = rest.indexOf('\n')
+        val groupName = if (newlineIdx >= 0) rest.substring(0, newlineIdx) else rest
+        val entryLines = if (newlineIdx >= 0) {
+            rest.substring(newlineIdx + 1).split('\n').filter { it.isNotBlank() }
+        } else emptyList()
+
+        val existing = db.stadeDbQueries.selectGroup(groupId).executeAsOneOrNull()
+        if (existing == null) {
+            val pending = getPendingJoinForContact(fromContactId)
+            if (pending == null || pending.groupId != groupId) return null
+            val now = Clock.System.now().toEpochMilliseconds()
+            val newToken = Encoding.toHex(crypto.randomBytes(16))
+            db.stadeDbQueries.insertGroup(groupId, ownerId, groupName, newToken, now, fromContactId)
+            clearPendingJoin(fromContactId)
+        } else {
+            if (existing.ownerId != ownerId) return null
+            if (!isMember(groupId, fromContactId)) return null
+            if (getPendingJoinForContact(fromContactId)?.groupId == groupId) clearPendingJoin(fromContactId)
+        }
+        val before = roster(groupId).toSet()
+        entryLines.forEach { line ->
+            val entry = parseRosterEntry(line) ?: return@forEach
+            runCatching { setMemberIdentity(groupId, entry) }
+        }
+        return RosterUpdate(groupId, roster(groupId).toSet() != before)
+    }
+
+    @OptIn(ExperimentalEncodingApi::class)
+    fun encodeFrame(frame: GroupFrame): String =
+        GRP_FRAME_PREFIX + frame.groupId + ":" + frame.senderId + ":" + frame.messageId + ":" +
+            frame.timestamp.toString() + ":" + frame.needsRelayTo.joinToString(GRP_NEEDS_SEP) + ":" +
+            Base64.Default.encode(frame.signature) + "\n" + frame.payload
+
+    fun signFrame(
+        owner: LocalIdentity,
+        groupId: String,
+        messageId: String,
+        timestamp: Long,
+        needsRelayTo: List<String>,
+        payload: String
+    ): String {
+        val material = groupSigningMaterial(
+            groupId, owner.stadeId, messageId, timestamp, needsRelayTo, payload
+        )
+        val signature = crypto.sign(owner.privateSigningKey, material)
+        return encodeFrame(
+            GroupFrame(groupId, owner.stadeId, messageId, timestamp, needsRelayTo, signature, payload)
+        )
+    }
+
+    @OptIn(ExperimentalEncodingApi::class)
+    fun parseFrame(rawBody: String): GroupFrame? {
+        if (!rawBody.startsWith(GRP_FRAME_PREFIX)) return null
+        val stripped = rawBody.substring(GRP_FRAME_PREFIX.length)
+        val newlineIdx = stripped.indexOf('\n')
+        if (newlineIdx < 0) return null
+        val parts = stripped.substring(0, newlineIdx).split(':')
+        if (parts.size != 6) return null
+        if (parts[0].isEmpty() || parts[1].isEmpty() || parts[2].isEmpty()) return null
+        val timestamp = parts[3].toLongOrNull() ?: return null
+        val needs = parts[4].split(GRP_NEEDS_SEP).filter { it.isNotBlank() }
+        val signature = runCatching { Base64.Default.decode(parts[5]) }.getOrNull() ?: return null
+        return GroupFrame(
+            parts[0], parts[1], parts[2], timestamp, needs, signature,
+            stripped.substring(newlineIdx + 1)
+        )
+    }
+
+    fun verifyFrame(frame: GroupFrame): Boolean {
+        val entry = memberIdentity(frame.groupId, frame.senderId) ?: return false
+        val signing = entry.signingKey ?: return false
+        val mldsa = entry.mldsaKey ?: return false
+        if (StadeId.derive(signing, mldsa, crypto::hash) != frame.senderId) return false
+        val material = groupSigningMaterial(
+            frame.groupId, frame.senderId, frame.messageId, frame.timestamp,
+            frame.needsRelayTo, frame.payload
+        )
+        return crypto.verify(signing, material, frame.signature)
+    }
+
+    fun recordDelivery(messageId: String, memberId: String): Boolean {
+        val row = db.stadeDbQueries.selectGroupMessageById(messageId).executeAsOneOrNull() ?: return false
+        if (row.outgoing != 1L) return false
+        db.stadeDbQueries.insertGroupDelivery(messageId, memberId)
+        return true
+    }
+
+    fun deliveryCounts(groupId: String): Map<String, Int> =
+        db.stadeDbQueries.groupDeliveryCounts(groupId).executeAsList()
+            .associate { it.messageId to it.deliveredCount.toInt() }
+
+    fun observeDeliveryCounts(groupId: String): Flow<Map<String, Int>> =
+        db.stadeDbQueries.groupDeliveryCounts(groupId)
+            .asFlow()
+            .mapToList(Dispatchers.Default)
+            .map { rows -> rows.associate { it.messageId to it.deliveredCount.toInt() } }
+
+    fun saveIncomingGroupMessage(
+        groupId: String,
+        messageId: String,
+        senderId: String,
+        body: String,
+        timestamp: Long
+    ): Boolean {
+        if (db.stadeDbQueries.groupMessageExists(messageId).executeAsOne() > 0L) return false
+        db.stadeDbQueries.insertGroupMessage(messageId, groupId, senderId, body, timestamp, 0L, 0L)
+        return true
+    }
+
     fun handleKick(kickerContactId: String, rawBody: String, selfStadeId: String): KickOutcome? {
         val stripped = rawBody.removePrefix(GRP_KICK_PREFIX)
         val colonIdx = stripped.indexOf(':')
         if (colonIdx < 0) return null
-        val groupId = stripped.substring(0, colonIdx)
-        val kickedId = stripped.substring(colonIdx + 1)
+        return applyKick(stripped.substring(0, colonIdx), kickerContactId, stripped.substring(colonIdx + 1), selfStadeId)
+    }
 
+    fun applyKick(groupId: String, kickerId: String, kickedId: String, selfStadeId: String): KickOutcome? {
         val group = db.stadeDbQueries.selectGroup(groupId).executeAsOneOrNull() ?: return null
-        if (group.creatorStadeId.isBlank() || group.creatorStadeId != kickerContactId) return null
+        if (group.creatorStadeId.isBlank() || group.creatorStadeId != kickerId) return null
 
         return if (kickedId == selfStadeId) {
             val name = group.name
@@ -228,11 +439,12 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
         }
     }
 
-    fun handleMemberLeft(leaverContactId: String, rawBody: String): String? {
-        val groupId = rawBody.removePrefix(GRP_LEAVE_PREFIX)
-        val isMember = db.stadeDbQueries.isGroupMember(groupId, leaverContactId).executeAsOne() > 0L
-        if (!isMember) return null
-        removeMember(groupId, leaverContactId)
+    fun handleMemberLeft(leaverContactId: String, rawBody: String): String? =
+        applyMemberLeft(rawBody.removePrefix(GRP_LEAVE_PREFIX), leaverContactId)
+
+    fun applyMemberLeft(groupId: String, leaverId: String): String? {
+        if (!isMember(groupId, leaverId)) return null
+        removeMember(groupId, leaverId)
         return groupId
     }
 

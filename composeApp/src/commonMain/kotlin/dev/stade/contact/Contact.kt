@@ -20,7 +20,8 @@ data class Contact(
     val addresses: List<String> = emptyList(),
     val kind: Int = 0,
     val muted: Boolean = false,
-    val avatar: ByteArray? = null
+    val avatar: ByteArray? = null,
+    val groupProto: Int = 1
 ) {
     val stadeId: String get() = id
     override fun equals(other: Any?): Boolean =

@@ -44,7 +44,8 @@ data class HelloPayload(
     val nonce: ByteArray,
     val transcriptCommitment: ByteArray,
     val addresses: List<String> = emptyList(),
-    val reAddRequest: Boolean = false
+    val reAddRequest: Boolean = false,
+    val groupProtocol: Int = 1
 )
 
 @Serializable

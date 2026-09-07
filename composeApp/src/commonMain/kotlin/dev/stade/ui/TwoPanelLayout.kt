@@ -99,7 +99,6 @@ import dev.stade.contact.deleteContact
 import dev.stade.group.GroupInfo
 import dev.stade.identity.LocalIdentity
 import dev.stade.message.SearchResult
-import dev.stade.message.previewBody
 import dev.stade.stadium.isOfficial
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.BotBadge
@@ -527,7 +526,7 @@ fun TwoPanelLayout(
                                             val unread by remember(contact.id) { container.messages.observeUnreadCount(contact.id) }
                                                 .collectAsState(initial = remember(contact.id) { container.messages.unreadCount(contact.id) })
                                             val preview by remember(lastMsg?.id) {
-                                                derivedStateOf { lastMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage) } }
+                                                derivedStateOf { directChatPreview(lastMsg, strings) }
                                             }
                                             val isSelected by remember(contact.id) {
                                                 derivedStateOf {
@@ -568,7 +567,7 @@ fun TwoPanelLayout(
                                             val groupUnread by remember(group.id) { container.groups.observeUnreadCount(group.id) }
                                                 .collectAsState(initial = remember(group.id) { container.groups.unreadCount(group.id) })
                                             val groupPreview by remember(lastGroupMsg?.id) {
-                                                derivedStateOf { lastGroupMsg?.body?.let { previewBody(it, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage) } }
+                                                derivedStateOf { container.groupChatPreview(group.id, lastGroupMsg, owner, strings) }
                                             }
                                             val isGroupSelected by remember(group.id) {
                                                 derivedStateOf {

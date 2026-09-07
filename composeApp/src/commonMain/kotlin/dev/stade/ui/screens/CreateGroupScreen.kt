@@ -175,7 +175,9 @@ fun CreateGroupScreen(
                         val group = withContext(Dispatchers.Default) {
                             val g = container.groups.createGroup(owner.id, owner.stadeId, groupName.trim())
 
-                            runCatching { container.groups.addMember(g.id, owner.id) }
+                            runCatching {
+                                container.groups.setMemberIdentity(g.id, container.groups.selfRosterEntry(owner))
+                            }
                             g
                         }
 
