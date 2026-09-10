@@ -106,6 +106,7 @@ import dev.stade.ui.components.BrandMark
 import dev.stade.radar.isRadarSupported
 import dev.stade.ui.components.HomeActionBar
 import dev.stade.ui.components.TopBarPill
+import dev.stade.ui.components.UpdateRequiredBanner
 import dev.stade.ui.screens.StadeRadarScreen
 import dev.stade.ui.components.formatChatTime
 import org.jetbrains.compose.resources.painterResource
@@ -200,6 +201,7 @@ fun TwoPanelLayout(
     val stadiums by remember(owner.id) { container.stadiums.observeStadiums(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.stadiums.allStadiums(owner.id) })
     val connectedSet by container.sync.connectedContacts.collectAsState()
+    val versionMismatch by container.sync.peerVersionMismatch.collectAsState()
     val typingSet by container.typing.typingContacts.collectAsState()
     val pinned by remember(owner.id) { container.pinnedChats.observePinned(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.pinnedChats.pinned(owner.id) })
@@ -473,6 +475,16 @@ fun TwoPanelLayout(
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            versionMismatch?.let { mismatch ->
+                                item(key = "versionNotice") {
+                                    UpdateRequiredBanner(
+                                        message = if (mismatch.peerIsNewer) strings.updateRequiredByYou
+                                            else strings.updateRequiredByPeer,
+                                        dismissLabel = strings.updateAction,
+                                        onDismiss = { container.sync.clearVersionMismatch() }
+                                    )
+                                }
+                            }
                             if (stadeyVisible && query.isBlank()) {
                                 item(key = "stadey") {
                                     PanelStadeyRow(

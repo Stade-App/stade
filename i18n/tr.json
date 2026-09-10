@@ -112,7 +112,6 @@
   "dialTransportClosed": "taşıma kapalı",
   "dialUnreachableTimeout": "ulaşılamadı / zaman aşımı",
   "dialHandshakeFailed": "handshake başarısız",
-  "hsProtocolMismatch": "Protokol uyumsuz: v{peer} (uygulama v{app})",
   "hsKeySizeBad": "Anahtar boyutları hatalı",
   "hsSelfConnected": "Kendine bağlandın (bayat adres)",
   "hsStadeIdMismatch": "Stade ID anahtarlarla eşleşmiyor",
@@ -542,5 +541,8 @@
   "navGroup": "Grup",
   "navStadium": "Stadium",
   "navRadar": "Radar",
-  "previewYouPrefix": "Siz"
+  "previewYouPrefix": "Siz",
+  "updateRequiredByYou": "Bir kişi Stade'in daha yeni bir sürümünü kullanıyor. Mesajlaşmaya devam etmek için uygulamayı güncelle.",
+  "updateRequiredByPeer": "Bir kişi Stade'in daha eski bir sürümünü kullanıyor. O kişi güncelleyene kadar mesajlar iletilemez.",
+  "updateAction": "Kapat"
 }

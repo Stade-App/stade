@@ -121,7 +121,6 @@ abstract class AppStrings {
     abstract val dialUnreachableTimeout: String
     abstract val dialHandshakeFailed: String
 
-    abstract fun hsProtocolMismatch(peer: Int, app: Int): String
     abstract val hsKeySizeBad: String
     abstract val hsSelfConnected: String
     abstract val hsStadeIdMismatch: String
@@ -569,6 +568,9 @@ abstract class AppStrings {
     abstract val navStadium: String
     abstract val navRadar: String
     abstract val previewYouPrefix: String
+    abstract val updateRequiredByYou: String
+    abstract val updateRequiredByPeer: String
+    abstract val updateAction: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

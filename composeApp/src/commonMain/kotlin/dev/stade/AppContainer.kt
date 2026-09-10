@@ -211,7 +211,7 @@ class AppContainer(
     val handshake = HandshakeService(crypto, pq)
     val outbox = Outbox(db, crypto)
     val ratchet = RatchetSessions(crypto, pq, contacts)
-    val groups = GroupManager(db, crypto)
+    val groups = GroupManager(db, crypto, pq)
     val stadiums = StadiumManager(db, crypto)
     val stickers = StickerManager(db, crypto)
     val pinnedChats = PinnedChats(db)

@@ -45,7 +45,9 @@ data class HelloPayload(
     val transcriptCommitment: ByteArray,
     val addresses: List<String> = emptyList(),
     val reAddRequest: Boolean = false,
-    val groupProtocol: Int = 1
+    val groupProtocol: Int = 1,
+    val ephemeralHandshakeKey: ByteArray = ByteArray(0),
+    val ephemeralMlKemKey: ByteArray = ByteArray(0)
 )
 
 @Serializable

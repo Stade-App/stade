@@ -137,8 +137,6 @@ object EnglishStrings : AppStrings() {
     override val dialUnreachableTimeout = "unreachable / timed out"
     override val dialHandshakeFailed = "handshake failed"
 
-    override fun hsProtocolMismatch(peer: Int, app: Int) =
-        "Protocol mismatch: v$peer (app v$app)"
     override val hsKeySizeBad = "Key sizes are invalid"
     override val hsSelfConnected = "Connected to yourself (stale address)"
     override val hsStadeIdMismatch = "Stade ID does not match the keys"
@@ -642,5 +640,10 @@ object EnglishStrings : AppStrings() {
     override val navStadium = "Stadium"
     override val navRadar = "Radar"
     override val previewYouPrefix = "You"
+    override val updateRequiredByYou =
+        "A contact is using a newer version of Stade. Update the app to keep messaging them."
+    override val updateRequiredByPeer =
+        "A contact is using an older version of Stade. Messages cannot get through until they update."
+    override val updateAction = "Dismiss"
 }
 

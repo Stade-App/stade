@@ -342,7 +342,8 @@ fun ChatScreen(
         container.sync.events.collect { ev ->
             when (ev) {
                 is SyncEngine.SyncEvent.HandshakeRejected ->
-                    showNotification(strings.handshakeRejected(ev.reason), NotificationKind.Error)
+                    if (ev.peerId == null || ev.peerId == contactId)
+                        showNotification(strings.handshakeRejected(ev.reason), NotificationKind.Error)
                 is SyncEngine.SyncEvent.ContactConnected ->
                     if (ev.contactId == contactId)
                         showNotification(strings.contactConnected, NotificationKind.Success)

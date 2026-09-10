@@ -114,6 +114,7 @@ data class GroupFrame(
     val timestamp: Long,
     val needsRelayTo: List<String>,
     val signature: ByteArray,
+    val pqSignature: ByteArray?,
     val payload: String
 )
 

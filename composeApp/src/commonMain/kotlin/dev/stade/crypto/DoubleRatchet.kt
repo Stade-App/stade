@@ -73,26 +73,40 @@ class DoubleRatchet(
         rootSeed: ByteArray,
         ownDh: KeyPair,
         peerDhPub: ByteArray,
-        isAlice: Boolean
+        isAlice: Boolean,
+        ownKem: KeyPair? = null,
+        peerKemPub: ByteArray? = null
     ): State {
         val a2b = crypto.hkdf(rootSeed, ByteArray(0), "stade-dr-a2b".encodeToByteArray(), 32)
         val b2a = crypto.hkdf(rootSeed, ByteArray(0), "stade-dr-b2a".encodeToByteArray(), 32)
-        return State(
+        val state = State(
             rootKey = rootSeed.copyOf(),
             sendChainKey = if (isAlice) a2b else b2a,
             recvChainKey = if (isAlice) b2a else a2b,
             dhSendPriv = ownDh.privateKey,
             dhSendPub = ownDh.publicKey,
             dhRecvPub = peerDhPub,
-            mlkemSendPriv = ByteArray(0),
-            mlkemSendPub = ByteArray(0),
-            mlkemRecvPub = null,
+            mlkemSendPriv = ownKem?.privateKey ?: ByteArray(0),
+            mlkemSendPub = ownKem?.publicKey ?: ByteArray(0),
+            mlkemRecvPub = peerKemPub,
             pendingKemCiphertext = null,
             sendCounter = 0,
             recvCounter = 0,
             previousSendCounter = 0,
             skipped = mutableMapOf()
         )
+        if (isAlice) startSendRatchet(state)
+        return state
+    }
+
+    fun hasNeverRatcheted(state: State, staticHandshakePub: ByteArray): Boolean =
+        state.dhSendPub.contentEquals(staticHandshakePub)
+
+    fun startSendRatchet(state: State) {
+        val peerDhPub = state.dhRecvPub ?: return
+        state.previousSendCounter = state.sendCounter
+        state.sendCounter = 0
+        sendStep(state, peerDhPub)
     }
 
     fun encrypt(state: State, plaintext: ByteArray, associatedData: ByteArray = ByteArray(0)): ByteArray {
@@ -108,7 +122,6 @@ class DoubleRatchet(
             mlkemPub = headerKemPub,
             mlkemCt = headerKemCt
         )
-        state.pendingKemCiphertext = null
         state.sendCounter += 1
         val nonce = crypto.hkdf(messageKey, ByteArray(0), "stade-dr-nonce".encodeToByteArray(), 12)
         val key = crypto.hkdf(messageKey, ByteArray(0), "stade-dr-key".encodeToByteArray(), 32)
@@ -143,28 +156,19 @@ class DoubleRatchet(
             header.counter < state.recvCounter
         ) return null
 
-        val snapshot = snapshotState(state)
+        val incomingKemSs = if (header.mlkemCt == null) {
+            ByteArray(0)
+        } else {
+            if (state.mlkemSendPriv.isEmpty()) return null
+            runCatching { pq.mlkemDecapsulate(state.mlkemSendPriv, header.mlkemCt) }.getOrNull()
+                ?: return null
+        }
 
-        val peerSentKemCtForUs = header.mlkemCt
-        val incomingKemSs: ByteArray? = if (peerSentKemCtForUs != null && state.mlkemSendPriv.isNotEmpty()) {
-            runCatching { pq.mlkemDecapsulate(state.mlkemSendPriv, peerSentKemCtForUs) }.getOrNull()
-        } else null
+        val snapshot = snapshotState(state)
 
         if (state.dhRecvPub == null || !header.dhPub.contentEquals(state.dhRecvPub!!)) {
             skipMessageKeys(state, header.previousCounter)
             dhRatchet(state, header, incomingKemSs)
-        } else if (incomingKemSs != null) {
-            mixKemSs(state, incomingKemSs)
-        }
-
-        val peerKemPub = header.mlkemPub
-        if (peerKemPub != null && (state.mlkemRecvPub == null || !peerKemPub.contentEquals(state.mlkemRecvPub!!))) {
-            state.mlkemRecvPub = peerKemPub
-            val enc = runCatching { pq.mlkemEncapsulate(peerKemPub) }.getOrNull()
-            if (enc != null) {
-                state.pendingKemCiphertext = enc.ciphertext
-                mixKemSs(state, enc.sharedSecret)
-            }
         }
 
         skipMessageKeys(state, header.counter)
@@ -241,18 +245,22 @@ class DoubleRatchet(
         }
     }
 
-    private fun dhRatchet(state: State, header: Header, incomingKemSs: ByteArray?) {
+    private fun dhRatchet(state: State, header: Header, incomingKemSs: ByteArray) {
         state.previousSendCounter = state.sendCounter
         state.sendCounter = 0
         state.recvCounter = 0
         state.dhRecvPub = header.dhPub
+        header.mlkemPub?.let { state.mlkemRecvPub = it }
 
         val sharedRecv = crypto.keyAgreement(state.dhSendPriv, header.dhPub)
-        val recvSecret = sharedRecv + (incomingKemSs ?: ByteArray(0))
-        val derivedRecv = crypto.hkdf(recvSecret, state.rootKey, "stade-pqdr-step-v2".encodeToByteArray(), 64)
+        val derivedRecv = crypto.hkdf(sharedRecv + incomingKemSs, state.rootKey, STEP_INFO, 64)
         state.rootKey = derivedRecv.copyOfRange(0, 32)
         state.recvChainKey = derivedRecv.copyOfRange(32, 64)
 
+        sendStep(state, header.dhPub)
+    }
+
+    private fun sendStep(state: State, peerDhPub: ByteArray) {
         val newDh = crypto.generateAgreementKeyPair()
         state.dhSendPriv = newDh.privateKey
         state.dhSendPub = newDh.publicKey
@@ -261,15 +269,21 @@ class DoubleRatchet(
         state.mlkemSendPriv = newKem.privateKey
         state.mlkemSendPub = newKem.publicKey
 
-        val sharedSend = crypto.keyAgreement(state.dhSendPriv, header.dhPub)
-        val derivedSend = crypto.hkdf(sharedSend, state.rootKey, "stade-pqdr-step-v2".encodeToByteArray(), 64)
+        var kemSs = ByteArray(0)
+        state.pendingKemCiphertext = null
+        val peerKemPub = state.mlkemRecvPub
+        if (peerKemPub != null) {
+            val enc = runCatching { pq.mlkemEncapsulate(peerKemPub) }.getOrNull()
+            if (enc != null) {
+                kemSs = enc.sharedSecret
+                state.pendingKemCiphertext = enc.ciphertext
+            }
+        }
+
+        val sharedSend = crypto.keyAgreement(state.dhSendPriv, peerDhPub)
+        val derivedSend = crypto.hkdf(sharedSend + kemSs, state.rootKey, STEP_INFO, 64)
         state.rootKey = derivedSend.copyOfRange(0, 32)
         state.sendChainKey = derivedSend.copyOfRange(32, 64)
-    }
-
-    private fun mixKemSs(state: State, kemSs: ByteArray) {
-        val derived = crypto.hkdf(kemSs, state.rootKey, "stade-pqdr-mix-v2".encodeToByteArray(), 32)
-        state.rootKey = derived
     }
 
     private fun kdfChain(chainKey: ByteArray): Pair<ByteArray, ByteArray> {
@@ -278,8 +292,9 @@ class DoubleRatchet(
     }
 
     companion object {
-        private const val MAX_SKIP_PER_STEP = 8000
-        private const val MAX_SKIPPED_STORED = 10000
+        private const val MAX_SKIP_PER_STEP = 1000
+        private const val MAX_SKIPPED_STORED = 2000
+        private val STEP_INFO = "stade-pqdr-step-v2".encodeToByteArray()
 
         private fun writeInt(out: ByteArray, offset: Int, value: Int) {
             out[offset] = ((value ushr 24) and 0xff).toByte()

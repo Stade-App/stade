@@ -3,9 +3,18 @@ package dev.stade.contact
 import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
 import dev.stade.crypto.KemResult
+import dev.stade.crypto.KeyPair
 import dev.stade.crypto.PqCrypto
 import dev.stade.identity.LocalIdentity
 import dev.stade.identity.StadeId
+
+data class HandshakeEphemeral(val dh: KeyPair, val kem: KeyPair)
+
+data class PeerEphemeral(val dhPub: ByteArray, val kemPub: ByteArray) {
+    override fun equals(other: Any?): Boolean =
+        other is PeerEphemeral && other.dhPub.contentEquals(dhPub) && other.kemPub.contentEquals(kemPub)
+    override fun hashCode(): Int = dhPub.contentHashCode() * 31 + kemPub.contentHashCode()
+}
 
 data class InvitePayload(
     val stadeId: String,
@@ -149,13 +158,23 @@ class HandshakeService(
     fun deriveRootKey(
         owner: LocalIdentity,
         peer: InvitePayload,
+        ownEphemeral: HandshakeEphemeral,
+        peerEphemeral: PeerEphemeral,
         kemCiphertext: ByteArray,
         kemSharedSecret: ByteArray
     ): ByteArray {
-        val dh = crypto.keyAgreement(owner.privateHandshakeKey, peer.handshakePublicKey)
         val ownerId = owner.stadeId.encodeToByteArray()
         val peerId = peer.stadeId.encodeToByteArray()
         val ownerIsLo = compareLex(ownerId, peerId) <= 0
+
+        val dhStatic = crypto.keyAgreement(owner.privateHandshakeKey, peer.handshakePublicKey)
+        val dhEphemeral = crypto.keyAgreement(ownEphemeral.dh.privateKey, peerEphemeral.dhPub)
+        val dhStaticToPeerEph = crypto.keyAgreement(owner.privateHandshakeKey, peerEphemeral.dhPub)
+        val dhEphToPeerStatic = crypto.keyAgreement(ownEphemeral.dh.privateKey, peer.handshakePublicKey)
+        val (crossLo, crossHi) =
+            if (ownerIsLo) dhStaticToPeerEph to dhEphToPeerStatic
+            else dhEphToPeerStatic to dhStaticToPeerEph
+
         val (lo, hi) = if (ownerIsLo) ownerId to peerId else peerId to ownerId
         val (loSigningPub, hiSigningPub) =
             if (ownerIsLo) owner.publicSigningKey to peer.signingPublicKey
@@ -166,22 +185,34 @@ class HandshakeService(
         val (loMlKemPub, hiMlKemPub) =
             if (ownerIsLo) owner.publicMlKemKey to peer.mlkemPublicKey
             else peer.mlkemPublicKey to owner.publicMlKemKey
-        val transcript = "stade-pqxdh-v2".encodeToByteArray() +
+        val (loEphDhPub, hiEphDhPub) =
+            if (ownerIsLo) ownEphemeral.dh.publicKey to peerEphemeral.dhPub
+            else peerEphemeral.dhPub to ownEphemeral.dh.publicKey
+        val (loEphKemPub, hiEphKemPub) =
+            if (ownerIsLo) ownEphemeral.kem.publicKey to peerEphemeral.kemPub
+            else peerEphemeral.kemPub to ownEphemeral.kem.publicKey
+
+        val transcript = "stade-pqxdh-v3".encodeToByteArray() +
             lo + hi +
             loSigningPub + hiSigningPub +
             loHandshakePub + hiHandshakePub +
             loMlKemPub + hiMlKemPub +
+            loEphDhPub + hiEphDhPub +
+            loEphKemPub + hiEphKemPub +
             kemCiphertext
         val salt = crypto.hash(transcript)
-        val secret = dh + kemSharedSecret
-        return crypto.hkdf(secret, salt, "stade-pqxdh-root-v2".encodeToByteArray(), 32)
+        val secret = dhStatic + dhEphemeral + crossLo + crossHi + kemSharedSecret
+        return crypto.hkdf(secret, salt, "stade-pqxdh-root-v3".encodeToByteArray(), 32)
     }
 
-    fun encapsulateForPeer(peer: InvitePayload): KemResult =
-        pq.mlkemEncapsulate(peer.mlkemPublicKey)
+    fun newEphemeral(): HandshakeEphemeral =
+        HandshakeEphemeral(crypto.generateAgreementKeyPair(), pq.generateMlKemKeyPair())
 
-    fun decapsulate(owner: LocalIdentity, ciphertext: ByteArray): ByteArray =
-        pq.mlkemDecapsulate(owner.privateMlKemKey, ciphertext)
+    fun encapsulateForPeer(peerEphemeralKemPub: ByteArray): KemResult =
+        pq.mlkemEncapsulate(peerEphemeralKemPub)
+
+    fun decapsulate(ownEphemeral: HandshakeEphemeral, ciphertext: ByteArray): ByteArray =
+        pq.mlkemDecapsulate(ownEphemeral.kem.privateKey, ciphertext)
 
     fun isAlice(owner: LocalIdentity, peer: InvitePayload): Boolean =
         compareLex(owner.stadeId.encodeToByteArray(), peer.stadeId.encodeToByteArray()) < 0

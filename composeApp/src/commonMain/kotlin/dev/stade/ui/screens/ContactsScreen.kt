@@ -42,6 +42,7 @@ import dev.stade.ui.components.HomeActionBar
 import dev.stade.ui.components.TOP_PILL_GAP
 import dev.stade.ui.components.TOP_PILL_SIZE
 import dev.stade.ui.components.TopBarPill
+import dev.stade.ui.components.UpdateRequiredBanner
 import org.jetbrains.compose.resources.painterResource
 import stade.composeapp.generated.resources.Res
 import stade.composeapp.generated.resources.app_icon
@@ -279,6 +280,7 @@ fun ContactsScreen(
     val stadiums by remember(owner.id) { container.stadiums.observeStadiums(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.stadiums.allStadiums(owner.id) })
     val connectedSet by container.sync.connectedContacts.collectAsState()
+    val versionMismatch by container.sync.peerVersionMismatch.collectAsState()
     val typingSet by container.typing.typingContacts.collectAsState()
     val pinned by remember(owner.id) { container.pinnedChats.observePinned(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.pinnedChats.pinned(owner.id) })
@@ -702,6 +704,16 @@ fun ContactsScreen(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
+                versionMismatch?.let { mismatch ->
+                    item(key = "versionNotice") {
+                        UpdateRequiredBanner(
+                            message = if (mismatch.peerIsNewer) strings.updateRequiredByYou
+                                else strings.updateRequiredByPeer,
+                            dismissLabel = strings.updateAction,
+                            onDismiss = { container.sync.clearVersionMismatch() }
+                        )
+                    }
+                }
                 if (stadeyVisible && !(searchActive && query.isNotBlank())) {
                     item(key = "stadey") {
                         StadeyRow(

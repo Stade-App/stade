@@ -34,9 +34,16 @@ class RatchetSessions(
                     rootSeed = contact.rootKey,
                     ownDh = KeyPair(owner.publicHandshakeKey, owner.privateHandshakeKey),
                     peerDhPub = contact.publicHandshakeKey,
-                    isAlice = contact.isAlice
+                    isAlice = contact.isAlice,
+                    ownKem = KeyPair(owner.publicMlKemKey, owner.privateMlKemKey),
+                    peerKemPub = contact.publicMlKemKey
                 )
-            } else loaded
+            } else {
+                if (contact.isAlice && ratchet.hasNeverRatcheted(loaded, owner.publicHandshakeKey)) {
+                    ratchet.startSendRatchet(loaded)
+                }
+                loaded
+            }
         } else {
             ratchet.initSymmetric(
                 rootSeed = contact.rootKey,

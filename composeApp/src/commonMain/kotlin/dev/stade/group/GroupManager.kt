@@ -5,6 +5,7 @@ import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import dev.stade.crypto.CryptoApi
+import dev.stade.crypto.PqCrypto
 import dev.stade.crypto.Encoding
 import dev.stade.db.StadeDb
 import dev.stade.identity.LocalIdentity
@@ -29,7 +30,11 @@ private fun sanitizeRosterField(value: String): String =
         .take(MAX_ROSTER_FIELD_LEN)
         .joinToString("")
 
-class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
+class GroupManager(
+    private val db: StadeDb,
+    private val crypto: CryptoApi,
+    private val pq: PqCrypto
+) {
 
     private val pendingJoins = mutableMapOf<String, PendingJoinData>()
 
@@ -340,7 +345,9 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
     fun encodeFrame(frame: GroupFrame): String =
         GRP_FRAME_PREFIX + frame.groupId + ":" + frame.senderId + ":" + frame.messageId + ":" +
             frame.timestamp.toString() + ":" + frame.needsRelayTo.joinToString(GRP_NEEDS_SEP) + ":" +
-            Base64.Default.encode(frame.signature) + "\n" + frame.payload
+            Base64.Default.encode(frame.signature) + ":" +
+            (frame.pqSignature?.let { Base64.Default.encode(it) } ?: "") +
+            "\n" + frame.payload
 
     fun signFrame(
         owner: LocalIdentity,
@@ -354,8 +361,14 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
             groupId, owner.stadeId, messageId, timestamp, needsRelayTo, payload
         )
         val signature = crypto.sign(owner.privateSigningKey, material)
+        val pqSignature = if (needsRelayTo.isEmpty()) null else runCatching {
+            pq.signMlDsa(owner.privateMlDsaKey, owner.publicMlDsaKey, material)
+        }.getOrNull()
         return encodeFrame(
-            GroupFrame(groupId, owner.stadeId, messageId, timestamp, needsRelayTo, signature, payload)
+            GroupFrame(
+                groupId, owner.stadeId, messageId, timestamp, needsRelayTo,
+                signature, pqSignature, payload
+            )
         )
     }
 
@@ -366,27 +379,40 @@ class GroupManager(private val db: StadeDb, private val crypto: CryptoApi) {
         val newlineIdx = stripped.indexOf('\n')
         if (newlineIdx < 0) return null
         val parts = stripped.substring(0, newlineIdx).split(':')
-        if (parts.size != 6) return null
+        if (parts.size != 7) return null
         if (parts[0].isEmpty() || parts[1].isEmpty() || parts[2].isEmpty()) return null
         val timestamp = parts[3].toLongOrNull() ?: return null
         val needs = parts[4].split(GRP_NEEDS_SEP).filter { it.isNotBlank() }
         val signature = runCatching { Base64.Default.decode(parts[5]) }.getOrNull() ?: return null
+        val pqSignature = if (parts[6].isEmpty()) null else
+            runCatching { Base64.Default.decode(parts[6]) }.getOrNull() ?: return null
         return GroupFrame(
-            parts[0], parts[1], parts[2], timestamp, needs, signature,
+            parts[0], parts[1], parts[2], timestamp, needs, signature, pqSignature,
             stripped.substring(newlineIdx + 1)
         )
     }
 
-    fun verifyFrame(frame: GroupFrame): Boolean {
+    fun verifyFrame(frame: GroupFrame, requirePostQuantum: Boolean): Boolean {
         val entry = memberIdentity(frame.groupId, frame.senderId) ?: return false
         val signing = entry.signingKey ?: return false
         val mldsa = entry.mldsaKey ?: return false
         if (StadeId.derive(signing, mldsa, crypto::hash) != frame.senderId) return false
+        return verifyFrameSignatures(frame, signing, mldsa, requirePostQuantum)
+    }
+
+    fun verifyFrameSignatures(
+        frame: GroupFrame,
+        signingKey: ByteArray,
+        mldsaKey: ByteArray,
+        requirePostQuantum: Boolean
+    ): Boolean {
         val material = groupSigningMaterial(
             frame.groupId, frame.senderId, frame.messageId, frame.timestamp,
             frame.needsRelayTo, frame.payload
         )
-        return crypto.verify(signing, material, frame.signature)
+        if (!crypto.verify(signingKey, material, frame.signature)) return false
+        val pqSignature = frame.pqSignature ?: return !requirePostQuantum
+        return runCatching { pq.verifyMlDsa(mldsaKey, material, pqSignature) }.getOrDefault(false)
     }
 
     fun recordDelivery(messageId: String, memberId: String): Boolean {

@@ -2,9 +2,11 @@
 
 import dev.stade.contact.Contact
 import dev.stade.contact.ContactManager
+import dev.stade.contact.HandshakeEphemeral
 import dev.stade.contact.HandshakeService
 import dev.stade.contact.InvitePayload
 import dev.stade.contact.PROMOTE_TO_CONTACT_PREFIX
+import dev.stade.contact.PeerEphemeral
 import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
 import dev.stade.crypto.PqCrypto
@@ -85,7 +87,7 @@ class SyncEngine(
     val groupManager: GroupManager? = null,
     val stadiumManager: StadiumManager? = null
 ) {
-    private val protocolVersion = 3
+    private val protocolVersion = 4
     private val json = Json { ignoreUnknownKeys = true }
     private val _events = MutableSharedFlow<SyncEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<SyncEvent> = _events
@@ -93,12 +95,16 @@ class SyncEngine(
     private val sessionsLock = Mutex()
     private val _connected = MutableStateFlow<Set<String>>(emptySet())
     val connectedContacts: StateFlow<Set<String>> = _connected.asStateFlow()
+    private val _versionMismatch = MutableStateFlow<VersionMismatch?>(null)
+    val peerVersionMismatch: StateFlow<VersionMismatch?> = _versionMismatch.asStateFlow()
     @Volatile var selfAddressesProvider: () -> List<String> = { emptyList() }
     @Volatile private var forgottenIds = emptySet<String>()
     @Volatile private var forgottenLoaded = false
     @Volatile private var pendingReAdds = emptySet<String>()
     private val pendingHandshakes = mutableMapOf<String, CompletableDeferred<Pair<Contact, Boolean>?>>()
     private val pendingHandshakesLock = Mutex()
+
+    data class VersionMismatch(val peerId: String, val peerIsNewer: Boolean)
 
     sealed interface SyncEvent {
         data class ContactConnected(val contactId: String, val isNew: Boolean) : SyncEvent
@@ -109,7 +115,7 @@ class SyncEngine(
         data class GroupMemberRemoved(val groupId: String) : SyncEvent
         data class GroupRosterUpdated(val groupId: String) : SyncEvent
         data class RemovedFromGroup(val groupId: String, val groupName: String) : SyncEvent
-        data class HandshakeRejected(val reason: String) : SyncEvent
+        data class HandshakeRejected(val reason: String, val peerId: String? = null) : SyncEvent
         data class DecryptFailed(val contactId: String) : SyncEvent
         data class SendFailed(val contactId: String, val reason: String) : SyncEvent
         data class ReactionUpdated(val messageId: String) : SyncEvent
@@ -148,6 +154,7 @@ class SyncEngine(
                 return@coroutineScope
             }
             val (contact, isNew) = handshakeOutcome
+            clearVersionMismatchFor(contact.id)
             contacts.markSeen(contact.id, Clock.System.now().toEpochMilliseconds())
             val preferOutbound = owner.stadeId < contact.id
             if (outbound != preferOutbound) {
@@ -183,12 +190,15 @@ class SyncEngine(
 
     private suspend fun handshake(owner: LocalIdentity, connection: Connection): Pair<Contact, Boolean>? {
         val ourNonce = crypto.randomBytes(32)
+        val ourEphemeral = handshakeService.newEphemeral()
         val ourTc = transcriptCommitment(
             protocolVersion,
             owner.publicSigningKey,
             owner.publicHandshakeKey,
             owner.publicMlKemKey,
-            owner.publicMlDsaKey
+            owner.publicMlDsaKey,
+            ourEphemeral.dh.publicKey,
+            ourEphemeral.kem.publicKey
         )
         val ourHello = HelloPayload(
             protocolVersion = protocolVersion,
@@ -202,7 +212,9 @@ class SyncEngine(
             transcriptCommitment = ourTc,
             addresses = runCatching { selfAddressesProvider() }.getOrDefault(emptyList()),
             reAddRequest = pendingReAdds.isNotEmpty(),
-            groupProtocol = GROUP_PROTOCOL_VERSION
+            groupProtocol = GROUP_PROTOCOL_VERSION,
+            ephemeralHandshakeKey = ourEphemeral.dh.publicKey,
+            ephemeralMlKemKey = ourEphemeral.kem.publicKey
         )
         runCatching {
             connection.send(FrameCodec.encode(SyncRecord(RecordType.HELLO, json.encodeToString(HelloPayload.serializer(), ourHello).encodeToByteArray())))
@@ -216,25 +228,38 @@ class SyncEngine(
         }.getOrNull() ?: return null
 
         if (peerHello.protocolVersion != protocolVersion) {
-            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsProtocolMismatch(peerHello.protocolVersion, protocolVersion)))
+            val peerIsNewer = peerHello.protocolVersion > protocolVersion
+            val known = runCatching { contacts.findByStadeId(peerHello.stadeId) }.getOrNull()
+            if (known != null && known.kind == 0 && known.ownerId == owner.id) {
+                _versionMismatch.value = VersionMismatch(peerHello.stadeId, peerIsNewer)
+            }
+            _events.tryEmit(
+                SyncEvent.HandshakeRejected(
+                    if (peerIsNewer) I18n.current.updateRequiredByYou
+                    else I18n.current.updateRequiredByPeer,
+                    peerHello.stadeId
+                )
+            )
             return null
         }
         if (peerHello.signingPublicKey.size != 32 ||
             peerHello.handshakePublicKey.size != 32 ||
             peerHello.mlkemPublicKey.size != 1184 ||
-            peerHello.mldsaPublicKey.size != 1952
+            peerHello.mldsaPublicKey.size != 1952 ||
+            peerHello.ephemeralHandshakeKey.size != 32 ||
+            peerHello.ephemeralMlKemKey.size != 1184
         ) {
-            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsKeySizeBad))
+            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsKeySizeBad, peerHello.stadeId))
             return null
         }
         if (peerHello.signingPublicKey.contentEquals(owner.publicSigningKey)) {
-            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsSelfConnected))
+            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsSelfConnected, peerHello.stadeId))
             return null
         }
 
         val derivedPeerId = StadeId.derive(peerHello.signingPublicKey, peerHello.mldsaPublicKey, crypto::hash)
         if (derivedPeerId != peerHello.stadeId) {
-            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsStadeIdMismatch))
+            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsStadeIdMismatch, peerHello.stadeId))
             return null
         }
         if (peerHello.stadeId in forgotten()) {
@@ -242,15 +267,18 @@ class SyncEngine(
             unforget(peerHello.stadeId)
         }
 
+        val peerEphemeral = PeerEphemeral(peerHello.ephemeralHandshakeKey, peerHello.ephemeralMlKemKey)
         val expectedPeerTc = transcriptCommitment(
             protocolVersion,
             peerHello.signingPublicKey,
             peerHello.handshakePublicKey,
             peerHello.mlkemPublicKey,
-            peerHello.mldsaPublicKey
+            peerHello.mldsaPublicKey,
+            peerEphemeral.dhPub,
+            peerEphemeral.kemPub
         )
         if (!expectedPeerTc.contentEquals(peerHello.transcriptCommitment)) {
-            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsTranscriptMismatch))
+            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsTranscriptMismatch, peerHello.stadeId))
             return null
         }
 
@@ -277,7 +305,7 @@ class SyncEngine(
             json.decodeFromString(AuthPayload.serializer(), authRecord.payload.decodeToString())
         }.getOrNull() ?: return null
         if (peerAuth.stadeId != peerHello.stadeId) {
-            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsAuthStadeIdMismatch))
+            _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsAuthStadeIdMismatch, peerHello.stadeId))
             return null
         }
 
@@ -288,7 +316,8 @@ class SyncEngine(
             _events.tryEmit(SyncEvent.HandshakeRejected(
                 if (!edOk && !dsaOk) I18n.current.hsSignaturesInvalid
                 else if (!edOk) I18n.current.hsEdInvalid
-                else I18n.current.hsMldsaInvalid
+                else I18n.current.hsMldsaInvalid,
+                peerHello.stadeId
             ))
             return null
         }
@@ -317,7 +346,9 @@ class SyncEngine(
             runCatching { contacts.delete(existing.id) }
         }
 
-        val established = gatedNewContactHandshake(owner, connection, peerHello, peerAuth.isStadiumJoin, priorKind)
+        val established = gatedNewContactHandshake(
+            owner, connection, peerHello, peerAuth.isStadiumJoin, priorKind, ourEphemeral, peerEphemeral
+        )
         if (established != null) {
             pendingReAdds = pendingReAdds - peerHello.stadeId
             noteGroupProtocol(established.first.id, peerHello.groupProtocol)
@@ -347,7 +378,9 @@ class SyncEngine(
         connection: Connection,
         peerHello: HelloPayload,
         peerClaimsStadiumJoin: Boolean,
-        priorKind: Int?
+        priorKind: Int?,
+        ourEphemeral: HandshakeEphemeral,
+        peerEphemeral: PeerEphemeral
     ): Pair<Contact, Boolean>? {
         val gateKey = peerHello.stadeId
         val (isLeader, gate) = pendingHandshakesLock.withLock {
@@ -362,7 +395,9 @@ class SyncEngine(
             val result = if (freshExisting != null) {
                 freshExisting to false
             } else {
-                performNewContactHandshake(owner, connection, peerHello, peerClaimsStadiumJoin, priorKind)
+                performNewContactHandshake(
+                    owner, connection, peerHello, peerClaimsStadiumJoin, priorKind, ourEphemeral, peerEphemeral
+                )
             }
             gate.complete(result)
             return result
@@ -384,7 +419,9 @@ class SyncEngine(
         connection: Connection,
         peerHello: HelloPayload,
         peerClaimsStadiumJoin: Boolean,
-        priorKind: Int?
+        priorKind: Int?,
+        ourEphemeral: HandshakeEphemeral,
+        peerEphemeral: PeerEphemeral
     ): Pair<Contact, Boolean>? {
         val invite = InvitePayload(
             stadeId = peerHello.stadeId,
@@ -399,7 +436,7 @@ class SyncEngine(
         val kemCt: ByteArray
         val kemSs: ByteArray
         if (isAlice) {
-            val enc = handshakeService.encapsulateForPeer(invite)
+            val enc = handshakeService.encapsulateForPeer(peerEphemeral.kemPub)
             kemCt = enc.ciphertext
             kemSs = enc.sharedSecret
             val rec = SyncRecord(RecordType.KEM_OFFER,
@@ -413,14 +450,14 @@ class SyncEngine(
                 json.decodeFromString(KemOfferPayload.serializer(), rec.payload.decodeToString())
             }.getOrNull() ?: return null
             kemCt = offer.ciphertext
-            kemSs = runCatching { handshakeService.decapsulate(owner, kemCt) }.getOrNull() ?: run {
-                _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsMlkemDecapFailed))
+            kemSs = runCatching { handshakeService.decapsulate(ourEphemeral, kemCt) }.getOrNull() ?: run {
+                _events.tryEmit(SyncEvent.HandshakeRejected(I18n.current.hsMlkemDecapFailed, peerHello.stadeId))
                 return null
             }
         }
 
         val rootKey = runCatching {
-            handshakeService.deriveRootKey(owner, invite, kemCt, kemSs)
+            handshakeService.deriveRootKey(owner, invite, ourEphemeral, peerEphemeral, kemCt, kemSs)
         }.getOrNull() ?: return null
 
         val nickname = peerHello.nickname.ifBlank { I18n.current.contactNameFallback(peerHello.stadeId.takeLast(4)) }
@@ -454,19 +491,21 @@ class SyncEngine(
         edPub: ByteArray,
         xPub: ByteArray,
         kemPub: ByteArray,
-        dsaPub: ByteArray
+        dsaPub: ByteArray,
+        ephDhPub: ByteArray,
+        ephKemPub: ByteArray
     ): ByteArray {
         val out = ByteArray(4)
         out[0] = ((proto ushr 24) and 0xff).toByte()
         out[1] = ((proto ushr 16) and 0xff).toByte()
         out[2] = ((proto ushr 8) and 0xff).toByte()
         out[3] = (proto and 0xff).toByte()
-        return crypto.hash(TC_PREFIX + out + edPub + xPub + kemPub + dsaPub)
+        return crypto.hash(TC_PREFIX + out + edPub + xPub + kemPub + dsaPub + ephDhPub + ephKemPub)
     }
 
     companion object {
-        private val AUTH_PREFIX = "stade-auth-v2".encodeToByteArray()
-        private val TC_PREFIX = "stade-tc-v2".encodeToByteArray()
+        private val AUTH_PREFIX = "stade-auth-v3".encodeToByteArray()
+        private val TC_PREFIX = "stade-tc-v3".encodeToByteArray()
     }
 
     private inner class ContactSession(
@@ -600,7 +639,7 @@ class SyncEngine(
                 } ?: false
                 if (!adopted) return false
             }
-            if (!groups.verifyFrame(frame)) return true
+            if (!groups.verifyFrame(frame, requirePostQuantum = contact.id != frame.senderId)) return true
 
             val payload = frame.payload
             val accepted = when {
@@ -1008,6 +1047,14 @@ class SyncEngine(
     }
 
     fun isConnected(contactId: String): Boolean = _connected.value.contains(contactId)
+
+    fun clearVersionMismatch() {
+        _versionMismatch.value = null
+    }
+
+    private fun clearVersionMismatchFor(contactId: String) {
+        if (_versionMismatch.value?.peerId == contactId) _versionMismatch.value = null
+    }
 
     private fun forgotten(): Set<String> {
         if (!forgottenLoaded) {

@@ -137,8 +137,6 @@ object TurkishStrings : AppStrings() {
     override val dialUnreachableTimeout = "ulaşılamadı / zaman aşımı"
     override val dialHandshakeFailed = "handshake başarısız"
 
-    override fun hsProtocolMismatch(peer: Int, app: Int) =
-        "Protokol uyumsuz: v$peer (uygulama v$app)"
     override val hsKeySizeBad = "Anahtar boyutları hatalı"
     override val hsSelfConnected = "Kendine bağlandın (bayat adres)"
     override val hsStadeIdMismatch = "Stade ID anahtarlarla eşleşmiyor"
@@ -641,5 +639,10 @@ object TurkishStrings : AppStrings() {
     override val navStadium = "Stadium"
     override val navRadar = "Radar"
     override val previewYouPrefix = "Siz"
+    override val updateRequiredByYou =
+        "Bir kişi Stade'in daha yeni bir sürümünü kullanıyor. Mesajlaşmaya devam etmek için uygulamayı güncelle."
+    override val updateRequiredByPeer =
+        "Bir kişi Stade'in daha eski bir sürümünü kullanıyor. O kişi güncelleyene kadar mesajlar iletilemez."
+    override val updateAction = "Kapat"
 }
 

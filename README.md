@@ -12,7 +12,8 @@ Built with Kotlin Multiplatform and Compose Multiplatform, Stade runs natively o
 
 ## Security & Encryption
 
-- **Hybrid post-quantum Double Ratchet** — every message is encrypted with a Double Ratchet that mixes a classical X25519 Diffie-Hellman ratchet with **ML-KEM-768** (a post-quantum key encapsulation mechanism) at every step, so forward secrecy and break-in recovery hold even against a future quantum adversary.
+- **Hybrid post-quantum handshake** — session keys are established from a combination of classical X25519 key agreements and **ML-KEM-768** (a post-quantum key encapsulation mechanism). Both sides contribute single-use ephemeral keys that are discarded immediately afterwards, so a conversation cannot be recovered later even if the long-term identity keys are seized.
+- **Hybrid post-quantum Double Ratchet** — every message is encrypted with its own key, and every ratchet step mixes a fresh X25519 key agreement with a fresh ML-KEM-768 encapsulation. Forward secrecy and break-in recovery therefore hold against a future quantum adversary as well as a present-day one.
 - **Dual signatures** — every handshake and identity claim is signed twice: once with classical **Ed25519** and once with post-quantum **ML-DSA-65**, so authentication doesn't rest on a single cryptographic assumption.
 - **Self-sovereign identity** — your `STADE-` ID is deterministically derived from the hash of your own public keys. No server issues it, no server can revoke it.
 - **Contact verification** — verify a contact out-of-band to confirm you're really talking to them and not a man-in-the-middle.
