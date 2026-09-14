@@ -188,6 +188,10 @@ private fun PadTag(text: String, accent: Color) {
 
 @Composable
 private fun PadPulse(active: Boolean, tint: Color) {
+    if (!active) {
+        PadBars(tint) { 0f }
+        return
+    }
     val transition = rememberInfiniteTransition(label = "padPulse")
     val phase by transition.animateFloat(
         initialValue = 0f,
@@ -198,15 +202,21 @@ private fun PadPulse(active: Boolean, tint: Color) {
         ),
         label = "padPulsePhase"
     )
+    PadBars(tint) { phase }
+}
+
+@Composable
+private fun PadBars(tint: Color, phase: () -> Float) {
     Canvas(modifier = Modifier.size(width = 22.dp, height = 22.dp)) {
+        val current = phase()
         val bars = 4
         val gap = size.width / (bars * 2f - 1f)
         val barWidth = gap
         for (i in 0 until bars) {
-            val amplitude = if (active) {
-                0.35f + 0.65f * abs(sin(phase + i * 0.8f))
-            } else {
+            val amplitude = if (current == 0f) {
                 0.35f
+            } else {
+                0.35f + 0.65f * abs(sin(current + i * 0.8f))
             }
             val barHeight = size.height * amplitude
             val x = i * (barWidth + gap) + barWidth / 2f

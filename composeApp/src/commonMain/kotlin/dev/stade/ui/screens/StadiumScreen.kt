@@ -120,7 +120,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.datetime.Clock
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import dev.stade.ui.components.InlineKeyboardPanel
-import dev.stade.ui.components.rememberPanelHeight
+import dev.stade.ui.components.rememberPanelHeightState
 import dev.stade.ui.components.EmojiStickerPanel
 import dev.stade.ui.components.PadPanel
 import dev.stade.ui.i18n.LocalStrings
@@ -133,6 +133,7 @@ import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.FullScreenImageViewer
 import dev.stade.ui.components.ScrollToBottomButton
 import dev.stade.ui.components.StickerMakerDialog
+import dev.stade.ui.components.MemeClipPlayer
 import dev.stade.ui.components.MemeClipBubble
 import dev.stade.ui.components.PadMode
 import dev.stade.ui.components.PadSoundBubble
@@ -198,7 +199,10 @@ fun StadiumScreen(
     var showInviteDialog by remember { mutableStateOf(false) }
     var showEmojiDrawer by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
-    val panelHeight = rememberPanelHeight()
+    val panelState = rememberPanelHeightState()
+    val navBarInsets = WindowInsets.navigationBars
+    val imeInsets = WindowInsets.ime
+    val imeAndNavInsets = remember(imeInsets, navBarInsets) { imeInsets.union(navBarInsets) }
     var showStickerMaker by remember { mutableStateOf(false) }
     val stickers by remember(owner.id) { container.stickers.observeStickers(owner.id) }.collectAsState(initial = emptyList())
     var leaving by remember { mutableStateOf(false) }
@@ -532,8 +536,7 @@ fun StadiumScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(
-                            if (anyPanelOpen) WindowInsets.navigationBars
-                            else WindowInsets.ime.union(WindowInsets.navigationBars)
+                            if (anyPanelOpen) navBarInsets else imeAndNavInsets
                         )
                         .onSizeChanged { size ->
                             if (size.height < prevColumnHeight && messages.isNotEmpty()) {
@@ -608,7 +611,7 @@ fun StadiumScreen(
                                         }
                                     )
                                     MessageType.PAD_SOUND -> StadiumPadSoundBubble(msg = msg)
-                                    MessageType.MEME_CLIP -> StadiumMemeClipBubble(msg = msg)
+                                    MessageType.MEME_CLIP -> StadiumMemeClipBubble(container = container, msg = msg)
                                     MessageType.VOICE -> StadiumVoiceBubble(
                                         msg = msg,
                                         selected = isSelected,
@@ -715,7 +718,7 @@ fun StadiumScreen(
                         val padStadium = current
                         InlineKeyboardPanel(
                             visible = currentPadMode != null && padStadium != null,
-                            height = panelHeight
+                            state = panelState
                         ) {
                             if (currentPadMode != null && padStadium != null) {
                                 PadPanel(
@@ -745,7 +748,7 @@ fun StadiumScreen(
                         val emojiStadium = current
                         InlineKeyboardPanel(
                             visible = showEmojiDrawer && emojiStadium != null,
-                            height = panelHeight
+                            state = panelState
                         ) {
                             if (emojiStadium != null) {
                                 EmojiStickerPanel(
@@ -1292,21 +1295,19 @@ private fun StadiumPadSoundBubble(msg: dev.stade.stadium.StadiumMessage) {
 }
 
 @Composable
-private fun StadiumMemeClipBubble(msg: dev.stade.stadium.StadiumMessage) {
+private fun StadiumMemeClipBubble(container: AppContainer, msg: dev.stade.stadium.StadiumMessage) {
     val bytes = msg.memeClipBytes()
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
         horizontalArrangement = if (msg.isOwn) Arrangement.End else Arrangement.Start
     ) {
         MemeClipBubble(label = msg.padLabel, durationMs = msg.padDurationMs) {
-            if (bytes != null) {
-                dev.stade.ui.video.VideoPlayerView(
-                    bytes = bytes,
-                    modifier = Modifier.fillMaxWidth().height(190.dp)
-                )
-            } else {
-                Box(Modifier.fillMaxWidth().height(190.dp))
-            }
+            MemeClipPlayer(
+                container = container,
+                messageId = msg.id,
+                bytes = bytes,
+                modifier = Modifier.fillMaxWidth().height(190.dp)
+            )
         }
     }
 }

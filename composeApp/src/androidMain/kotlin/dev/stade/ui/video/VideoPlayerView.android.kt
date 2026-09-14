@@ -2,6 +2,7 @@ package dev.stade.ui.video
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -13,7 +14,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 @Composable
-actual fun VideoPlayerView(bytes: ByteArray, modifier: Modifier) {
+actual fun VideoPlayerView(bytes: ByteArray, modifier: Modifier, autoPlay: Boolean) {
     val context = LocalContext.current
     val file = remember(bytes) {
         val dir = File(context.cacheDir, "videos_inline").apply { mkdirs() }
@@ -27,8 +28,11 @@ actual fun VideoPlayerView(bytes: ByteArray, modifier: Modifier) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(file.toURI().toString()))
             prepare()
-            playWhenReady = true
+            playWhenReady = false
         }
+    }
+    LaunchedEffect(exoPlayer, autoPlay) {
+        if (autoPlay) exoPlayer.play()
     }
     DisposableEffect(exoPlayer) {
         onDispose { exoPlayer.release() }

@@ -10,41 +10,59 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val FALLBACK_PANEL_HEIGHT = 300.dp
 private val MIN_REAL_KEYBOARD = 140.dp
 
-@Composable
-fun rememberPanelHeight(): Dp {
-    val density = LocalDensity.current
-    val keyboard = with(density) {
-        val ime = WindowInsets.ime.getBottom(this)
-        val nav = WindowInsets.navigationBars.getBottom(this)
-        (ime - nav).coerceAtLeast(0).toDp()
-    }
-    var remembered by remember { mutableStateOf(FALLBACK_PANEL_HEIGHT) }
-    LaunchedEffect(keyboard) {
-        if (keyboard >= MIN_REAL_KEYBOARD) remembered = keyboard
-    }
-    return remembered
+@Stable
+class PanelHeightState internal constructor() {
+    var height: Dp by mutableStateOf(FALLBACK_PANEL_HEIGHT)
+        internal set
 }
+
+@Composable
+fun rememberPanelHeightState(): PanelHeightState {
+    val state = remember { PanelHeightState() }
+    val density = LocalDensity.current
+    val imeInsets = WindowInsets.ime
+    val navInsets = WindowInsets.navigationBars
+    LaunchedEffect(state, density, imeInsets, navInsets) {
+        snapshotFlow { keyboardHeightPx(imeInsets, navInsets, density) }
+            .distinctUntilChanged()
+            .collect { px ->
+                val dp = with(density) { px.toDp() }
+                if (dp >= MIN_REAL_KEYBOARD) state.height = dp
+            }
+    }
+    return state
+}
+
+private fun keyboardHeightPx(
+    ime: WindowInsets,
+    navigationBars: WindowInsets,
+    density: Density
+): Int = (ime.getBottom(density) - navigationBars.getBottom(density)).coerceAtLeast(0)
 
 @Composable
 fun InlineKeyboardPanel(
     visible: Boolean,
-    height: Dp,
+    state: PanelHeightState,
     content: @Composable () -> Unit
 ) {
     if (!visible) return
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
-        Box(Modifier.fillMaxWidth().height(height)) { content() }
+        Box(Modifier.fillMaxWidth().height(state.height)) { content() }
     }
 }

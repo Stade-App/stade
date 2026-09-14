@@ -32,7 +32,7 @@ private val vlcAvailable: Boolean by lazy {
 }
 
 @Composable
-actual fun VideoPlayerView(bytes: ByteArray, modifier: Modifier) {
+actual fun VideoPlayerView(bytes: ByteArray, modifier: Modifier, autoPlay: Boolean) {
     if (!vlcAvailable) {
         VideoPlayerFallback(bytes, modifier)
         return
@@ -46,7 +46,11 @@ actual fun VideoPlayerView(bytes: ByteArray, modifier: Modifier) {
     }
     val component = remember(file) { EmbeddedMediaPlayerComponent() }
     DisposableEffect(component) {
-        component.mediaPlayer().media().play(file.absolutePath)
+        if (autoPlay) {
+            component.mediaPlayer().media().play(file.absolutePath)
+        } else {
+            component.mediaPlayer().media().startPaused(file.absolutePath)
+        }
         onDispose { component.mediaPlayer().release() }
     }
     SwingPanel(modifier = modifier, factory = { component })

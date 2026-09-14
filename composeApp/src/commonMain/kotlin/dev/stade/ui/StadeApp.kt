@@ -65,7 +65,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 private const val NAV_SLIDE_MS = 260
 private const val NAV_FADE_MS = 180
 
-private fun screenKey(s: Screen): String = when (s) {
+internal fun screenKey(s: Screen): String = when (s) {
     is Screen.Chat -> "chat:" + s.contactId
     is Screen.GroupChat -> "group:" + s.groupId
     is Screen.Stadium -> "stadium:" + s.stadiumId
@@ -76,9 +76,12 @@ private fun screenKey(s: Screen): String = when (s) {
     else -> s.toString()
 }
 
-private fun screenDepth(s: Screen): Int = when (s) {
+internal fun screenDepth(s: Screen): Int = when (s) {
     Screen.Onboarding -> 0
     Screen.Contacts -> 1
+    Screen.Settings, Screen.Stadey, Screen.AddContact, Screen.Radar,
+    Screen.CreateGroup, Screen.CreateStadium, Screen.JoinStadium -> 2
+    Screen.Security, Screen.Transports, Screen.About -> 3
     is Screen.GroupMembers, is Screen.ManageStadium, is Screen.Verify, is Screen.PinSetup -> 3
     else -> 2
 }

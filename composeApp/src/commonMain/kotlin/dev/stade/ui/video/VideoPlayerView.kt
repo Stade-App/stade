@@ -4,4 +4,4 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 @Composable
-expect fun VideoPlayerView(bytes: ByteArray, modifier: Modifier)
+expect fun VideoPlayerView(bytes: ByteArray, modifier: Modifier, autoPlay: Boolean = true)

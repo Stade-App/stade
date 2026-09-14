@@ -138,7 +138,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.datetime.Clock
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import dev.stade.ui.components.InlineKeyboardPanel
-import dev.stade.ui.components.rememberPanelHeight
+import dev.stade.ui.components.rememberPanelHeightState
 import dev.stade.ui.components.EmojiStickerPanel
 import dev.stade.ui.components.PadPanel
 import dev.stade.link.LinkPreview
@@ -157,6 +157,7 @@ import dev.stade.ui.components.ChatComposerReplyPreview
 import dev.stade.ui.components.ScrollToBottomButton
 import dev.stade.ui.components.StickerMakerDialog
 import dev.stade.ui.components.DeliveryStatusDots
+import dev.stade.ui.components.MemeClipPlayer
 import dev.stade.ui.components.MemeClipBubble
 import dev.stade.ui.components.PadMode
 import dev.stade.ui.components.PadSoundBubble
@@ -254,7 +255,10 @@ fun GroupChatScreen(
     var showLeaveGroupDialog by remember { mutableStateOf(false) }
     var showEmojiDrawer by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
-    val panelHeight = rememberPanelHeight()
+    val panelState = rememberPanelHeightState()
+    val navBarInsets = WindowInsets.navigationBars
+    val imeInsets = WindowInsets.ime
+    val imeAndNavInsets = remember(imeInsets, navBarInsets) { imeInsets.union(navBarInsets) }
     var showStickerMaker by remember { mutableStateOf(false) }
     val stickers by remember(owner.id) { container.stickers.observeStickers(owner.id) }.collectAsState(initial = emptyList())
 
@@ -775,8 +779,7 @@ fun GroupChatScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(
-                        if (anyPanelOpen) WindowInsets.navigationBars
-                        else WindowInsets.ime.union(WindowInsets.navigationBars)
+                        if (anyPanelOpen) navBarInsets else imeAndNavInsets
                     )
                     .onSizeChanged { size ->
                         if (size.height < prevColumnHeight && messages.isNotEmpty()) {
@@ -920,6 +923,8 @@ fun GroupChatScreen(
                                         )
                                     } else if (msg.type == MessageType.MEME_CLIP) {
                                         MemeClipMessage(
+                                            container = container,
+                                            messageId = msg.id,
                                             label = msg.padLabel,
                                             durationMs = msg.padDurationMs,
                                             bytes = msg.memeClipBytes(),
@@ -1090,7 +1095,7 @@ fun GroupChatScreen(
                 val currentPadMode = padMode
                 InlineKeyboardPanel(
                     visible = currentPadMode != null && group != null,
-                    height = panelHeight
+                    state = panelState
                 ) {
                     if (currentPadMode != null) {
                         PadPanel(
@@ -1117,7 +1122,7 @@ fun GroupChatScreen(
                     }
                 }
 
-                InlineKeyboardPanel(visible = showEmojiDrawer, height = panelHeight) {
+                InlineKeyboardPanel(visible = showEmojiDrawer, state = panelState) {
                     EmojiStickerPanel(
                         stickers = stickers,
                         onDismiss = { showEmojiDrawer = false },
@@ -2147,6 +2152,8 @@ private fun PadSoundMessage(
 
 @Composable
 private fun MemeClipMessage(
+    container: AppContainer,
+    messageId: String,
     label: String,
     durationMs: Long,
     bytes: ByteArray?,
@@ -2168,14 +2175,12 @@ private fun MemeClipMessage(
             )
         }
         MemeClipBubble(label = label, durationMs = durationMs, delivered = delivered) {
-            if (bytes != null) {
-                dev.stade.ui.video.VideoPlayerView(
-                    bytes = bytes,
-                    modifier = Modifier.fillMaxWidth().height(190.dp)
-                )
-            } else {
-                Box(Modifier.fillMaxWidth().height(190.dp))
-            }
+            MemeClipPlayer(
+                container = container,
+                messageId = messageId,
+                bytes = bytes,
+                modifier = Modifier.fillMaxWidth().height(190.dp)
+            )
         }
     }
 }
