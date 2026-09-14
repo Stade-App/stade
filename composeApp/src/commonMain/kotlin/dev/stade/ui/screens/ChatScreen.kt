@@ -171,13 +171,28 @@ import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.FullScreenImageViewer
 import dev.stade.ui.components.ChatComposerReplyPreview
 import dev.stade.ui.components.DeliveryStatusDots
-import dev.stade.ui.components.EmojiStickerDrawer
 import dev.stade.ui.components.ScheduleMessageDialog
 import dev.stade.ui.components.ScheduledMessagesSheet
 import dev.stade.ui.components.ScrollToBottomButton
 import dev.stade.ui.components.StickerMakerDialog
 import dev.stade.ui.components.TypingBubble
 import dev.stade.ui.components.VanishDurationSheet
+import dev.stade.ui.components.PadMode
+import dev.stade.ui.components.PadSoundBubble
+import dev.stade.ui.components.LinkifiedText
+import dev.stade.ui.components.animateToChatBottom
+import dev.stade.ui.components.jumpToChatBottom
+import dev.stade.message.DraftScope
+import dev.stade.message.loadDraft
+import dev.stade.message.saveDraft
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import dev.stade.ui.components.InlineKeyboardPanel
+import dev.stade.ui.components.rememberPanelHeight
+import dev.stade.ui.components.EmojiStickerPanel
+import dev.stade.ui.components.PadPanel
+import dev.stade.ui.components.MemeClipBubble
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatScheduledTime
 import dev.stade.ui.components.formatVanishRemaining
@@ -224,14 +239,33 @@ fun ChatScreen(
     val connected by container.sync.connectedContacts.collectAsState()
     val isOnline by remember(contactId) { derivedStateOf { connected.contains(contactId) } }
     val diagnostics by container.connections.diagnostics.collectAsState()
+    var padMode by remember { mutableStateOf<PadMode?>(null) }
     val listState = rememberLazyListState()
     val linkPreviewsEnabled = remember { getLinkPreviewsEnabled(container.db) }
-    var draft by remember { mutableStateOf(TextFieldValue("")) }
+    var draft by remember(contactId) { mutableStateOf(TextFieldValue("")) }
+    val draftRef = rememberUpdatedState(draft.text)
+    LaunchedEffect(contactId) {
+        val saved = withContext(Dispatchers.Default) { loadDraft(container.db, DraftScope.DIRECT, contactId) }
+        if (saved.isNotEmpty() && draft.text.isEmpty()) {
+            draft = TextFieldValue(saved, selection = TextRange(saved.length))
+        }
+    }
+    LaunchedEffect(contactId) {
+        snapshotFlow { draft.text }.collectLatest { text ->
+            delay(500)
+            withContext(Dispatchers.Default) { saveDraft(container.db, DraftScope.DIRECT, contactId, text) }
+        }
+    }
+    DisposableEffect(contactId) {
+        onDispose { saveDraft(container.db, DraftScope.DIRECT, contactId, draftRef.value) }
+    }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var showDiagnosticsDialog by remember(contactId) { mutableStateOf(false) }
     var showClearAddressesDialog by remember { mutableStateOf(false) }
     var showEmojiDrawer by remember { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val panelHeight = rememberPanelHeight()
     var showStickerMaker by remember { mutableStateOf(false) }
     val stickers by remember(owner.id) { container.stickers.observeStickers(owner.id) }.collectAsState(initial = emptyList())
 
@@ -398,15 +432,15 @@ fun ChatScreen(
 
     LaunchedEffect(contactId, messages.size) { container.messages.markRead(contactId) }
 
-    var prevMessageCount by remember { mutableStateOf(0) }
+    var prevMessageCount by remember(contactId) { mutableStateOf(0) }
     var scrollReady by remember(contactId) { mutableStateOf(false) }
     LaunchedEffect(rawMessages) {
         if (rawMessages == null) return@LaunchedEffect
         if (messages.isNotEmpty()) {
             if (prevMessageCount == 0) {
-                listState.scrollToItem(messages.lastIndex)
+                listState.jumpToChatBottom(messages.lastIndex)
             } else {
-                listState.animateScrollToItem(messages.lastIndex)
+                listState.animateToChatBottom(messages.lastIndex)
             }
         }
         prevMessageCount = messages.size
@@ -488,6 +522,25 @@ fun ChatScreen(
             pendingVoiceClip = null
             isRecording = true
             recorder.start()
+        }
+    }
+
+    fun cancelRecording() {
+        if (!isRecording) return
+        isRecording = false
+        recorder.cancel()
+    }
+
+    var recordingElapsedMs by remember { mutableStateOf(0L) }
+    LaunchedEffect(isRecording) {
+        if (!isRecording) {
+            recordingElapsedMs = 0L
+            return@LaunchedEffect
+        }
+        val startedAt = Clock.System.now().toEpochMilliseconds()
+        while (true) {
+            recordingElapsedMs = Clock.System.now().toEpochMilliseconds() - startedAt
+            delay(200)
         }
     }
 
@@ -609,20 +662,6 @@ fun ChatScreen(
         )
     }
 
-    if (showEmojiDrawer && contact != null) {
-        val c = contact
-        EmojiStickerDrawer(
-            stickers = stickers,
-            onDismiss = { showEmojiDrawer = false },
-            onSend = { bytes -> scope.launch { container.chat.sendSticker(owner, c, bytes) } },
-            onCreateSticker = {
-                showEmojiDrawer = false
-                showStickerMaker = true
-            },
-            onDeleteSticker = { id -> container.stickers.delete(id) }
-        )
-    }
-
     if (showStickerMaker) {
         StickerMakerDialog(
             onSave = { bytes ->
@@ -718,6 +757,14 @@ fun ChatScreen(
         )
     }
 
+    val anyPanelOpen = showEmojiDrawer || padMode != null
+
+    fun closePanels() {
+        showEmojiDrawer = false
+        padMode = null
+    }
+
+    PlatformBackHandler(enabled = anyPanelOpen) { closePanels() }
     PlatformBackHandler(enabled = inSelectionMode) { clearSelection() }
 
     Scaffold(
@@ -868,18 +915,24 @@ fun ChatScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                    .windowInsetsPadding(
+                        if (anyPanelOpen) WindowInsets.navigationBars
+                        else WindowInsets.ime.union(WindowInsets.navigationBars)
+                    )
                     .onSizeChanged { size ->
                         if (size.height < prevColumnHeight && messages.isNotEmpty()) {
-                            scope.launch { listState.scrollToItem(messages.lastIndex) }
+                            scope.launch { listState.animateToChatBottom(messages.lastIndex) }
                         }
                         prevColumnHeight = size.height
                     }
             ) {
-                if (!isOnline && contact != null) {
-                    DiagnosticsCard(onOpenDetails = { showDiagnosticsDialog = true })
-                }
                 val currentVanishSession = activeVanishSession
+                if (!isOnline && contact != null) {
+                    DiagnosticsCard(
+                        roundedBottom = currentVanishSession == null,
+                        onOpenDetails = { showDiagnosticsDialog = true }
+                    )
+                }
                 if (currentVanishSession != null) {
                     VanishActiveBanner(deadlineAtMs = currentVanishSession.deadlineAtMs)
                 }
@@ -989,6 +1042,22 @@ fun ChatScreen(
                                                     )
                                                 }
                                             }
+                                        )
+                                    } else if (msg.type == MessageType.PAD_SOUND) {
+                                        PadSoundMessage(
+                                            label = msg.padLabel,
+                                            durationMs = msg.padDurationMs,
+                                            bytes = msg.padSoundBytes(),
+                                            outgoing = msg.direction == MessageDirection.OUT,
+                                            delivered = if (msg.direction == MessageDirection.OUT) msg.delivered else null
+                                        )
+                                    } else if (msg.type == MessageType.MEME_CLIP) {
+                                        MemeClipMessage(
+                                            label = msg.padLabel,
+                                            durationMs = msg.padDurationMs,
+                                            bytes = msg.memeClipBytes(),
+                                            outgoing = msg.direction == MessageDirection.OUT,
+                                            delivered = if (msg.direction == MessageDirection.OUT) msg.delivered else null
                                         )
                                     } else if (msg.type == MessageType.VOICE) {
                                         VoiceBubble(
@@ -1128,6 +1197,8 @@ fun ChatScreen(
                     pendingVideo = pendingVideo,
                     pendingVoiceClip = pendingVoiceClip,
                     isRecording = isRecording,
+                    onCancelRecording = { cancelRecording() },
+                    recordingElapsedMs = recordingElapsedMs,
                     replyPreview = replyTarget?.let { target ->
                         ChatComposerReplyPreview(
                             senderLabel = if (target.direction == MessageDirection.OUT) strings.youLabel else (contact?.nickname ?: ""),
@@ -1183,9 +1254,76 @@ fun ChatScreen(
                         }
                     },
                     onPickMedia = { mediaPicker.launch() },
+                    onOpenPaddy = {
+                        keyboardController?.hide()
+                        showEmojiDrawer = false
+                        padMode = PadMode.SOUNDS
+                    },
+                    onOpenMemepad = {
+                        keyboardController?.hide()
+                        showEmojiDrawer = false
+                        padMode = PadMode.MEMES
+                    },
                     onToggleRecording = { toggleRecording() },
-                    onOpenEmojiPicker = { showEmojiDrawer = true }
+                    onInputFocused = { closePanels() },
+                    onOpenEmojiPicker = {
+                        keyboardController?.hide()
+                        padMode = null
+                        showEmojiDrawer = true
+                    }
                 )
+
+                val padContact = contact
+                val currentPadMode = padMode
+                InlineKeyboardPanel(
+                    visible = currentPadMode != null && padContact != null,
+                    height = panelHeight
+                ) {
+                    if (currentPadMode != null && padContact != null) {
+                        PadPanel(
+                            container = container,
+                            mode = currentPadMode,
+                            onDismiss = { padMode = null },
+                            onSend = { asset, bytes ->
+                                padMode = null
+                                scope.launch {
+                                    runCatching {
+                                        if (currentPadMode == PadMode.SOUNDS) {
+                                            container.chat.sendPadSound(
+                                                owner, padContact, bytes, asset.name, asset.durationMs
+                                            )
+                                        } else {
+                                            container.chat.sendMemeClip(
+                                                owner, padContact, bytes, asset.name, asset.durationMs
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+
+                val emojiContact = contact
+                InlineKeyboardPanel(
+                    visible = showEmojiDrawer && emojiContact != null,
+                    height = panelHeight
+                ) {
+                    if (emojiContact != null) {
+                        EmojiStickerPanel(
+                            stickers = stickers,
+                            onDismiss = { showEmojiDrawer = false },
+                            onSend = { bytes ->
+                                scope.launch { container.chat.sendSticker(owner, emojiContact, bytes) }
+                            },
+                            onCreateSticker = {
+                                showEmojiDrawer = false
+                                showStickerMaker = true
+                            },
+                            onDeleteSticker = { id -> container.stickers.delete(id) }
+                        )
+                    }
+                }
             }
 
             Box(
@@ -1282,12 +1420,14 @@ private fun TopNotificationBanner(
 @Composable
 private fun DiagnosticsCard(
     onOpenDetails: () -> Unit,
+    roundedBottom: Boolean = true,
 ) {
     val strings = LocalStrings.current
+    val bottomCorner = if (roundedBottom) 12.dp else 0.dp
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp),
+        shape = RoundedCornerShape(bottomStart = bottomCorner, bottomEnd = bottomCorner),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ),
@@ -1711,7 +1851,12 @@ private fun Bubble(
                 if (quoted != null) {
                     ReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 5.dp))
                 }
-                Text(msg.displayBody, color = fg, style = MaterialTheme.typography.bodyMedium)
+                LinkifiedText(
+                    msg.displayBody,
+                    color = fg,
+                    linkColor = if (outgoing) fg else MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
                 val currentPreview = preview
                 if (currentPreview != null) {
                     LinkPreviewCard(currentPreview, outgoing, Modifier.padding(top = 6.dp))
@@ -2436,3 +2581,61 @@ private fun VideoBubble(
     }
 }
 
+
+@Composable
+private fun PadSoundMessage(
+    label: String,
+    durationMs: Long,
+    bytes: ByteArray?,
+    outgoing: Boolean,
+    delivered: Boolean?
+) {
+    val player = rememberAudioPlayer()
+    var playing by remember(label) { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
+        horizontalArrangement = if (outgoing) Arrangement.End else Arrangement.Start
+    ) {
+        PadSoundBubble(
+            label = label,
+            durationMs = durationMs,
+            playing = playing && player.isPlaying,
+            delivered = delivered,
+            onToggle = {
+                if (bytes == null) return@PadSoundBubble
+                if (player.isPlaying) {
+                    player.stop()
+                    playing = false
+                } else {
+                    runCatching { player.play(bytes) }
+                    playing = true
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun MemeClipMessage(
+    label: String,
+    durationMs: Long,
+    bytes: ByteArray?,
+    outgoing: Boolean,
+    delivered: Boolean?
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
+        horizontalArrangement = if (outgoing) Arrangement.End else Arrangement.Start
+    ) {
+        MemeClipBubble(label = label, durationMs = durationMs, delivered = delivered) {
+            if (bytes != null) {
+                dev.stade.ui.video.VideoPlayerView(
+                    bytes = bytes,
+                    modifier = Modifier.fillMaxWidth().height(190.dp)
+                )
+            } else {
+                Box(Modifier.fillMaxWidth().height(190.dp))
+            }
+        }
+    }
+}

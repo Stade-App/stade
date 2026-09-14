@@ -275,7 +275,7 @@ object EnglishStrings : AppStrings() {
     override val aboutVersionLabel = "Version"
     override val accountSection = "Account"
     override val logoutTitle = "Sign out"
-    override val logoutSubtitle = "Local data is preserved"
+    override val logoutSubtitle = "Erases everything on this device"
     override val localIdentity = "Local identity"
     override val fingerprintLabel = "Identity fingerprint"
     override val fingerprintCopied = "Copied!"
@@ -323,6 +323,13 @@ object EnglishStrings : AppStrings() {
     override val duressPinTitle = "Duress PIN"
     override val duressPinSetSubtitle = "Set — entering it instead of your PIN wipes this device"
     override val duressPinNotSetSubtitle = "Not set"
+    override val duressPinInfoTitle = "How the duress PIN works"
+    override val duressPinInfoBody =
+        "Enter this PIN on the lock screen instead of your real one and Stade immediately erases " +
+        "everything on this device \u2014 your identity, contacts, messages, groups and Stadiums. " +
+        "The app then looks exactly like a fresh install, with no sign a duress PIN was used. " +
+        "There is no warning, no confirmation, and nothing can be recovered afterwards. " +
+        "Your contacts are not notified."
     override val clearDuressPinAction = "Remove duress PIN"
 
     override val autoLockNeverInfoTitle = "About the 'Never' Option"
@@ -483,6 +490,10 @@ object EnglishStrings : AppStrings() {
     override val imageCopyFailed = "Failed to copy image"
 
     override val saveAction = "Save"
+    override val editAliasTitle = "Edit name"
+    override val editAliasBody =
+        "This name is only stored on your device. The other person is never told you changed it."
+    override val editAliasLabel = "Name"
     override val createStadiumTitle = "New Stadium"
     override val createStadiumAction = "Create Stadium"
     override val createStadiumHint = "A Stadium is a public broadcast channel — only you can post, anyone with the invite can join and read."
@@ -572,6 +583,9 @@ object EnglishStrings : AppStrings() {
 
     override val typingIndicator = "typing…"
     override val voiceTooShort = "Voice message too short"
+    override val voiceCancelRecording = "Discard recording"
+    override val voiceSlideToCancel = "Slide to cancel"
+    override val voiceRecordingCancelled = "Recording discarded"
 
     override val scheduleMessagePickDate = "Pick a date"
     override val scheduleMessagePickTime = "Pick a time"
@@ -645,5 +659,34 @@ object EnglishStrings : AppStrings() {
     override val updateRequiredByPeer =
         "A contact is using an older version of Stade. Messages cannot get through until they update."
     override val updateAction = "Dismiss"
+    override val padPlusAction = "More"
+    override val padAttachMedia = "Media"
+    override val padPaddyTitle = "Stade Paddy"
+    override val padPaddySubtitle = "Sound effects"
+    override val padMemepadTitle = "Stade Memepad"
+    override val padMemepadSubtitle = "Meme clips"
+    override val padUnavailable = "Could not reach the library. Check your connection and try again."
+    override val padSoundUnsupported = "That sound is in a format Stade cannot read. It must be a WAV file."
+    override val padDownloadFailed = "Could not download that item. It may be too large, or the connection timed out."
+    override val padRefresh = "Refresh"
+    override val padEmpty = "Nothing here yet."
+    override val padRetry = "Try again"
+    override val padDownloading = "Downloading\u2026"
+    override val padSendFailed = "That one could not be sent."
+    override val padSoundTag = "PADDY"
+    override val padMemeTag = "MEMEPAD"
+    override val padTapToPlay = "Tap to play"
+    override val padTorNotReady =
+        "Tor is still starting up. Paddy and Memepad load over Tor, so give it a moment."
+    override fun padSentSound(sender: String?, isSelf: Boolean) = when {
+        isSelf -> "You sent a sound effect"
+        !sender.isNullOrBlank() -> "$sender sent a sound effect"
+        else -> "Sent a sound effect"
+    }
+    override fun padSentMeme(sender: String?, isSelf: Boolean) = when {
+        isSelf -> "You sent a meme"
+        !sender.isNullOrBlank() -> "$sender sent a meme"
+        else -> "Sent a meme"
+    }
 }
 

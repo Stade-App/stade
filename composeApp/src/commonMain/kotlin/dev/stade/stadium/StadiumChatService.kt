@@ -8,7 +8,10 @@ import dev.stade.crypto.Encoding
 import dev.stade.group.GroupManager
 import dev.stade.identity.LocalIdentity
 import dev.stade.message.MessageManager
+import dev.stade.message.MEME_CLIP_BODY_PREFIX
+import dev.stade.message.PAD_SOUND_BODY_PREFIX
 import dev.stade.message.encodeImageBody
+import dev.stade.message.encodePadBody
 import dev.stade.message.encodeStickerBody
 import dev.stade.message.encodeVideoBody
 import dev.stade.message.encodeVoiceBody
@@ -111,6 +114,22 @@ class StadiumChatService(
         }
         return true
     }
+
+    suspend fun postPadSound(
+        owner: LocalIdentity,
+        stadium: StadiumInfo,
+        bytes: ByteArray,
+        name: String,
+        durationMs: Long
+    ): Boolean = post(owner, stadium, encodePadBody(PAD_SOUND_BODY_PREFIX, bytes, name, durationMs))
+
+    suspend fun postMemeClip(
+        owner: LocalIdentity,
+        stadium: StadiumInfo,
+        bytes: ByteArray,
+        name: String,
+        durationMs: Long
+    ): Boolean = post(owner, stadium, encodePadBody(MEME_CLIP_BODY_PREFIX, bytes, name, durationMs))
 
     suspend fun postImage(owner: LocalIdentity, stadium: StadiumInfo, imageBytes: ByteArray, caption: String = ""): Boolean =
         post(owner, stadium, encodeImageBody(imageBytes, caption))

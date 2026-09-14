@@ -127,6 +127,7 @@ private fun SecuritySettingsContent(
     val linkPreviewsEnabled = remember(refreshTick) { dev.stade.link.getLinkPreviewsEnabled(container.db) }
     var timeoutMenuOpen by remember { mutableStateOf(false) }
     var showNeverInfoDialog by remember { mutableStateOf(false) }
+    var showDuressInfoDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     Scaffold(
@@ -242,20 +243,30 @@ private fun SecuritySettingsContent(
                             title = strings.duressPinTitle,
                             subtitle = if (duressSet) strings.duressPinSetSubtitle else strings.duressPinNotSetSubtitle,
                             onClick = onOpenDuressPinSetup,
-                            trailingContent = if (duressSet) {
-                                {
-                                    IconButton(onClick = {
-                                        container.vault.clearDuressPin()
-                                        refreshTick++
-                                    }) {
+                            trailingContent = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(onClick = { showDuressInfoDialog = true }) {
                                         Icon(
-                                            Icons.Default.Close,
-                                            contentDescription = strings.clearDuressPinAction,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            Icons.Default.Info,
+                                            contentDescription = strings.duressPinInfoTitle,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
+                                    if (duressSet) {
+                                        IconButton(onClick = {
+                                            container.vault.clearDuressPin()
+                                            refreshTick++
+                                        }) {
+                                            Icon(
+                                                Icons.Default.Close,
+                                                contentDescription = strings.clearDuressPinAction,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
                                 }
-                            } else null
+                            }
                         )
                     }
                 }
@@ -306,6 +317,30 @@ private fun SecuritySettingsContent(
                 }
             }
 
+            if (showDuressInfoDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDuressInfoDialog = false },
+                    icon = {
+                        Icon(
+                            Icons.Default.ReportProblem,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    },
+                    title = { Text(strings.duressPinInfoTitle) },
+                    text = {
+                        Text(
+                            strings.duressPinInfoBody,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showDuressInfoDialog = false }) {
+                            Text(strings.understood)
+                        }
+                    }
+                )
+            }
             if (showNeverInfoDialog) {
                 AlertDialog(
                     onDismissRequest = { showNeverInfoDialog = false },

@@ -164,7 +164,7 @@ class StadeService : Service() {
                                 } else {
                                     val senderName = contact?.nickname ?: dev.stade.ui.i18n.I18n.current.unknownNickname
                                     val preview = container.messages.lastMessage(event.contactId)?.body
-                                        ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage, dev.stade.ui.i18n.I18n.current.voiceMessage, dev.stade.ui.i18n.I18n.current.videoMessage, dev.stade.ui.i18n.I18n.current.stickerMessage) }
+                                        ?.let { padAwarePreview(it) }
                                         ?: dev.stade.ui.i18n.I18n.current.notifNewMessageFallback
                                     showMessageNotification(event.contactId, senderName, preview, avatarBytes = contact?.avatar, keySeed = contact?.publicSigningKey)
                                 }
@@ -175,7 +175,7 @@ class StadeService : Service() {
                                 if (group.muted) return@collect
                                 if (container.isAppInForeground.value && container.activeContactId == event.groupId) return@collect
                                 val preview = container.groups.lastMessage(event.groupId)?.body
-                                    ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage, dev.stade.ui.i18n.I18n.current.voiceMessage, dev.stade.ui.i18n.I18n.current.videoMessage, dev.stade.ui.i18n.I18n.current.stickerMessage) }
+                                    ?.let { padAwarePreview(it) }
                                     ?: dev.stade.ui.i18n.I18n.current.notifNewMessageFallback
                                 showMessageNotification(event.groupId, group.name, preview, isGroup = true)
                             }
@@ -185,7 +185,7 @@ class StadeService : Service() {
                                 if (stadium == null || stadium.muted) return@collect
                                 if (container.isAppInForeground.value && container.activeContactId == event.stadiumId) return@collect
                                 val preview = container.stadiums.lastMessage(event.stadiumId)?.body
-                                    ?.let { dev.stade.message.previewBody(it, dev.stade.ui.i18n.I18n.current.photoMessage, dev.stade.ui.i18n.I18n.current.voiceMessage, dev.stade.ui.i18n.I18n.current.videoMessage, dev.stade.ui.i18n.I18n.current.stickerMessage) }
+                                    ?.let { padAwarePreview(it) }
                                     ?: dev.stade.ui.i18n.I18n.current.notifNewMessageFallback
                                 showMessageNotification(event.stadiumId, stadium.name, preview, isStadium = true)
                             }
@@ -301,5 +301,20 @@ class StadeService : Service() {
             .build()
         val notifId = (contactId.hashCode() and 0x7FFFFFFF) + 1000
         mgr.notify(notifId, notif)
+    }
+}
+
+private fun padAwarePreview(body: String): String {
+    val strings = dev.stade.ui.i18n.I18n.current
+    return when (dev.stade.message.padPreviewKind(body)) {
+        dev.stade.message.MessageType.PAD_SOUND -> strings.padSentSound(null, false)
+        dev.stade.message.MessageType.MEME_CLIP -> strings.padSentMeme(null, false)
+        else -> dev.stade.message.previewBody(
+            body,
+            strings.photoMessage,
+            strings.voiceMessage,
+            strings.videoMessage,
+            strings.stickerMessage
+        )
     }
 }

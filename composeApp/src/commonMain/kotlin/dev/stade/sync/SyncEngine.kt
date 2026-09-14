@@ -153,7 +153,9 @@ class SyncEngine(
                 connection.close()
                 return@coroutineScope
             }
-            val (contact, isNew) = handshakeOutcome
+            val contact = handshakeOutcome.contact
+            val isNew = handshakeOutcome.isNew
+            val peerWireProtocol = handshakeOutcome.peerWireProtocol
             clearVersionMismatchFor(contact.id)
             contacts.markSeen(contact.id, Clock.System.now().toEpochMilliseconds())
             val preferOutbound = owner.stadeId < contact.id
@@ -168,7 +170,7 @@ class SyncEngine(
             stale?.let { runCatching { it.cancelAndJoin() } }
             val session = sessionsLock.withLock {
                 sessions[contact.id]?.let { runCatching { it.cancel() } }
-                ContactSession(this@coroutineScope, owner, contact, connection).also {
+                ContactSession(this@coroutineScope, owner, contact, connection, peerWireProtocol).also {
                     sessions[contact.id] = it
                     _connected.value = sessions.keys.toSet()
                 }
@@ -188,7 +190,9 @@ class SyncEngine(
         return sessionStarted
     }
 
-    private suspend fun handshake(owner: LocalIdentity, connection: Connection): Pair<Contact, Boolean>? {
+    private class Negotiated(val contact: Contact, val isNew: Boolean, val peerWireProtocol: Int)
+
+    private suspend fun handshake(owner: LocalIdentity, connection: Connection): Negotiated? {
         val ourNonce = crypto.randomBytes(32)
         val ourEphemeral = handshakeService.newEphemeral()
         val ourTc = transcriptCommitment(
@@ -213,6 +217,7 @@ class SyncEngine(
             addresses = runCatching { selfAddressesProvider() }.getOrDefault(emptyList()),
             reAddRequest = pendingReAdds.isNotEmpty(),
             groupProtocol = GROUP_PROTOCOL_VERSION,
+            wireProtocol = WIRE_PROTOCOL_VERSION,
             ephemeralHandshakeKey = ourEphemeral.dh.publicKey,
             ephemeralMlKemKey = ourEphemeral.kem.publicKey
         )
@@ -335,7 +340,7 @@ class SyncEngine(
             }
             pendingReAdds = pendingReAdds - peerHello.stadeId
             noteGroupProtocol(existing.id, peerHello.groupProtocol)
-            return existing to false
+            return Negotiated(existing, false, peerHello.wireProtocol)
         }
 
         var priorKind: Int? = null
@@ -349,11 +354,10 @@ class SyncEngine(
         val established = gatedNewContactHandshake(
             owner, connection, peerHello, peerAuth.isStadiumJoin, priorKind, ourEphemeral, peerEphemeral
         )
-        if (established != null) {
-            pendingReAdds = pendingReAdds - peerHello.stadeId
-            noteGroupProtocol(established.first.id, peerHello.groupProtocol)
-        }
-        return established
+        if (established == null) return null
+        pendingReAdds = pendingReAdds - peerHello.stadeId
+        noteGroupProtocol(established.first.id, peerHello.groupProtocol)
+        return Negotiated(established.first, established.second, peerHello.wireProtocol)
     }
 
     private val rosterPushedAhead = mutableSetOf<String>()
@@ -512,7 +516,8 @@ class SyncEngine(
         private val parent: CoroutineScope,
         private val owner: LocalIdentity,
         private val contact: Contact,
-        @Volatile private var connection: Connection
+        @Volatile private var connection: Connection,
+        private val peerWireProtocol: Int
     ) {
         private val outboxSignal = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
         private var rootJob: Job? = null
@@ -554,17 +559,36 @@ class SyncEngine(
             }
         }
 
+
+        private fun toWireRecord(stored: ByteArray): SyncRecord {
+            if (peerWireProtocol < WIRE_PROTOCOL_VERSION) {
+                return SyncRecord(RecordType.MESSAGE, stored)
+            }
+            val parsed = runCatching {
+                json.decodeFromString(MessagePayload.serializer(), stored.decodeToString())
+            }.getOrNull() ?: return SyncRecord(RecordType.MESSAGE, stored)
+            val binary = encodeBinaryPayload(parsed) ?: return SyncRecord(RecordType.MESSAGE, stored)
+            return SyncRecord(RecordType.MESSAGE_BIN, binary)
+        }
+
         private suspend fun drainOutbox(scope: CoroutineScope): Boolean {
-            val pending = runCatching { outbox.pending(contact.id) }.getOrNull() ?: return true
-            for (item in pending) {
+            val pendingIds = runCatching { outbox.pendingIds(contact.id) }.getOrNull() ?: return true
+            for (id in pendingIds) {
                 if (!scope.isActive) return false
+                val item = runCatching { outbox.item(id) }.getOrNull() ?: continue
                 if (item.payload.size > FrameCodec.MAX_LEN) {
                     outbox.remove(item.id)
                     _events.tryEmit(SyncEvent.SendFailed(contact.id, "message too large to send"))
                     continue
                 }
+                val record = toWireRecord(item.payload)
+                if (record.payload.size > FrameCodec.MAX_LEN) {
+                    outbox.remove(item.id)
+                    _events.tryEmit(SyncEvent.SendFailed(contact.id, "message too large to send"))
+                    continue
+                }
                 val ok = runCatching {
-                    connection.send(FrameCodec.encode(SyncRecord(RecordType.MESSAGE, item.payload)))
+                    connection.send(FrameCodec.encode(record))
                 }.isSuccess
                 if (!ok) {
                     scope.cancel()
@@ -737,10 +761,13 @@ class SyncEngine(
 
         private suspend fun handleRecord(record: SyncRecord) {
             when (record.type) {
-                RecordType.MESSAGE -> {
-                    val payload = runCatching {
-                        json.decodeFromString(MessagePayload.serializer(), record.payload.decodeToString())
-                    }.getOrNull() ?: return
+                RecordType.MESSAGE, RecordType.MESSAGE_BIN -> {
+                    val payload = (
+                        if (record.type == RecordType.MESSAGE_BIN) decodeBinaryPayload(record.payload)
+                        else runCatching {
+                            json.decodeFromString(MessagePayload.serializer(), record.payload.decodeToString())
+                        }.getOrNull()
+                    ) ?: return
                     if (messages.isEnvelopeProcessed(payload.messageId)) {
                         val ack = AckPayload(payload.messageId)
                         runCatching {

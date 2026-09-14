@@ -277,7 +277,7 @@ object TurkishStrings : AppStrings() {
     override val aboutVersionLabel = "Sürüm"
     override val accountSection = "Hesap"
     override val logoutTitle = "Oturumu kapat"
-    override val logoutSubtitle = "Yerel veriler korunur"
+    override val logoutSubtitle = "Bu cihazdaki her \u015feyi siler"
     override val localIdentity = "Yerel kimlik"
     override val fingerprintLabel = "Kimlik parmak izi"
     override val fingerprintCopied = "Kopyalandı!"
@@ -324,6 +324,13 @@ object TurkishStrings : AppStrings() {
     override val duressPinTitle = "Tehlike PIN'i"
     override val duressPinSetSubtitle = "Ayarlandı — PIN'iniz yerine girilmesi bu cihazı siler"
     override val duressPinNotSetSubtitle = "Ayarlanmadı"
+    override val duressPinInfoTitle = "Bask\u0131 PIN\u2019i nas\u0131l \u00e7al\u0131\u015f\u0131r"
+    override val duressPinInfoBody =
+        "Kilit ekran\u0131nda ger\u00e7ek PIN\u2019in yerine bunu girersen Stade bu cihazdaki her \u015feyi " +
+        "an\u0131nda siler \u2014 kimli\u011fin, ki\u015filerin, mesajlar\u0131n, gruplar\u0131n ve stadyumlar\u0131n. " +
+        "Uygulama ard\u0131ndan yeni kurulmu\u015f gibi g\u00f6r\u00fcn\u00fcr; bask\u0131 PIN\u2019i kullan\u0131ld\u0131\u011f\u0131na dair bir iz kalmaz. " +
+        "Uyar\u0131 ya da onay yoktur ve sonras\u0131nda hi\u00e7bir \u015fey geri getirilemez. " +
+        "Ki\u015filerine bildirim gitmez."
     override val clearDuressPinAction = "Tehlike PIN'ini kaldır"
 
     override val autoLockNeverInfoTitle = "«Asla» Seçeneği Hakkında"
@@ -482,6 +489,10 @@ object TurkishStrings : AppStrings() {
     override val imageCopyFailed = "Görsel kopyalanamadı"
 
     override val saveAction = "Kaydet"
+    override val editAliasTitle = "\u0130smi d\u00fczenle"
+    override val editAliasBody =
+        "Bu isim yaln\u0131zca senin cihaz\u0131nda saklan\u0131r. Kar\u015f\u0131 tarafa de\u011fi\u015ftirdi\u011fin bildirilmez."
+    override val editAliasLabel = "\u0130sim"
     override val createStadiumTitle = "Yeni Stadium"
     override val createStadiumAction = "Stadium Oluştur"
     override val createStadiumHint = "Stadium, herkese açık bir yayın kanalıdır — sadece siz paylaşım yapabilirsiniz, davet bağlantısına sahip olan herkes katılıp okuyabilir."
@@ -571,6 +582,9 @@ object TurkishStrings : AppStrings() {
 
     override val typingIndicator = "yazıyor…"
     override val voiceTooShort = "Sesli mesaj çok kısa"
+    override val voiceCancelRecording = "Kayd\u0131 sil"
+    override val voiceSlideToCancel = "\u0130ptal i\u00e7in kayd\u0131r"
+    override val voiceRecordingCancelled = "Kay\u0131t silindi"
 
     override val scheduleMessagePickDate = "Tarih seç"
     override val scheduleMessagePickTime = "Saat seç"
@@ -644,5 +658,34 @@ object TurkishStrings : AppStrings() {
     override val updateRequiredByPeer =
         "Bir kişi Stade'in daha eski bir sürümünü kullanıyor. O kişi güncelleyene kadar mesajlar iletilemez."
     override val updateAction = "Kapat"
+    override val padPlusAction = "Daha fazla"
+    override val padAttachMedia = "Medya"
+    override val padPaddyTitle = "Stade Paddy"
+    override val padPaddySubtitle = "Ses efektleri"
+    override val padMemepadTitle = "Stade Memepad"
+    override val padMemepadSubtitle = "Mizah klipleri"
+    override val padUnavailable = "Kitapl\u0131\u011fa ula\u015f\u0131lamad\u0131. Ba\u011flant\u0131n\u0131 kontrol edip tekrar dene."
+    override val padSoundUnsupported = "Bu ses, Stade\u2019nin okuyamad\u0131\u011f\u0131 bir bi\u00e7imde. WAV dosyas\u0131 olmal\u0131."
+    override val padDownloadFailed = "Bu \u00f6\u011fe indirilemedi. \u00c7ok b\u00fcy\u00fck olabilir veya ba\u011flant\u0131 zaman a\u015f\u0131m\u0131na u\u011frad\u0131."
+    override val padRefresh = "Yenile"
+    override val padEmpty = "Burada hen\u00fcz bir \u015fey yok."
+    override val padRetry = "Tekrar dene"
+    override val padDownloading = "\u0130ndiriliyor\u2026"
+    override val padSendFailed = "Bu g\u00f6nderilemedi."
+    override val padSoundTag = "PADDY"
+    override val padMemeTag = "MEMEPAD"
+    override val padTapToPlay = "Oynatmak i\u00e7in dokun"
+    override val padTorNotReady =
+        "Tor hen\u00fcz ba\u015flat\u0131l\u0131yor. Paddy ve Memepad Tor \u00fczerinden y\u00fcklenir, biraz bekle."
+    override fun padSentSound(sender: String?, isSelf: Boolean) = when {
+        isSelf -> "Ses efekti g\u00f6nderdin"
+        !sender.isNullOrBlank() -> "$sender ses efekti g\u00f6nderdi"
+        else -> "Ses efekti g\u00f6nderdi"
+    }
+    override fun padSentMeme(sender: String?, isSelf: Boolean) = when {
+        isSelf -> "Mizah klibi g\u00f6nderdin"
+        !sender.isNullOrBlank() -> "$sender mizah klibi g\u00f6nderdi"
+        else -> "Mizah klibi g\u00f6nderdi"
+    }
 }
 

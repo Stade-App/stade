@@ -86,7 +86,7 @@ class LanTransport(
                     noDelay = true
                     keepAlive = true
                 }
-                TcpConnection(socket, "lan://$host:$portStr") as Connection
+                EncryptedLinkConnection(TcpConnection(socket, "lan://$host:$portStr")) as Connection
             }.getOrNull()
         }
     }
@@ -105,7 +105,7 @@ class LanTransport(
         while (scope.isActive) {
             val socket = runCatching { server.accept() }.getOrNull() ?: break
             scope.launch {
-                val conn = TcpConnection(socket, "lan://${socket.remoteAddress}")
+                val conn = EncryptedLinkConnection(TcpConnection(socket, "lan://${socket.remoteAddress}"))
                 handler(conn)
             }
         }

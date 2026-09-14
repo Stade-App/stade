@@ -2,6 +2,11 @@
 
 import dev.stade.message.IMAGE_BODY_PREFIX
 import dev.stade.message.MessageType
+import dev.stade.message.MEME_CLIP_BODY_PREFIX
+import dev.stade.message.PAD_SOUND_BODY_PREFIX
+import dev.stade.message.parsePadBytes
+import dev.stade.message.parsePadDurationMs
+import dev.stade.message.parsePadName
 import dev.stade.message.STICKER_BODY_PREFIX
 import dev.stade.message.VIDEO_BODY_PREFIX
 import dev.stade.message.VOICE_BODY_PREFIX
@@ -44,6 +49,8 @@ data class GroupMessage(
             effectiveBody.startsWith(VOICE_BODY_PREFIX) -> MessageType.VOICE
             effectiveBody.startsWith(VIDEO_BODY_PREFIX) -> MessageType.VIDEO
             effectiveBody.startsWith(STICKER_BODY_PREFIX) -> MessageType.STICKER
+            effectiveBody.startsWith(PAD_SOUND_BODY_PREFIX) -> MessageType.PAD_SOUND
+            effectiveBody.startsWith(MEME_CLIP_BODY_PREFIX) -> MessageType.MEME_CLIP
             else -> MessageType.TEXT
         }
 
@@ -90,6 +97,26 @@ data class GroupMessage(
                     ((raw[2].toInt() and 0xFF) shl 8) or (raw[3].toInt() and 0xFF)
             }.getOrNull()
         else null
+
+    fun padSoundBytes(): ByteArray? =
+        if (type == MessageType.PAD_SOUND) parsePadBytes(effectiveBody, PAD_SOUND_BODY_PREFIX) else null
+
+    fun memeClipBytes(): ByteArray? =
+        if (type == MessageType.MEME_CLIP) parsePadBytes(effectiveBody, MEME_CLIP_BODY_PREFIX) else null
+
+    val padLabel: String
+        get() = when (type) {
+            MessageType.PAD_SOUND -> parsePadName(effectiveBody, PAD_SOUND_BODY_PREFIX)
+            MessageType.MEME_CLIP -> parsePadName(effectiveBody, MEME_CLIP_BODY_PREFIX)
+            else -> ""
+        }
+
+    val padDurationMs: Long
+        get() = when (type) {
+            MessageType.PAD_SOUND -> parsePadDurationMs(effectiveBody, PAD_SOUND_BODY_PREFIX)
+            MessageType.MEME_CLIP -> parsePadDurationMs(effectiveBody, MEME_CLIP_BODY_PREFIX)
+            else -> 0L
+        }
 }
 
 data class GroupMemberEntry(

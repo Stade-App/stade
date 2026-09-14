@@ -220,7 +220,8 @@ fun SettingsScreen(
                 }
                 pendingAvatarBytes = null
             },
-            onCancel = { pendingAvatarBytes = null }
+            onCancel = { pendingAvatarBytes = null },
+            circular = true
         )
     }
 

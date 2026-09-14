@@ -2,8 +2,31 @@ package dev.stade.message
 
 private const val PREVIEW_MAX = 120
 
-fun previewBody(body: String, photoLabel: String, voiceLabel: String? = null, videoLabel: String? = null, stickerLabel: String? = null): String {
+fun padPreviewKind(body: String): MessageType? {
     val effective = parseReplyWrapper(body)?.second ?: body
+    return when {
+        effective.startsWith(PAD_SOUND_BODY_PREFIX) -> MessageType.PAD_SOUND
+        effective.startsWith(MEME_CLIP_BODY_PREFIX) -> MessageType.MEME_CLIP
+        else -> null
+    }
+}
+
+fun previewBody(
+    body: String,
+    photoLabel: String,
+    voiceLabel: String? = null,
+    videoLabel: String? = null,
+    stickerLabel: String? = null,
+    soundLabel: String? = null,
+    memeLabel: String? = null
+): String {
+    val effective = parseReplyWrapper(body)?.second ?: body
+    if (effective.startsWith(PAD_SOUND_BODY_PREFIX)) {
+        return soundLabel ?: parsePadName(effective, PAD_SOUND_BODY_PREFIX)
+    }
+    if (effective.startsWith(MEME_CLIP_BODY_PREFIX)) {
+        return memeLabel ?: parsePadName(effective, MEME_CLIP_BODY_PREFIX)
+    }
     if (effective.startsWith(IMAGE_BODY_PREFIX)) return photoLabel
     if (voiceLabel != null && effective.startsWith(VOICE_BODY_PREFIX)) return voiceLabel
     if (videoLabel != null && effective.startsWith(VIDEO_BODY_PREFIX)) return videoLabel

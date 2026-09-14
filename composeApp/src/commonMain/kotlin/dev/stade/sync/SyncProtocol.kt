@@ -25,7 +25,8 @@ enum class RecordType(val code: Byte) {
     PING(5),
     BYE(6),
 
-    KEM_OFFER(7);
+    KEM_OFFER(7),
+    MESSAGE_BIN(8);
 
     companion object {
         fun fromCode(c: Byte): RecordType? = entries.firstOrNull { it.code == c }
@@ -46,6 +47,7 @@ data class HelloPayload(
     val addresses: List<String> = emptyList(),
     val reAddRequest: Boolean = false,
     val groupProtocol: Int = 1,
+    val wireProtocol: Int = 1,
     val ephemeralHandshakeKey: ByteArray = ByteArray(0),
     val ephemeralMlKemKey: ByteArray = ByteArray(0)
 )
@@ -74,6 +76,40 @@ data class MessagePayload(
 
 @Serializable
 data class AckPayload(val messageId: String)
+
+const val WIRE_PROTOCOL_VERSION = 2
+private const val BIN_PAYLOAD_VERSION: Byte = 1
+
+fun encodeBinaryPayload(payload: MessagePayload): ByteArray? {
+    val id = payload.messageId.encodeToByteArray()
+    if (id.size > 255) return null
+    val out = ByteArray(2 + id.size + 8 + payload.ratchetFrame.size)
+    out[0] = BIN_PAYLOAD_VERSION
+    out[1] = id.size.toByte()
+    id.copyInto(out, 2)
+    var off = 2 + id.size
+    for (i in 0 until 8) {
+        out[off + i] = ((payload.timestamp ushr (56 - 8 * i)) and 0xff).toByte()
+    }
+    off += 8
+    payload.ratchetFrame.copyInto(out, off)
+    return out
+}
+
+fun decodeBinaryPayload(bytes: ByteArray): MessagePayload? {
+    if (bytes.size < 10) return null
+    if (bytes[0] != BIN_PAYLOAD_VERSION) return null
+    val idLen = bytes[1].toInt() and 0xff
+    if (idLen == 0 || bytes.size < 2 + idLen + 8) return null
+    val id = bytes.copyOfRange(2, 2 + idLen).decodeToString()
+    var off = 2 + idLen
+    var timestamp = 0L
+    for (i in 0 until 8) {
+        timestamp = (timestamp shl 8) or (bytes[off + i].toLong() and 0xff)
+    }
+    off += 8
+    return MessagePayload(id, timestamp, bytes.copyOfRange(off, bytes.size))
+}
 
 @Serializable
 data class SyncRecord(

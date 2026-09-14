@@ -108,6 +108,21 @@ import dev.stade.stadium.StadiumMessage
 import dev.stade.stadium.isOfficial
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
+import dev.stade.ui.components.LinkifiedText
+import dev.stade.ui.components.animateToChatBottom
+import dev.stade.ui.components.jumpToChatBottom
+import dev.stade.message.DraftScope
+import dev.stade.message.loadDraft
+import dev.stade.message.saveDraft
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.text.TextRange
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.datetime.Clock
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import dev.stade.ui.components.InlineKeyboardPanel
+import dev.stade.ui.components.rememberPanelHeight
+import dev.stade.ui.components.EmojiStickerPanel
+import dev.stade.ui.components.PadPanel
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.Avatar
@@ -116,9 +131,12 @@ import stade.composeapp.generated.resources.Res
 import stade.composeapp.generated.resources.app_icon
 import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.FullScreenImageViewer
-import dev.stade.ui.components.EmojiStickerDrawer
 import dev.stade.ui.components.ScrollToBottomButton
 import dev.stade.ui.components.StickerMakerDialog
+import dev.stade.ui.components.MemeClipBubble
+import dev.stade.ui.components.PadMode
+import dev.stade.ui.components.PadSoundBubble
+import dev.stade.audio.rememberAudioPlayer
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.rememberMediaPickerLauncher
@@ -144,6 +162,7 @@ fun StadiumScreen(
     val scope = rememberCoroutineScope()
     val stadiums by remember(owner.id) { container.stadiums.observeStadiums(owner.id) }.collectAsState(initial = emptyList())
     val stadium = remember(stadiums, stadiumId) { stadiums.find { it.id == stadiumId } }
+    var padMode by remember { mutableStateOf<PadMode?>(null) }
     val rawMessages by remember(stadiumId) { container.stadiums.observeMessages(stadiumId) }.collectAsState(initial = null)
     val messages = rawMessages ?: emptyList()
     val connected by container.sync.connectedContacts.collectAsState()
@@ -158,10 +177,28 @@ fun StadiumScreen(
         }
     }
 
-    var draft by remember { mutableStateOf(TextFieldValue("")) }
+    var draft by remember(stadiumId) { mutableStateOf(TextFieldValue("")) }
+    val draftRef = rememberUpdatedState(draft.text)
+    LaunchedEffect(stadiumId) {
+        val saved = withContext(Dispatchers.Default) { loadDraft(container.db, DraftScope.STADIUM, stadiumId) }
+        if (saved.isNotEmpty() && draft.text.isEmpty()) {
+            draft = TextFieldValue(saved, selection = TextRange(saved.length))
+        }
+    }
+    LaunchedEffect(stadiumId) {
+        snapshotFlow { draft.text }.collectLatest { text ->
+            delay(500)
+            withContext(Dispatchers.Default) { saveDraft(container.db, DraftScope.STADIUM, stadiumId, text) }
+        }
+    }
+    DisposableEffect(stadiumId) {
+        onDispose { saveDraft(container.db, DraftScope.STADIUM, stadiumId, draftRef.value) }
+    }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showEmojiDrawer by remember { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val panelHeight = rememberPanelHeight()
     var showStickerMaker by remember { mutableStateOf(false) }
     val stickers by remember(owner.id) { container.stickers.observeStickers(owner.id) }.collectAsState(initial = emptyList())
     var leaving by remember { mutableStateOf(false) }
@@ -252,6 +289,25 @@ fun StadiumScreen(
         }
     }
 
+    fun cancelRecording() {
+        if (!isRecording) return
+        isRecording = false
+        recorder.cancel()
+    }
+
+    var recordingElapsedMs by remember { mutableStateOf(0L) }
+    LaunchedEffect(isRecording) {
+        if (!isRecording) {
+            recordingElapsedMs = 0L
+            return@LaunchedEffect
+        }
+        val startedAt = Clock.System.now().toEpochMilliseconds()
+        while (true) {
+            recordingElapsedMs = Clock.System.now().toEpochMilliseconds() - startedAt
+            delay(200)
+        }
+    }
+
     DisposableEffect(stadiumId) {
         container.activeContactId = stadiumId
         onDispose { container.activeContactId = null }
@@ -271,9 +327,9 @@ fun StadiumScreen(
         if (rawMessages == null) return@LaunchedEffect
         if (messages.isNotEmpty()) {
             if (prevMessageCount == 0) {
-                listState.scrollToItem(messages.lastIndex)
+                listState.jumpToChatBottom(messages.lastIndex)
             } else {
-                listState.animateScrollToItem(messages.lastIndex)
+                listState.animateToChatBottom(messages.lastIndex)
             }
         }
         prevMessageCount = messages.size
@@ -319,19 +375,6 @@ fun StadiumScreen(
         )
     }
 
-    if (showEmojiDrawer && current != null) {
-        EmojiStickerDrawer(
-            stickers = stickers,
-            onDismiss = { showEmojiDrawer = false },
-            onSend = { bytes -> scope.launch { container.stadiumChat.postSticker(owner, current, bytes) } },
-            onCreateSticker = {
-                showEmojiDrawer = false
-                showStickerMaker = true
-            },
-            onDeleteSticker = { id -> container.stickers.delete(id) }
-        )
-    }
-
     if (showStickerMaker) {
         StickerMakerDialog(
             onSave = { bytes ->
@@ -343,6 +386,14 @@ fun StadiumScreen(
         )
     }
 
+    val anyPanelOpen = showEmojiDrawer || padMode != null
+
+    fun closePanels() {
+        showEmojiDrawer = false
+        padMode = null
+    }
+
+    PlatformBackHandler(enabled = anyPanelOpen) { closePanels() }
     PlatformBackHandler(enabled = inSelectionMode) { clearSelection() }
 
     Scaffold(
@@ -480,10 +531,13 @@ fun StadiumScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                        .windowInsetsPadding(
+                            if (anyPanelOpen) WindowInsets.navigationBars
+                            else WindowInsets.ime.union(WindowInsets.navigationBars)
+                        )
                         .onSizeChanged { size ->
                             if (size.height < prevColumnHeight && messages.isNotEmpty()) {
-                                scope.launch { listState.scrollToItem(messages.lastIndex) }
+                                scope.launch { listState.animateToChatBottom(messages.lastIndex) }
                             }
                             prevColumnHeight = size.height
                         }
@@ -553,6 +607,8 @@ fun StadiumScreen(
                                             }
                                         }
                                     )
+                                    MessageType.PAD_SOUND -> StadiumPadSoundBubble(msg = msg)
+                                    MessageType.MEME_CLIP -> StadiumMemeClipBubble(msg = msg)
                                     MessageType.VOICE -> StadiumVoiceBubble(
                                         msg = msg,
                                         selected = isSelected,
@@ -596,6 +652,8 @@ fun StadiumScreen(
                             pendingVideo = pendingVideo,
                             pendingVoiceClip = pendingVoiceClip,
                             isRecording = isRecording,
+                            onCancelRecording = { cancelRecording() },
+                            recordingElapsedMs = recordingElapsedMs,
                             onChange = { draft = it },
                             onRemoveImage = { idx ->
                                 pendingImages = pendingImages.toMutableList().also { it.removeAt(idx) }
@@ -634,9 +692,76 @@ fun StadiumScreen(
                                 }
                             },
                             onPickMedia = { mediaPicker.launch() },
+                            onOpenPaddy = {
+                                keyboardController?.hide()
+                                showEmojiDrawer = false
+                                padMode = PadMode.SOUNDS
+                            },
+                            onOpenMemepad = {
+                                keyboardController?.hide()
+                                showEmojiDrawer = false
+                                padMode = PadMode.MEMES
+                            },
                             onToggleRecording = { toggleRecording() },
-                            onOpenEmojiPicker = { showEmojiDrawer = true }
+                            onInputFocused = { closePanels() },
+                            onOpenEmojiPicker = {
+                                keyboardController?.hide()
+                                padMode = null
+                                showEmojiDrawer = true
+                            }
                         )
+
+                        val currentPadMode = padMode
+                        val padStadium = current
+                        InlineKeyboardPanel(
+                            visible = currentPadMode != null && padStadium != null,
+                            height = panelHeight
+                        ) {
+                            if (currentPadMode != null && padStadium != null) {
+                                PadPanel(
+                                    container = container,
+                                    mode = currentPadMode,
+                                    onDismiss = { padMode = null },
+                                    onSend = { asset, bytes ->
+                                        padMode = null
+                                        scope.launch {
+                                            runCatching {
+                                                if (currentPadMode == PadMode.SOUNDS) {
+                                                    container.stadiumChat.postPadSound(
+                                                        owner, padStadium, bytes, asset.name, asset.durationMs
+                                                    )
+                                                } else {
+                                                    container.stadiumChat.postMemeClip(
+                                                        owner, padStadium, bytes, asset.name, asset.durationMs
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+
+                        val emojiStadium = current
+                        InlineKeyboardPanel(
+                            visible = showEmojiDrawer && emojiStadium != null,
+                            height = panelHeight
+                        ) {
+                            if (emojiStadium != null) {
+                                EmojiStickerPanel(
+                                    stickers = stickers,
+                                    onDismiss = { showEmojiDrawer = false },
+                                    onSend = { bytes ->
+                                        scope.launch { container.stadiumChat.postSticker(owner, emojiStadium, bytes) }
+                                    },
+                                    onCreateSticker = {
+                                        showEmojiDrawer = false
+                                        showStickerMaker = true
+                                    },
+                                    onDeleteSticker = { id -> container.stickers.delete(id) }
+                                )
+                            }
+                        }
                     }
                 }
                 Box(
@@ -703,9 +828,10 @@ private fun StadiumTextBubble(
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier.widthIn(max = 340.dp)
         ) {
-            Text(
+            LinkifiedText(
                 msg.displayBody,
                 color = textColor,
+                linkColor = if (msg.isOwn) textColor else MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Start,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
@@ -1133,6 +1259,53 @@ private fun StadiumTopBanner(
             ) {
                 Icon(icon, contentDescription = null, tint = fg)
                 Text(data.message, color = fg, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StadiumPadSoundBubble(msg: dev.stade.stadium.StadiumMessage) {
+    val player = rememberAudioPlayer()
+    var playing by remember(msg.id) { mutableStateOf(false) }
+    val bytes = msg.padSoundBytes()
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
+        horizontalArrangement = if (msg.isOwn) Arrangement.End else Arrangement.Start
+    ) {
+        PadSoundBubble(
+            label = msg.padLabel,
+            durationMs = msg.padDurationMs,
+            playing = playing && player.isPlaying,
+            onToggle = {
+                if (bytes == null) return@PadSoundBubble
+                if (player.isPlaying) {
+                    player.stop()
+                    playing = false
+                } else {
+                    runCatching { player.play(bytes) }
+                    playing = true
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun StadiumMemeClipBubble(msg: dev.stade.stadium.StadiumMessage) {
+    val bytes = msg.memeClipBytes()
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
+        horizontalArrangement = if (msg.isOwn) Arrangement.End else Arrangement.Start
+    ) {
+        MemeClipBubble(label = msg.padLabel, durationMs = msg.padDurationMs) {
+            if (bytes != null) {
+                dev.stade.ui.video.VideoPlayerView(
+                    bytes = bytes,
+                    modifier = Modifier.fillMaxWidth().height(190.dp)
+                )
+            } else {
+                Box(Modifier.fillMaxWidth().height(190.dp))
             }
         }
     }

@@ -23,11 +23,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -55,11 +53,10 @@ import org.jetbrains.compose.resources.rememberResourceEnvironment
 
 private enum class EmojiStickerTab { Emoji, Stickers }
 
-private val DRAWER_GRID_HEIGHT = 320.dp
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalResourceApi::class)
+@OptIn(ExperimentalResourceApi::class)
 @Composable
-fun EmojiStickerDrawer(
+fun EmojiStickerPanel(
     stickers: List<Sticker>,
     onDismiss: () -> Unit,
     onSend: (ByteArray) -> Unit,
@@ -72,137 +69,134 @@ fun EmojiStickerDrawer(
     var tab by remember { mutableStateOf(EmojiStickerTab.Emoji) }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            TabRow(selectedTabIndex = tab.ordinal) {
-                Tab(
-                    selected = tab == EmojiStickerTab.Emoji,
-                    onClick = { tab = EmojiStickerTab.Emoji },
-                    text = { Text(strings.emojiTabLabel) }
-                )
-                Tab(
-                    selected = tab == EmojiStickerTab.Stickers,
-                    onClick = { tab = EmojiStickerTab.Stickers },
-                    text = { Text(strings.stickersTabLabel) }
-                )
-            }
-
-            when (tab) {
-                EmojiStickerTab.Emoji -> {
-                    if (CustomEmojiCatalog.all.isEmpty()) {
-                        DrawerEmptyState(strings.noCustomEmojiYet)
-                    } else {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(5),
-                            contentPadding = PaddingValues(12.dp),
-                            modifier = Modifier.fillMaxWidth().height(DRAWER_GRID_HEIGHT)
-                        ) {
-                            items(CustomEmojiCatalog.all, key = { it.key }) { emoji ->
-                                Box(
-                                    modifier = Modifier
-                                        .padding(4.dp)
-                                        .size(52.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable {
-                                            scope.launch {
-                                                val bytes = runCatching {
-                                                    getDrawableResourceBytes(environment, emoji.drawable)
-                                                }.getOrNull()
-                                                if (bytes != null) {
-                                                    onSend(bytes)
-                                                    onDismiss()
-                                                }
-                                            }
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Image(
-                                        painter = painterResource(emoji.drawable),
-                                        contentDescription = emoji.key,
-                                        modifier = Modifier.size(40.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                EmojiStickerTab.Stickers -> {
-                    if (stickers.isEmpty()) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().height(DRAWER_GRID_HEIGHT),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                strings.noStickersYet,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            FilledTonalButton(onClick = onCreateSticker) {
-                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(strings.createStickerAction)
-                            }
-                        }
-                    } else {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(4),
-                            contentPadding = PaddingValues(12.dp),
-                            modifier = Modifier.fillMaxWidth().height(DRAWER_GRID_HEIGHT)
-                        ) {
-                            item(key = "create") {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(4.dp)
-                                        .aspectRatio(1f)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
-                                        .clickable(onClick = onCreateSticker),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Default.Add,
-                                        contentDescription = strings.createStickerAction,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                            items(stickers, key = { it.id }) { sticker ->
-                                val bitmap = remember(sticker.id) {
-                                    runCatching { sticker.imageBytes.decodeToImageBitmap() }.getOrNull()
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .padding(4.dp)
-                                        .aspectRatio(1f)
-                                        .pointerInput(sticker.id) {
-                                            detectTapGestures(
-                                                onTap = {
-                                                    onSend(sticker.imageBytes)
-                                                    onDismiss()
-                                                },
-                                                onLongPress = { pendingDeleteId = sticker.id }
-                                            )
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (bitmap != null) {
-                                        Image(
-                                            bitmap = bitmap,
-                                            contentDescription = null,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
+    Column(modifier = Modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = tab.ordinal) {
+            Tab(
+                selected = tab == EmojiStickerTab.Emoji,
+                onClick = { tab = EmojiStickerTab.Emoji },
+                text = { Text(strings.emojiTabLabel) }
+            )
+            Tab(
+                selected = tab == EmojiStickerTab.Stickers,
+                onClick = { tab = EmojiStickerTab.Stickers },
+                text = { Text(strings.stickersTabLabel) }
+            )
         }
+
+        when (tab) {
+            EmojiStickerTab.Emoji -> {
+                if (CustomEmojiCatalog.all.isEmpty()) {
+                    DrawerEmptyState(strings.noCustomEmojiYet, Modifier.weight(1f))
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(5),
+                        contentPadding = PaddingValues(12.dp),
+                        modifier = Modifier.fillMaxWidth().weight(1f)
+                    ) {
+                        items(CustomEmojiCatalog.all, key = { it.key }) { emoji ->
+                            Box(
+                                modifier = Modifier
+                                    .padding(4.dp)
+                                    .size(52.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        scope.launch {
+                                            val bytes = runCatching {
+                                                getDrawableResourceBytes(environment, emoji.drawable)
+                                            }.getOrNull()
+                                            if (bytes != null) {
+                                                onSend(bytes)
+                                                onDismiss()
+                                            }
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    painter = painterResource(emoji.drawable),
+                                    contentDescription = emoji.key,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            EmojiStickerTab.Stickers -> {
+                if (stickers.isEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            strings.noStickersYet,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        FilledTonalButton(onClick = onCreateSticker) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(strings.createStickerAction)
+                        }
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(4),
+                        contentPadding = PaddingValues(12.dp),
+                        modifier = Modifier.fillMaxWidth().weight(1f)
+                    ) {
+                        item(key = "create") {
+                            Box(
+                                modifier = Modifier
+                                    .padding(4.dp)
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+                                    .clickable(onClick = onCreateSticker),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = strings.createStickerAction,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        items(stickers, key = { it.id }) { sticker ->
+                            val bitmap = remember(sticker.id) {
+                                runCatching { sticker.imageBytes.decodeToImageBitmap() }.getOrNull()
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .padding(4.dp)
+                                    .aspectRatio(1f)
+                                    .pointerInput(sticker.id) {
+                                        detectTapGestures(
+                                            onTap = {
+                                                onSend(sticker.imageBytes)
+                                                onDismiss()
+                                            },
+                                            onLongPress = { pendingDeleteId = sticker.id }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (bitmap != null) {
+                                    Image(
+                                        bitmap = bitmap,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
     }
 
     val deleteId = pendingDeleteId
@@ -225,9 +219,9 @@ fun EmojiStickerDrawer(
 }
 
 @Composable
-private fun DrawerEmptyState(text: String) {
+private fun DrawerEmptyState(text: String, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier.fillMaxWidth().height(DRAWER_GRID_HEIGHT),
+        modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
         Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)

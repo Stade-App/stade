@@ -1,0 +1,139 @@
+name: Tor version check
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare pinned Tor bundle against upstream
+        id: compare
+        run: |
+          set -euo pipefail
+          ARCHIVE="https://archive.torproject.org/tor-package-archive/torbrowser"
+
+          PINNED="$(grep -E '^tor\.bundle\.version=' gradle.properties | cut -d= -f2 | tr -d '[:space:]')"
+          echo "pinned=$PINNED" >> "$GITHUB_OUTPUT"
+          echo "Pinned: $PINNED"
+
+          # Stable releases only: bare X.Y or X.Y.Z, never alphas or betas.
+          LATEST="$(curl -fsSL "$ARCHIVE/" \
+            | grep -oE 'href="[0-9]+\.[0-9]+(\.[0-9]+)?/"' \
+            | sed -E 's/href="([^\/]+)\/"/\1/' \
+            | sort -V -u \
+            | tail -1)"
+
+          if [ -z "$LATEST" ]; then
+            echo "Could not read the upstream listing; treating as no change."
+            echo "outdated=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Latest stable upstream: $LATEST"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+
+          if [ "$PINNED" = "$LATEST" ]; then
+            echo "outdated=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          NEWEST="$(printf '%s\n%s\n' "$PINNED" "$LATEST" | sort -V | tail -1)"
+          if [ "$NEWEST" = "$PINNED" ]; then
+            echo "Pinned version is ahead of the listing; nothing to do."
+            echo "outdated=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Every expert bundle must exist before this is worth reporting.
+          TRIPLES="windows-x86_64 linux-x86_64 macos-x86_64 macos-aarch64 android-aarch64 android-armv7 android-x86_64 android-x86"
+          for T in $TRIPLES; do
+            URL="$ARCHIVE/$LATEST/tor-expert-bundle-$T-$LATEST.tar.gz"
+            if ! curl -fsSLI "$URL" >/dev/null 2>&1; then
+              echo "$LATEST is listed but $T is not published yet; waiting."
+              echo "outdated=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+
+          echo "outdated=true" >> "$GITHUB_OUTPUT"
+
+      - name: Compute hashes for the new bundles
+        if: steps.compare.outputs.outdated == 'true'
+        id: hashes
+        run: |
+          set -euo pipefail
+          ARCHIVE="https://archive.torproject.org/tor-package-archive/torbrowser"
+          LATEST="${{ steps.compare.outputs.latest }}"
+
+          declare -A PROPS=(
+            [windows-x86_64]=tor.sha256.windows.x86_64
+            [linux-x86_64]=tor.sha256.linux.x86_64
+            [macos-x86_64]=tor.sha256.macos.x86_64
+            [macos-aarch64]=tor.sha256.macos.aarch64
+            [android-aarch64]=tor.sha256.android.aarch64
+            [android-armv7]=tor.sha256.android.armv7
+            [android-x86_64]=tor.sha256.android.x86_64
+            [android-x86]=tor.sha256.android.x86
+          )
+
+          {
+            echo "tor.bundle.version=$LATEST"
+            for T in windows-x86_64 linux-x86_64 macos-x86_64 macos-aarch64 android-aarch64 android-armv7 android-x86_64 android-x86; do
+              URL="$ARCHIVE/$LATEST/tor-expert-bundle-$T-$LATEST.tar.gz"
+              SHA="$(curl -fsSL "$URL" | sha256sum | cut -d' ' -f1)"
+              echo "${PROPS[$T]}=$SHA"
+            done
+          } > tor-pins.txt
+
+          cat tor-pins.txt
+          {
+            echo "block<<PINS_EOF"
+            cat tor-pins.txt
+            echo "PINS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the tracking issue
+        if: steps.compare.outputs.outdated == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PINNED: ${{ steps.compare.outputs.pinned }}
+          LATEST: ${{ steps.compare.outputs.latest }}
+          PINS: ${{ steps.hashes.outputs.block }}
+        run: |
+          set -euo pipefail
+          TITLE="Bundled Tor is behind upstream ($LATEST available)"
+
+          cat > body.md <<EOF
+          The bundled Tor Expert Bundle is pinned to **$PINNED**, but **$LATEST** is published upstream.
+
+          Updating matters because the Tor binary ships inside the app, so a fix released upstream
+          only reaches users when the pin is bumped here.
+
+          Replace the corresponding lines in \`gradle.properties\` with:
+
+          \`\`\`properties
+          $PINS
+          \`\`\`
+
+          These SHA-256 values were computed from the published archives during this run. The build
+          verifies every download against them and fails on a mismatch, so a bad paste cannot ship.
+
+          After updating, build once so the binaries are re-downloaded and verified, and confirm Tor
+          still bootstraps on Android and desktop before releasing.
+          EOF
+
+          EXISTING="$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number' || true)"
+          if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ]; then
+            gh issue comment "$EXISTING" --body-file body.md
+          else
+            gh issue create --title "$TITLE" --body-file body.md --label dependencies || \
+              gh issue create --title "$TITLE" --body-file body.md
+          fi

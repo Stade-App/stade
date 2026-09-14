@@ -278,6 +278,8 @@ abstract class AppStrings {
     abstract val duressPinTitle: String
     abstract val duressPinSetSubtitle: String
     abstract val duressPinNotSetSubtitle: String
+    abstract val duressPinInfoTitle: String
+    abstract val duressPinInfoBody: String
     abstract val clearDuressPinAction: String
 
     abstract val transportsTitle: String
@@ -423,6 +425,9 @@ abstract class AppStrings {
     abstract val imageCopyFailed: String
 
     abstract val saveAction: String
+    abstract val editAliasTitle: String
+    abstract val editAliasBody: String
+    abstract val editAliasLabel: String
     abstract val createStadiumTitle: String
     abstract val createStadiumAction: String
     abstract val createStadiumHint: String
@@ -511,6 +516,9 @@ abstract class AppStrings {
 
     abstract val typingIndicator: String
     abstract val voiceTooShort: String
+    abstract val voiceCancelRecording: String
+    abstract val voiceSlideToCancel: String
+    abstract val voiceRecordingCancelled: String
 
     abstract val scheduleMessagePickDate: String
     abstract val scheduleMessagePickTime: String
@@ -571,6 +579,26 @@ abstract class AppStrings {
     abstract val updateRequiredByYou: String
     abstract val updateRequiredByPeer: String
     abstract val updateAction: String
+    abstract val padPlusAction: String
+    abstract val padAttachMedia: String
+    abstract val padPaddyTitle: String
+    abstract val padPaddySubtitle: String
+    abstract val padMemepadTitle: String
+    abstract val padMemepadSubtitle: String
+    abstract val padUnavailable: String
+    abstract val padSoundUnsupported: String
+    abstract val padDownloadFailed: String
+    abstract val padRefresh: String
+    abstract val padEmpty: String
+    abstract val padRetry: String
+    abstract val padDownloading: String
+    abstract val padSendFailed: String
+    abstract val padSoundTag: String
+    abstract val padMemeTag: String
+    abstract val padTapToPlay: String
+    abstract val padTorNotReady: String
+    abstract fun padSentSound(sender: String?, isSelf: Boolean): String
+    abstract fun padSentMeme(sender: String?, isSelf: Boolean): String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

@@ -182,7 +182,8 @@ fun StadeRadarScreen(
     )
 
     val peers = session.peers.filter {
-        it.fingerprint.isEmpty() || it.fingerprint !in knownFingerprints
+        if (it.fingerprint.isEmpty()) true
+        else it.fingerprint != ownFingerprint && it.fingerprint !in knownFingerprints
     }
 
     var connectingTo by remember { mutableStateOf<RadarPeer?>(null) }

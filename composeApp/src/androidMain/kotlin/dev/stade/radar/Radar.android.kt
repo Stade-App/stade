@@ -43,6 +43,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 actual val isRadarSupported: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
+private const val BROADCAST_RESTART_DELAY_MS = 600L
+
 @SuppressLint("MissingPermission")
 internal class AndroidRadarSession(
     private val context: Context,
@@ -81,6 +83,7 @@ internal class AndroidRadarSession(
     private var advertiseBlocked = false
     private var gattServer: RadarGattServer? = null
     private var expiryJob: Job? = null
+    private var restartJob: Job? = null
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -134,13 +137,20 @@ internal class AndroidRadarSession(
         paletteIndex = palette
         broadcasting = broadcast
         if (!attached || statusState.value != RadarStatus.Scanning) return
+        restartJob?.cancel()
         stopBroadcast()
         advertiseBlocked = false
-        if (broadcasting) startBroadcast()
+        if (!broadcasting) return
+        restartJob = scope.launch {
+            delay(BROADCAST_RESTART_DELAY_MS)
+            if (attached && broadcasting && statusState.value == RadarStatus.Scanning) startBroadcast()
+        }
     }
 
     fun detach() {
         attached = false
+        restartJob?.cancel()
+        restartJob = null
         stopRadio()
         synchronized(lock) { seen.clear() }
         peersState.value = emptyList()
@@ -329,11 +339,14 @@ internal class AndroidRadarSession(
         val fp = RadarProtocol.readFingerprint(mfg)
         val palette = RadarProtocol.readPaletteIndex(mfg)
         val snapshot = synchronized(lock) {
-            val previous = seen[address]
-            seen[address] = RadarPeer(
+            val carried = seen.remove(address)
+            val identity = fp.ifEmpty { carried?.fingerprint.orEmpty() }
+            val key = identity.ifEmpty { address }
+            val previous = seen[key] ?: carried
+            seen[key] = RadarPeer(
                 id = address,
-                nickname = if (name.isEmpty() && previous != null) previous.nickname else name,
-                fingerprint = if (fp.isEmpty() && previous != null) previous.fingerprint else fp,
+                nickname = name.ifEmpty { previous?.nickname.orEmpty() },
+                fingerprint = identity,
                 paletteIndex = palette ?: previous?.paletteIndex,
                 rssi = result.rssi,
                 lastSeenAt = System.currentTimeMillis()

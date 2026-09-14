@@ -42,6 +42,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -80,12 +83,27 @@ private enum class EditorMode { CROP, DRAW }
 
 private val swatchColors = listOf(Color.Red, Color(0xFFFFC107), Color(0xFF2196F3), Color(0xFF4CAF50), Color.White, Color.Black)
 private const val MIN_CROP_SIZE = 0.1f
+private val EDITOR_SIDE_INSET = 32.dp
+private val EDITOR_VERTICAL_INSET = 12.dp
+
+internal fun toSquare(r: CropRect, imageW: Int, imageH: Int): CropRect {
+    if (imageW <= 0 || imageH <= 0) return r
+    val side = minOf((r.right - r.left) * imageW, (r.bottom - r.top) * imageH)
+    val fracW = (side / imageW).coerceIn(0f, 1f)
+    val fracH = (side / imageH).coerceIn(0f, 1f)
+    val cx = (r.left + r.right) / 2f
+    val cy = (r.top + r.bottom) / 2f
+    val left = (cx - fracW / 2f).coerceIn(0f, 1f - fracW)
+    val top = (cy - fracH / 2f).coerceIn(0f, 1f - fracH)
+    return CropRect(left, top, left + fracW, top + fracH)
+}
 
 @Composable
 fun MediaEditorDialog(
     imageBytes: ByteArray,
     onSave: (ByteArray) -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    circular: Boolean = false
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
@@ -97,7 +115,15 @@ fun MediaEditorDialog(
     }
 
     var mode by remember { mutableStateOf(EditorMode.CROP) }
-    var crop by remember { mutableStateOf(CropRect(0f, 0f, 1f, 1f)) }
+    val squareCrop: (CropRect) -> CropRect = remember(circular, bitmap) {
+        { r -> if (circular) toSquare(r, bitmap.width, bitmap.height) else r }
+    }
+    var crop by remember(circular) {
+        mutableStateOf(
+            if (circular) toSquare(CropRect(0f, 0f, 1f, 1f), bitmap.width, bitmap.height)
+            else CropRect(0f, 0f, 1f, 1f)
+        )
+    }
     var strokes by remember { mutableStateOf(listOf<EditStroke>()) }
     var currentColor by remember { mutableStateOf(Color.Red) }
     var saving by remember { mutableStateOf(false) }
@@ -125,20 +151,22 @@ fun MediaEditorDialog(
                 IconButton(onClick = { if (!saving) onCancel() }) {
                     Icon(Icons.Default.Close, contentDescription = strings.cancel, tint = Color.White)
                 }
-                Row {
-                    IconButton(onClick = { mode = EditorMode.CROP }) {
-                        Icon(
-                            Icons.Default.Crop,
-                            contentDescription = strings.cropToolAction,
-                            tint = if (mode == EditorMode.CROP) MaterialTheme.colorScheme.primary else Color.White
-                        )
-                    }
-                    IconButton(onClick = { mode = EditorMode.DRAW }) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = strings.drawToolAction,
-                            tint = if (mode == EditorMode.DRAW) MaterialTheme.colorScheme.primary else Color.White
-                        )
+                if (!circular) {
+                    Row {
+                        IconButton(onClick = { mode = EditorMode.CROP }) {
+                            Icon(
+                                Icons.Default.Crop,
+                                contentDescription = strings.cropToolAction,
+                                tint = if (mode == EditorMode.CROP) MaterialTheme.colorScheme.primary else Color.White
+                            )
+                        }
+                        IconButton(onClick = { mode = EditorMode.DRAW }) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = strings.drawToolAction,
+                                tint = if (mode == EditorMode.DRAW) MaterialTheme.colorScheme.primary else Color.White
+                            )
+                        }
                     }
                 }
                 IconButton(
@@ -171,8 +199,8 @@ fun MediaEditorDialog(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                val availW = maxWidth * 0.94f
-                val availH = maxHeight * 0.94f
+                val availW = (maxWidth - EDITOR_SIDE_INSET * 2).coerceAtLeast(1.dp)
+                val availH = (maxHeight - EDITOR_VERTICAL_INSET * 2).coerceAtLeast(1.dp)
                 val fitsByWidth = (availW / aspect) <= availH
                 val targetW = if (fitsByWidth) availW else availH * aspect
                 val targetH = if (fitsByWidth) availW / aspect else availH
@@ -249,12 +277,27 @@ fun MediaEditorDialog(
                                 drawRect(color = scrim, topLeft = Offset(0f, b), size = Size(w, h - b))
                                 drawRect(color = scrim, topLeft = Offset(0f, t), size = Size(l, b - t))
                                 drawRect(color = scrim, topLeft = Offset(r, t), size = Size(w - r, b - t))
-                                drawRect(
-                                    color = Color.White,
-                                    topLeft = Offset(l, t),
-                                    size = Size(r - l, b - t),
-                                    style = Stroke(width = 2.dp.toPx())
-                                )
+                                if (circular) {
+                                    val ring = Path().apply {
+                                        addRect(Rect(l, t, r, b))
+                                        addOval(Rect(l, t, r, b))
+                                        fillType = PathFillType.EvenOdd
+                                    }
+                                    drawPath(ring, scrim)
+                                    drawOval(
+                                        color = Color.White,
+                                        topLeft = Offset(l, t),
+                                        size = Size(r - l, b - t),
+                                        style = Stroke(width = 2.dp.toPx())
+                                    )
+                                } else {
+                                    drawRect(
+                                        color = Color.White,
+                                        topLeft = Offset(l, t),
+                                        size = Size(r - l, b - t),
+                                        style = Stroke(width = 2.dp.toPx())
+                                    )
+                                }
                             }
                         }
 
@@ -278,35 +321,35 @@ fun MediaEditorDialog(
                                             val height = crop.bottom - crop.top
                                             val newLeft = (crop.left + dxFrac).coerceIn(0f, 1f - width)
                                             val newTop = (crop.top + dyFrac).coerceIn(0f, 1f - height)
-                                            crop = CropRect(newLeft, newTop, newLeft + width, newTop + height)
+                                            crop = squareCrop(CropRect(newLeft, newTop, newLeft + width, newTop + height))
                                         }
                                     }
                             )
 
                             val handleSize = 24.dp
                             CropHandle(handleSize, boxSizePx, crop.left, crop.top) { dxFrac, dyFrac ->
-                                crop = crop.copy(
+                                crop = squareCrop(crop.copy(
                                     left = (crop.left + dxFrac).coerceIn(0f, crop.right - MIN_CROP_SIZE),
                                     top = (crop.top + dyFrac).coerceIn(0f, crop.bottom - MIN_CROP_SIZE)
-                                )
+                                ))
                             }
                             CropHandle(handleSize, boxSizePx, crop.right, crop.top) { dxFrac, dyFrac ->
-                                crop = crop.copy(
+                                crop = squareCrop(crop.copy(
                                     right = (crop.right + dxFrac).coerceIn(crop.left + MIN_CROP_SIZE, 1f),
                                     top = (crop.top + dyFrac).coerceIn(0f, crop.bottom - MIN_CROP_SIZE)
-                                )
+                                ))
                             }
                             CropHandle(handleSize, boxSizePx, crop.left, crop.bottom) { dxFrac, dyFrac ->
-                                crop = crop.copy(
+                                crop = squareCrop(crop.copy(
                                     left = (crop.left + dxFrac).coerceIn(0f, crop.right - MIN_CROP_SIZE),
                                     bottom = (crop.bottom + dyFrac).coerceIn(crop.top + MIN_CROP_SIZE, 1f)
-                                )
+                                ))
                             }
                             CropHandle(handleSize, boxSizePx, crop.right, crop.bottom) { dxFrac, dyFrac ->
-                                crop = crop.copy(
+                                crop = squareCrop(crop.copy(
                                     right = (crop.right + dxFrac).coerceIn(crop.left + MIN_CROP_SIZE, 1f),
                                     bottom = (crop.bottom + dyFrac).coerceIn(crop.top + MIN_CROP_SIZE, 1f)
-                                )
+                                ))
                             }
                         }
                     }

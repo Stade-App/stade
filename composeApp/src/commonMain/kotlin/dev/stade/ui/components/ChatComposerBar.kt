@@ -34,7 +34,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.InsertEmoticon
@@ -49,7 +54,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,6 +73,23 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.dp
 import dev.stade.audio.RecordedClip
 import dev.stade.audio.rememberAudioPlayer
@@ -94,13 +118,25 @@ fun ChatComposerBar(
     onSend: () -> Unit,
     onLongPressSend: (() -> Unit)? = null,
     onPickMedia: () -> Unit,
+    onOpenPaddy: () -> Unit = {},
+    onOpenMemepad: () -> Unit = {},
     onToggleRecording: () -> Unit,
+    onCancelRecording: () -> Unit = {},
+    recordingElapsedMs: Long = 0L,
+    onInputFocused: () -> Unit = {},
     onOpenEmojiPicker: () -> Unit = {}
 ) {
     val strings = LocalStrings.current
+    var plusOpen by remember { mutableStateOf(false) }
     val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty() || pendingVideo != null || pendingVoiceClip != null
     val interactionSource = remember { MutableInteractionSource() }
+    val haptic = LocalHapticFeedback.current
+    var cancelDragPx by remember { mutableStateOf(0f) }
+    val cancelThresholdPx = with(LocalDensity.current) { CANCEL_SLIDE_DISTANCE.toPx() }
+    val cancelProgress = (-cancelDragPx / cancelThresholdPx).coerceIn(0f, 1f)
+    LaunchedEffect(isRecording) { if (!isRecording) cancelDragPx = 0f }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    LaunchedEffect(isFocused) { if (isFocused) onInputFocused() }
     val borderColor by animateColorAsState(
         targetValue = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent,
         animationSpec = tween(220),
@@ -299,6 +335,14 @@ fun ChatComposerBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            if (isRecording) {
+                RecordingStrip(
+                    elapsedMs = recordingElapsedMs,
+                    cancelProgress = cancelProgress,
+                    onCancel = onCancelRecording,
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
             BasicTextField(
                 value = draft,
                 onValueChange = onChange,
@@ -356,20 +400,77 @@ fun ChatComposerBar(
                             }
                             innerTextField()
                         }
-                        IconButton(
-                            onClick = onPickMedia,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.AttachFile,
-                                contentDescription = strings.attachMediaAction,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
+                        Box {
+                            IconButton(
+                                onClick = { plusOpen = true },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = strings.padPlusAction,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = plusOpen,
+                                onDismissRequest = { plusOpen = false },
+                                shape = RoundedCornerShape(18.dp)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(strings.padAttachMedia) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.AttachFile, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        plusOpen = false
+                                        onPickMedia()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(strings.padPaddyTitle)
+                                            Text(
+                                                strings.padPaddySubtitle,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.GraphicEq, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        plusOpen = false
+                                        onOpenPaddy()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(strings.padMemepadTitle)
+                                            Text(
+                                                strings.padMemepadSubtitle,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Movie, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        plusOpen = false
+                                        onOpenMemepad()
+                                    }
+                                )
+                            }
                         }
                     }
                 }
             )
+            }
 
             val voiceButtonMode = when {
                 isRecording -> VoiceSendMode.STOP
@@ -390,12 +491,30 @@ fun ChatComposerBar(
                 animationSpec = tween(220),
                 label = "voiceSendContent"
             )
-            val haptic = LocalHapticFeedback.current
             Box(
                 modifier = Modifier
+                    .offset { IntOffset(cancelDragPx.toInt(), 0) }
                     .size(54.dp)
                     .clip(CircleShape)
                     .background(buttonContainerColor)
+                    .pointerInput(isRecording) {
+                        if (!isRecording) return@pointerInput
+                        detectHorizontalDragGestures(
+                            onDragEnd = { cancelDragPx = 0f },
+                            onDragCancel = { cancelDragPx = 0f },
+                            onHorizontalDrag = { change, delta ->
+                                change.consume()
+                                val next = (cancelDragPx + delta).coerceIn(-cancelThresholdPx * 1.2f, 0f)
+                                val crossed = -next >= cancelThresholdPx && -cancelDragPx < cancelThresholdPx
+                                cancelDragPx = next
+                                if (crossed) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    cancelDragPx = 0f
+                                    onCancelRecording()
+                                }
+                            }
+                        )
+                    }
                     .combinedClickable(
                         onClick = {
                             if (voiceButtonMode == VoiceSendMode.SEND) onSend() else onToggleRecording()
@@ -436,5 +555,72 @@ fun ChatComposerBar(
                 }
             }
         }
+    }
+}
+
+private val CANCEL_SLIDE_DISTANCE = 96.dp
+
+@Composable
+private fun RecordingStrip(
+    elapsedMs: Long,
+    cancelProgress: Float,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val strings = LocalStrings.current
+    val pulse = rememberInfiniteTransition(label = "recPulse")
+    val dotAlpha by pulse.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(650, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "recDot"
+    )
+    val binScale by animateFloatAsState(1f + cancelProgress * 0.6f, label = "binScale")
+    val binTint = lerp(
+        MaterialTheme.colorScheme.onSurfaceVariant,
+        MaterialTheme.colorScheme.error,
+        cancelProgress
+    )
+    Row(
+        modifier = modifier
+            .height(54.dp)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(54.dp)
+            )
+            .padding(start = 14.dp, end = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onCancel, modifier = Modifier.size(30.dp)) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = strings.voiceCancelRecording,
+                tint = binTint,
+                modifier = Modifier.size(20.dp).scale(binScale)
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Box(
+            Modifier
+                .size(9.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.error.copy(alpha = dotAlpha))
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            formatVoiceDuration(elapsedMs.toInt()),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.weight(1f))
+        Text(
+            strings.voiceSlideToCancel,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 1f - cancelProgress),
+            maxLines = 1
+        )
     }
 }

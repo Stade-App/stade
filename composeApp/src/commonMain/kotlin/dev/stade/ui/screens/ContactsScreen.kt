@@ -1035,6 +1035,15 @@ private fun ContactRow(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    if (contact.muted) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.AutoMirrored.Filled.VolumeOff,
+                            contentDescription = strings.muteChatAction,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(2.dp))
@@ -1113,6 +1122,15 @@ private fun GroupRow(
                             Icons.Default.PushPin,
                             contentDescription = strings.pinChatAction,
                             modifier = Modifier.size(14.dp).rotate(45f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (group.muted) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.AutoMirrored.Filled.VolumeOff,
+                            contentDescription = strings.muteChatAction,
+                            modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -1196,6 +1214,15 @@ private fun StadiumRow(
                             Icons.Default.PushPin,
                             contentDescription = strings.pinChatAction,
                             modifier = Modifier.size(14.dp).rotate(45f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (stadium.muted) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.AutoMirrored.Filled.VolumeOff,
+                            contentDescription = strings.muteChatAction,
+                            modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

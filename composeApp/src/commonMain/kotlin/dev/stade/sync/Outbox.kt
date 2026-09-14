@@ -23,13 +23,11 @@ class Outbox(private val db: StadeDb, private val crypto: CryptoApi) {
         return OutboxItem(id, contactId, messageId, payload, 0, now)
     }
 
-    fun pending(contactId: String): List<OutboxItem> =
-        db.stadeDbQueries.selectOutbox(contactId).executeAsList().map {
-            OutboxItem(it.id, it.contactId, it.messageId, it.payload, it.attempts.toInt(), it.createdAt)
-        }
+    fun pendingIds(contactId: String): List<String> =
+        db.stadeDbQueries.selectOutboxIds(contactId).executeAsList()
 
-    fun all(): List<OutboxItem> =
-        db.stadeDbQueries.selectAllOutbox().executeAsList().map {
+    fun item(id: String): OutboxItem? =
+        db.stadeDbQueries.selectOutboxItem(id).executeAsOneOrNull()?.let {
             OutboxItem(it.id, it.contactId, it.messageId, it.payload, it.attempts.toInt(), it.createdAt)
         }
 

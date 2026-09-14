@@ -127,6 +127,20 @@ import dev.stade.audio.rememberAudioPlayer
 import dev.stade.audio.rememberAudioRecorder
 import dev.stade.group.GroupMessage
 import dev.stade.identity.LocalIdentity
+import dev.stade.ui.components.LinkifiedText
+import dev.stade.ui.components.animateToChatBottom
+import dev.stade.ui.components.jumpToChatBottom
+import dev.stade.message.DraftScope
+import dev.stade.message.loadDraft
+import dev.stade.message.saveDraft
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.datetime.Clock
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import dev.stade.ui.components.InlineKeyboardPanel
+import dev.stade.ui.components.rememberPanelHeight
+import dev.stade.ui.components.EmojiStickerPanel
+import dev.stade.ui.components.PadPanel
 import dev.stade.link.LinkPreview
 import dev.stade.link.extractFirstUrl
 import dev.stade.link.fetchLinkPreview
@@ -140,10 +154,13 @@ import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.FullScreenImageViewer
 import dev.stade.ui.components.ChatComposerReplyPreview
-import dev.stade.ui.components.EmojiStickerDrawer
 import dev.stade.ui.components.ScrollToBottomButton
 import dev.stade.ui.components.StickerMakerDialog
 import dev.stade.ui.components.DeliveryStatusDots
+import dev.stade.ui.components.MemeClipBubble
+import dev.stade.ui.components.PadMode
+import dev.stade.ui.components.PadSoundBubble
+import dev.stade.audio.rememberAudioPlayer
 import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.copyImageToClipboard
@@ -183,7 +200,23 @@ fun GroupChatScreen(
     val contacts by remember(owner.id) { container.contacts.observeContacts(owner.id) }.collectAsState(initial = emptyList())
     val listState = rememberLazyListState()
     val linkPreviewsEnabled = remember { getLinkPreviewsEnabled(container.db) }
-    var draft by remember { mutableStateOf(TextFieldValue("")) }
+    var draft by remember(groupId) { mutableStateOf(TextFieldValue("")) }
+    val draftRef = rememberUpdatedState(draft.text)
+    LaunchedEffect(groupId) {
+        val saved = withContext(Dispatchers.Default) { loadDraft(container.db, DraftScope.GROUP, groupId) }
+        if (saved.isNotEmpty() && draft.text.isEmpty()) {
+            draft = TextFieldValue(saved, selection = TextRange(saved.length))
+        }
+    }
+    LaunchedEffect(groupId) {
+        snapshotFlow { draft.text }.collectLatest { text ->
+            delay(500)
+            withContext(Dispatchers.Default) { saveDraft(container.db, DraftScope.GROUP, groupId, text) }
+        }
+    }
+    DisposableEffect(groupId) {
+        onDispose { saveDraft(container.db, DraftScope.GROUP, groupId, draftRef.value) }
+    }
     var menuOpen by remember { mutableStateOf(false) }
 
     val isOwner = remember(group?.creatorStadeId) {
@@ -215,10 +248,13 @@ fun GroupChatScreen(
         }
     }
 
+    var padMode by remember { mutableStateOf<PadMode?>(null) }
     var showAddMembersDialog by remember { mutableStateOf(false) }
     var showDeleteGroupDialog by remember { mutableStateOf(false) }
     var showLeaveGroupDialog by remember { mutableStateOf(false) }
     var showEmojiDrawer by remember { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val panelHeight = rememberPanelHeight()
     var showStickerMaker by remember { mutableStateOf(false) }
     val stickers by remember(owner.id) { container.stickers.observeStickers(owner.id) }.collectAsState(initial = emptyList())
 
@@ -280,15 +316,15 @@ fun GroupChatScreen(
         container.groups.markRead(groupId)
     }
 
-    var prevMessageCount by remember { mutableStateOf(0) }
+    var prevMessageCount by remember(groupId) { mutableStateOf(0) }
     var scrollReady by remember(groupId) { mutableStateOf(false) }
     LaunchedEffect(rawMessages) {
         if (rawMessages == null) return@LaunchedEffect
         if (messages.isNotEmpty()) {
             if (prevMessageCount == 0) {
-                listState.scrollToItem(messages.lastIndex)
+                listState.jumpToChatBottom(messages.lastIndex)
             } else {
-                listState.animateScrollToItem(messages.lastIndex)
+                listState.animateToChatBottom(messages.lastIndex)
             }
         }
         prevMessageCount = messages.size
@@ -362,6 +398,25 @@ fun GroupChatScreen(
             pendingVoiceClip = null
             isRecording = true
             recorder.start()
+        }
+    }
+
+    fun cancelRecording() {
+        if (!isRecording) return
+        isRecording = false
+        recorder.cancel()
+    }
+
+    var recordingElapsedMs by remember { mutableStateOf(0L) }
+    LaunchedEffect(isRecording) {
+        if (!isRecording) {
+            recordingElapsedMs = 0L
+            return@LaunchedEffect
+        }
+        val startedAt = Clock.System.now().toEpochMilliseconds()
+        while (true) {
+            recordingElapsedMs = Clock.System.now().toEpochMilliseconds() - startedAt
+            delay(200)
         }
     }
 
@@ -540,19 +595,6 @@ fun GroupChatScreen(
         )
     }
 
-    if (showEmojiDrawer) {
-        EmojiStickerDrawer(
-            stickers = stickers,
-            onDismiss = { showEmojiDrawer = false },
-            onSend = { bytes -> scope.launch { container.groupChat.sendSticker(owner, groupId, bytes) } },
-            onCreateSticker = {
-                showEmojiDrawer = false
-                showStickerMaker = true
-            },
-            onDeleteSticker = { id -> container.stickers.delete(id) }
-        )
-    }
-
     if (showStickerMaker) {
         StickerMakerDialog(
             onSave = { bytes ->
@@ -564,6 +606,14 @@ fun GroupChatScreen(
         )
     }
 
+    val anyPanelOpen = showEmojiDrawer || padMode != null
+
+    fun closePanels() {
+        showEmojiDrawer = false
+        padMode = null
+    }
+
+    PlatformBackHandler(enabled = anyPanelOpen) { closePanels() }
     PlatformBackHandler(enabled = inSelectionMode) { clearSelection() }
 
     Scaffold(
@@ -724,10 +774,13 @@ fun GroupChatScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                    .windowInsetsPadding(
+                        if (anyPanelOpen) WindowInsets.navigationBars
+                        else WindowInsets.ime.union(WindowInsets.navigationBars)
+                    )
                     .onSizeChanged { size ->
                         if (size.height < prevColumnHeight && messages.isNotEmpty()) {
-                            scope.launch { listState.scrollToItem(messages.lastIndex) }
+                            scope.launch { listState.animateToChatBottom(messages.lastIndex) }
                         }
                         prevColumnHeight = size.height
                     }
@@ -855,6 +908,26 @@ fun GroupChatScreen(
                                                 }
                                             }
                                         )
+                                    } else if (msg.type == MessageType.PAD_SOUND) {
+                                        PadSoundMessage(
+                                            label = msg.padLabel,
+                                            durationMs = msg.padDurationMs,
+                                            bytes = msg.padSoundBytes(),
+                                            outgoing = msg.isOwn,
+                                            senderName = senderName,
+                                            showSender = !msg.isOwn && !tight,
+                                            delivered = if (msg.isOwn) delivered else null
+                                        )
+                                    } else if (msg.type == MessageType.MEME_CLIP) {
+                                        MemeClipMessage(
+                                            label = msg.padLabel,
+                                            durationMs = msg.padDurationMs,
+                                            bytes = msg.memeClipBytes(),
+                                            outgoing = msg.isOwn,
+                                            senderName = senderName,
+                                            showSender = !msg.isOwn && !tight,
+                                            delivered = if (msg.isOwn) delivered else null
+                                        )
                                     } else if (msg.type == MessageType.VOICE) {
                                         GroupVoiceBubble(
                                             msg = msg,
@@ -945,6 +1018,8 @@ fun GroupChatScreen(
                     pendingVideo = pendingVideo,
                     pendingVoiceClip = pendingVoiceClip,
                     isRecording = isRecording,
+                    onCancelRecording = { cancelRecording() },
+                    recordingElapsedMs = recordingElapsedMs,
                     replyPreview = replyTarget?.let { target ->
                         val targetSenderName = memberName(target.senderId, target.isOwn)
                         ChatComposerReplyPreview(
@@ -993,9 +1068,69 @@ fun GroupChatScreen(
                         }
                     },
                     onPickMedia = { mediaPicker.launch() },
+                    onOpenPaddy = {
+                        keyboardController?.hide()
+                        showEmojiDrawer = false
+                        padMode = PadMode.SOUNDS
+                    },
+                    onOpenMemepad = {
+                        keyboardController?.hide()
+                        showEmojiDrawer = false
+                        padMode = PadMode.MEMES
+                    },
                     onToggleRecording = { toggleRecording() },
-                    onOpenEmojiPicker = { showEmojiDrawer = true }
+                    onInputFocused = { closePanels() },
+                    onOpenEmojiPicker = {
+                        keyboardController?.hide()
+                        padMode = null
+                        showEmojiDrawer = true
+                    }
                 )
+
+                val currentPadMode = padMode
+                InlineKeyboardPanel(
+                    visible = currentPadMode != null && group != null,
+                    height = panelHeight
+                ) {
+                    if (currentPadMode != null) {
+                        PadPanel(
+                            container = container,
+                            mode = currentPadMode,
+                            onDismiss = { padMode = null },
+                            onSend = { asset, bytes ->
+                                padMode = null
+                                scope.launch {
+                                    runCatching {
+                                        if (currentPadMode == PadMode.SOUNDS) {
+                                            container.groupChat.sendPadSound(
+                                                owner, groupId, bytes, asset.name, asset.durationMs
+                                            )
+                                        } else {
+                                            container.groupChat.sendMemeClip(
+                                                owner, groupId, bytes, asset.name, asset.durationMs
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+
+                InlineKeyboardPanel(visible = showEmojiDrawer, height = panelHeight) {
+                    EmojiStickerPanel(
+                        stickers = stickers,
+                        onDismiss = { showEmojiDrawer = false },
+                        onSend = { bytes ->
+                            scope.launch { container.groupChat.sendSticker(owner, groupId, bytes) }
+                        },
+                        onCreateSticker = {
+                            showEmojiDrawer = false
+                            showStickerMaker = true
+                        },
+                        onDeleteSticker = { id -> container.stickers.delete(id) }
+                    )
+                }
             }
 
             Box(
@@ -1318,7 +1453,12 @@ private fun GroupTextBubble(
                 if (quoted != null) {
                     GroupReplyQuoteChip(info = quoted, outgoing = outgoing, modifier = Modifier.padding(bottom = 5.dp))
                 }
-                Text(msg.displayBody, color = fg, style = MaterialTheme.typography.bodyMedium)
+                LinkifiedText(
+                    msg.displayBody,
+                    color = fg,
+                    linkColor = if (outgoing) fg else MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
                 val currentPreview = preview
                 if (currentPreview != null) {
                     GroupLinkPreviewCard(currentPreview, outgoing, Modifier.padding(top = 6.dp))
@@ -1961,3 +2101,81 @@ private fun GroupVideoBubble(
     }
 }
 
+
+@Composable
+private fun PadSoundMessage(
+    label: String,
+    durationMs: Long,
+    bytes: ByteArray?,
+    outgoing: Boolean,
+    senderName: String,
+    showSender: Boolean,
+    delivered: Boolean?
+) {
+    val player = rememberAudioPlayer()
+    var playing by remember(label) { mutableStateOf(false) }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
+        horizontalAlignment = if (outgoing) Alignment.End else Alignment.Start
+    ) {
+        if (showSender) {
+            Text(
+                senderName,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
+            )
+        }
+        PadSoundBubble(
+            label = label,
+            durationMs = durationMs,
+            playing = playing && player.isPlaying,
+            delivered = delivered,
+            onToggle = {
+                if (bytes == null) return@PadSoundBubble
+                if (player.isPlaying) {
+                    player.stop()
+                    playing = false
+                } else {
+                    runCatching { player.play(bytes) }
+                    playing = true
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun MemeClipMessage(
+    label: String,
+    durationMs: Long,
+    bytes: ByteArray?,
+    outgoing: Boolean,
+    senderName: String,
+    showSender: Boolean,
+    delivered: Boolean?
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
+        horizontalAlignment = if (outgoing) Alignment.End else Alignment.Start
+    ) {
+        if (showSender) {
+            Text(
+                senderName,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 6.dp, bottom = 2.dp)
+            )
+        }
+        MemeClipBubble(label = label, durationMs = durationMs, delivered = delivered) {
+            if (bytes != null) {
+                dev.stade.ui.video.VideoPlayerView(
+                    bytes = bytes,
+                    modifier = Modifier.fillMaxWidth().height(190.dp)
+                )
+            } else {
+                Box(Modifier.fillMaxWidth().height(190.dp))
+            }
+        }
+    }
+}

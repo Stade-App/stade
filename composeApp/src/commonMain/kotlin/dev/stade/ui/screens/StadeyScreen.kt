@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -121,38 +123,41 @@ fun StadeyScreen(onBack: () -> Unit) {
         },
         bottomBar = {
             Surface(tonalElevation = 2.dp, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
-                FlowRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    topics.forEach { topic ->
+                    items(topics, key = { it.question }) { topic ->
                         AssistChip(
                             onClick = {
                                 respond(listOf(StadeyBubble.Question(topic.question), StadeyBubble.Answer(topic.answer)))
                             },
-                            label = { Text(topic.question) }
+                            label = { Text(topic.question, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            shape = RoundedCornerShape(50)
                         )
                     }
-                    AssistChip(
-                        onClick = {
-                            respond(
-                                listOf(
-                                    StadeyBubble.Answer(
-                                        text = strings.stadeySupportAnswer,
-                                        linkUrl = DISCORD_INVITE_URL,
-                                        linkLabel = "Discord"
+                    item(key = "stadey-support") {
+                        AssistChip(
+                            onClick = {
+                                respond(
+                                    listOf(
+                                        StadeyBubble.Answer(
+                                            text = strings.stadeySupportAnswer,
+                                            linkUrl = DISCORD_INVITE_URL,
+                                            linkLabel = "Discord"
+                                        )
                                     )
                                 )
-                            )
-                        },
-                        label = { Text(strings.stadeySupportLabel) },
-                        leadingIcon = {
-                            Icon(BrandIcons.Discord, contentDescription = null, modifier = Modifier.width(16.dp))
-                        }
-                    )
+                            },
+                            label = { Text(strings.stadeySupportLabel, maxLines = 1) },
+                            shape = RoundedCornerShape(50),
+                            leadingIcon = {
+                                Icon(BrandIcons.Discord, contentDescription = null, modifier = Modifier.width(16.dp))
+                            }
+                        )
+                    }
                 }
             }
         }

@@ -28,6 +28,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -72,7 +74,10 @@ fun VerifyContactScreen(
     onBack: () -> Unit
 ) {
     val strings = LocalStrings.current
-    val contact = remember(contactId) { container.contacts.get(contactId) }
+    var renameTick by remember(contactId) { mutableStateOf(0) }
+    val contact = remember(contactId, renameTick) { container.contacts.get(contactId) }
+    var showRenameDialog by remember(contactId) { mutableStateOf(false) }
+    var renameText by remember(contactId) { mutableStateOf("") }
     val safety = remember(contact?.id) {
         contact?.let { container.fingerprint.safetyNumber(owner.publicSigningKey, it.publicSigningKey) }
     }
@@ -97,6 +102,39 @@ fun VerifyContactScreen(
             vanishNow = Clock.System.now().toEpochMilliseconds()
             delay(60_000L)
         }
+    }
+
+    if (showRenameDialog && contact != null) {
+        val target = contact
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text(strings.editAliasTitle) },
+            text = {
+                Column {
+                    Text(strings.editAliasBody, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = renameText,
+                        onValueChange = { if (it.length <= 40) renameText = it },
+                        singleLine = true,
+                        label = { Text(strings.editAliasLabel) }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = renameText.isNotBlank(),
+                    onClick = {
+                        container.contacts.rename(target.id, renameText.trim())
+                        showRenameDialog = false
+                        renameTick++
+                    }
+                ) { Text(strings.saveAction) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) { Text(strings.cancel) }
+            }
+        )
     }
 
     if (showAvatarViewer && customAvatar != null) {
@@ -185,7 +223,26 @@ fun VerifyContactScreen(
                         avatarBytes = contact?.avatar
                     )
                     Spacer(Modifier.height(10.dp))
-                    Text(contact?.nickname ?: "", style = MaterialTheme.typography.titleMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(contact?.nickname ?: "", style = MaterialTheme.typography.titleMedium)
+                        if (contact != null) {
+                            Spacer(Modifier.width(2.dp))
+                            IconButton(
+                                onClick = {
+                                    renameText = contact.nickname
+                                    showRenameDialog = true
+                                },
+                                modifier = Modifier.size(30.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = strings.editAliasTitle,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                     if (contact != null) {
                         Spacer(Modifier.height(6.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {

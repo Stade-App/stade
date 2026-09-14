@@ -195,11 +195,11 @@ SELECT COUNT(*) FROM Message WHERE id = ?;
 enqueueOutbox:
 INSERT INTO Outbox(id, contactId, messageId, payload, attempts, createdAt) VALUES (?, ?, ?, ?, ?, ?);
 
-selectOutbox:
-SELECT * FROM Outbox WHERE contactId = ? ORDER BY createdAt ASC;
+selectOutboxIds:
+SELECT id FROM Outbox WHERE contactId = ? ORDER BY createdAt ASC;
 
-selectAllOutbox:
-SELECT * FROM Outbox ORDER BY createdAt ASC;
+selectOutboxItem:
+SELECT * FROM Outbox WHERE id = ?;
 
 bumpOutbox:
 UPDATE Outbox SET attempts = attempts + 1 WHERE id = ?;
