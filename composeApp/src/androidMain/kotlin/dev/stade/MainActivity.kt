@@ -19,9 +19,9 @@ import kotlinx.coroutines.launch
 import dev.stade.notification.clearAllMessageNotifications
 import dev.stade.service.StadeService
 import dev.stade.ui.StadeApp
+import java.io.ByteArrayOutputStream
 
 class MainActivity : ComponentActivity() {
-
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -76,9 +76,23 @@ class MainActivity : ComponentActivity() {
         uri ?: return
         val app = application as StadeApplication
         lifecycleScope.launch(Dispatchers.IO) {
-            val text = runCatching {
-                contentResolver.openInputStream(uri)?.readBytes()
-            }.getOrNull()?.toString(Charsets.UTF_8)?.trim()
+            val text = try {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    val out = ByteArrayOutputStream()
+                    val buffer = ByteArray(8 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        if (out.size() + read > MAX_INVITE_BYTES) {
+                            return@use null
+                        }
+                        out.write(buffer, 0, read)
+                    }
+                    out.toString(Charsets.UTF_8.name()).trim()
+                }
+            } catch (_: Exception) {
+                null
+            }
             if (!text.isNullOrBlank() && text.startsWith("STADE2-")) {
                 app.handleOpenInviteIntent(text)
             }
@@ -143,6 +157,7 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        private const val MAX_INVITE_BYTES = 128 * 1024
         const val EXTRA_OPEN_CHAT_ID = "open_chat_contact_id"
         const val EXTRA_OPEN_STADIUM_ID = "open_stadium_id"
         const val EXTRA_OPEN_GROUP_ID = "open_group_id"
