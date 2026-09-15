@@ -217,7 +217,6 @@ fun StadeApp(boot: BootContext) {
                                     boot.markUnlocked()
                                     unlocked = true
                                     lockFailure = true
-                                    println("Stade: vault lock failed. ${failure.message}")
                                     return@launch
                                 }
                                 container = null

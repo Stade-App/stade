@@ -6,7 +6,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -23,11 +22,6 @@ import dev.stade.ui.StadeApp
 import java.io.ByteArrayOutputStream
 
 class MainActivity : ComponentActivity() {
-    private companion object {
-        const val TAG = "StadeInvite"
-        const val MAX_INVITE_BYTES = 128 * 1024
-    }
-
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -90,15 +84,13 @@ class MainActivity : ComponentActivity() {
                         val read = input.read(buffer)
                         if (read < 0) break
                         if (out.size() + read > MAX_INVITE_BYTES) {
-                            Log.w(TAG, "Ignoring oversized invite URI: $uri")
                             return@use null
                         }
                         out.write(buffer, 0, read)
                     }
                     out.toString(Charsets.UTF_8.name()).trim()
                 }
-            } catch (error: Exception) {
-                Log.w(TAG, "Failed to read invite URI: $uri", error)
+            } catch (_: Exception) {
                 null
             }
             if (!text.isNullOrBlank() && text.startsWith("STADE2-")) {
@@ -165,6 +157,7 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        private const val MAX_INVITE_BYTES = 128 * 1024
         const val EXTRA_OPEN_CHAT_ID = "open_chat_contact_id"
         const val EXTRA_OPEN_STADIUM_ID = "open_stadium_id"
         const val EXTRA_OPEN_GROUP_ID = "open_group_id"

@@ -535,9 +535,6 @@ class FileVault(private val rootDir: File) : Vault {
         if (!f.delete() && f.exists()) {
             throw java.io.IOException("Unable to remove ${f.absolutePath}", overwriteFailure)
         }
-        if (overwriteFailure != null) {
-            println("Stade: removed ${f.absolutePath}, but could not overwrite it first: ${overwriteFailure.message}")
-        }
     }
 
     companion object {
