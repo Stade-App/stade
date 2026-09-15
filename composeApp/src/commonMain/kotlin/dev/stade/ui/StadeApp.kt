@@ -2,6 +2,9 @@
 
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -123,6 +126,7 @@ fun StadeApp(boot: BootContext) {
             var autoUnlockTried by remember { mutableStateOf(false) }
             var container by remember { mutableStateOf<AppContainer?>(null) }
             var pendingNickname by remember { mutableStateOf<String?>(null) }
+            var lockFailure by remember { mutableStateOf(false) }
             val scope = rememberCoroutineScope()
 
             LaunchedEffect(initialized) {
@@ -131,6 +135,19 @@ fun StadeApp(boot: BootContext) {
                     autoUnlockTried = true
                     if (ok && boot.resolveUnlocked()) unlocked = true
                 }
+            }
+
+            if (lockFailure) {
+                AlertDialog(
+                    onDismissRequest = { lockFailure = false },
+                    title = { Text(activeStrings.vaultLockFailedTitle) },
+                    text = { Text(activeStrings.vaultLockFailedBody) },
+                    confirmButton = {
+                        TextButton(onClick = { lockFailure = false }) {
+                            Text(activeStrings.closeAction)
+                        }
+                    }
+                )
             }
 
             when {
@@ -181,14 +198,29 @@ fun StadeApp(boot: BootContext) {
                     )
                 }
                 else -> {
-                    val active = container ?: remember { boot.buildContainer() }.also { container = it }
+                    val active = container ?: boot.buildContainer().also { container = it }
                     UnlockedApp(
                         container = active,
                         boot = boot,
                         presetNickname = pendingNickname,
                         onLockRequested = {
                             scope.launch {
-                                withContext(Dispatchers.Default) { vault.flushAndKeep() }
+                                val toClose = container ?: boot.activeContainer()
+                                val failure = runCatching {
+                                    withContext(Dispatchers.Default) {
+                                        toClose?.close()
+                                        vault.flushAndClose()
+                                    }
+                                }.exceptionOrNull()
+                                if (failure != null) {
+                                    container = null
+                                    boot.markUnlocked()
+                                    unlocked = true
+                                    lockFailure = true
+                                    println("Stade: vault lock failed. ${failure.message}")
+                                    return@launch
+                                }
+                                container = null
                                 boot.markLocked()
                                 unlocked = false
                             }

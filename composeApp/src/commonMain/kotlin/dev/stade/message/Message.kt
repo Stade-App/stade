@@ -22,6 +22,15 @@ const val MEME_CLIP_BODY_PREFIX = "STADE_MEM_V1:"
 const val MAX_PAD_NAME_LEN = 48
 
 const val MAX_ATTACHMENT_BYTES = 1800 * 1024
+private const val MAX_ATTACHMENT_BASE64_CHARS = ((MAX_ATTACHMENT_BYTES + 2) / 3) * 4
+
+@OptIn(ExperimentalEncodingApi::class)
+fun decodeInboundAttachment(encoded: String): ByteArray? {
+    if (encoded.length > MAX_ATTACHMENT_BASE64_CHARS) return null
+    return runCatching { Base64.Default.decode(encoded) }
+        .getOrNull()
+        ?.takeIf { it.size <= MAX_ATTACHMENT_BYTES }
+}
 
 @Serializable
 data class Message(
@@ -57,19 +66,19 @@ data class Message(
     @OptIn(ExperimentalEncodingApi::class)
     fun imageBytes(): ByteArray? =
         if (type == MessageType.IMAGE)
-            runCatching { Base64.Default.decode(effectiveBody.removePrefix(IMAGE_BODY_PREFIX).substringBefore('\n')) }.getOrNull()
+            decodeInboundAttachment(effectiveBody.removePrefix(IMAGE_BODY_PREFIX).substringBefore('\n'))
         else null
 
     @OptIn(ExperimentalEncodingApi::class)
     fun videoBytes(): ByteArray? =
         if (type == MessageType.VIDEO)
-            runCatching { Base64.Default.decode(effectiveBody.removePrefix(VIDEO_BODY_PREFIX).substringBefore('\n')) }.getOrNull()
+            decodeInboundAttachment(effectiveBody.removePrefix(VIDEO_BODY_PREFIX).substringBefore('\n'))
         else null
 
     @OptIn(ExperimentalEncodingApi::class)
     fun stickerBytes(): ByteArray? =
         if (type == MessageType.STICKER)
-            runCatching { Base64.Default.decode(effectiveBody.removePrefix(STICKER_BODY_PREFIX)) }.getOrNull()
+            decodeInboundAttachment(effectiveBody.removePrefix(STICKER_BODY_PREFIX))
         else null
 
     val caption: String

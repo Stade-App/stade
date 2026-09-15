@@ -25,6 +25,8 @@ object TurkishStrings : AppStrings() {
         "Şifre cihazından kurtarılamaz. Devam edersen tüm yerel veriler kalıcı olarak silinir ve uygulama sıfırlanır."
     override val resetAndWipe = "Sıfırla ve sil"
     override val vaultNotInitialized = "Kasa başlatılmamış"
+    override val vaultLockFailedTitle = "Güvenli şekilde kilitlenemedi"
+    override val vaultLockFailedBody = "Stade, yerel veritabanını güvenle kaldıramadığı için kilit açık kaldı. Depolama hatasını çözdükten sonra tekrar deneyin."
     override fun wrongPinRemaining(remaining: Int) = "Şifre hatalı ($remaining hak kaldı)"
     override val wrongPin = "Şifre hatalı"
     override val wiping = "Siliniyor…"

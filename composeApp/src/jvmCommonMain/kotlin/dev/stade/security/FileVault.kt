@@ -276,10 +276,10 @@ class FileVault(private val rootDir: File) : Vault {
     override fun flushAndClose() {
         val key = dek
         if (key != null && plaintextDb.exists()) {
-            runCatching { encryptFile(plaintextDb, encryptedDb, key) }
+            encryptFile(plaintextDb, encryptedDb, key)
         }
         if (plaintextDb.exists()) {
-            runCatching { secureDelete(plaintextDb) }
+            secureDelete(plaintextDb)
         }
         val current = dek
         if (current != null) {
@@ -512,8 +512,10 @@ class FileVault(private val rootDir: File) : Vault {
     }
 
     private fun secureDelete(f: File) {
+        if (!f.exists()) return
+        var overwriteFailure: Throwable? = null
         try {
-            if (f.exists() && f.length() > 0) {
+            if (f.length() > 0) {
                 RandomAccessFile(f, "rw").use { raf ->
                     val len = raf.length()
                     val zeros = ByteArray(4096)
@@ -527,9 +529,15 @@ class FileVault(private val rootDir: File) : Vault {
                     raf.fd.sync()
                 }
             }
-        } catch (_: Throwable) {
+        } catch (error: Throwable) {
+            overwriteFailure = error
         }
-        runCatching { f.delete() }
+        if (!f.delete() && f.exists()) {
+            throw java.io.IOException("Unable to remove ${f.absolutePath}", overwriteFailure)
+        }
+        if (overwriteFailure != null) {
+            println("Stade: removed ${f.absolutePath}, but could not overwrite it first: ${overwriteFailure.message}")
+        }
     }
 
     companion object {
