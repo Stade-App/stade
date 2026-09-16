@@ -60,6 +60,28 @@ Built with Kotlin Multiplatform and Compose Multiplatform, Stade runs natively o
 | macOS | `.dmg` |
 | Linux | `.deb`, `.rpm` |
 
+## Verifying a download
+
+Every Stade release published here is signed with the same key. Before installing an APK you downloaded from this repository, check that it carries our signature — a build that doesn't is not ours, no matter where you got it.
+
+**Signing certificate SHA-256**
+
+```
+69:5D:86:C1:20:89:0F:EC:6B:C0:51:E7:33:A5:69:7B:B4:30:66:83:C2:51:DD:DA:59:B5:78:56:2F:07:82:62
+```
+
+Check an APK with `apksigner` from the Android SDK build-tools:
+
+```
+apksigner verify --print-certs Stade-<version>.apk
+```
+
+The `Signer #1 certificate SHA-256 digest` it prints must equal `695d86c120890fec6bc051e733a5697bb4306683c251ddda59b578562f078262`. The certificate subject is `CN=Stade, OU=Stade Development, O=Stade Development, L=Ankara, ST=Ankara, C=TR`.
+
+If the fingerprint differs, or the APK is unsigned, do not install it.
+
+> **Installing from Google Play?** Play re-signs every app with its own key, so a build installed from Play will show a different fingerprint than the one above. The fingerprint here applies to APKs downloaded directly from this repository.
+
 ## Localization
 
 Stade is available in **English** and **Turkish**, switchable from Settings.
