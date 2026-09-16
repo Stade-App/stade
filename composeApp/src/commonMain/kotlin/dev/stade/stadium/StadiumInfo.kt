@@ -1,6 +1,7 @@
 package dev.stade.stadium
 
 import dev.stade.message.IMAGE_BODY_PREFIX
+import dev.stade.message.decodeInboundAttachment
 import dev.stade.message.MessageType
 import dev.stade.message.MEME_CLIP_BODY_PREFIX
 import dev.stade.message.PAD_SOUND_BODY_PREFIX
@@ -49,19 +50,19 @@ data class StadiumMessage(
     @OptIn(ExperimentalEncodingApi::class)
     fun imageBytes(): ByteArray? =
         if (type == MessageType.IMAGE)
-            runCatching { Base64.Default.decode(body.removePrefix(IMAGE_BODY_PREFIX).substringBefore('\n')) }.getOrNull()
+            decodeInboundAttachment(body.removePrefix(IMAGE_BODY_PREFIX).substringBefore('\n'))
         else null
 
     @OptIn(ExperimentalEncodingApi::class)
     fun videoBytes(): ByteArray? =
         if (type == MessageType.VIDEO)
-            runCatching { Base64.Default.decode(body.removePrefix(VIDEO_BODY_PREFIX).substringBefore('\n')) }.getOrNull()
+            decodeInboundAttachment(body.removePrefix(VIDEO_BODY_PREFIX).substringBefore('\n'))
         else null
 
     @OptIn(ExperimentalEncodingApi::class)
     fun stickerBytes(): ByteArray? =
         if (type == MessageType.STICKER)
-            runCatching { Base64.Default.decode(body.removePrefix(STICKER_BODY_PREFIX)) }.getOrNull()
+            decodeInboundAttachment(body.removePrefix(STICKER_BODY_PREFIX))
         else null
 
     val caption: String

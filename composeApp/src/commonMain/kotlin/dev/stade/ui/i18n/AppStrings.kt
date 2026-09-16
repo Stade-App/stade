@@ -22,6 +22,8 @@ abstract class AppStrings {
     abstract val resetPinBody: String
     abstract val resetAndWipe: String
     abstract val vaultNotInitialized: String
+    abstract val vaultLockFailedTitle: String
+    abstract val vaultLockFailedBody: String
     abstract fun wrongPinRemaining(remaining: Int): String
     abstract val wrongPin: String
     abstract val wiping: String

@@ -25,6 +25,8 @@ object EnglishStrings : AppStrings() {
         "PIN cannot be recovered from this device. Continuing will permanently erase all local data and reset the app."
     override val resetAndWipe = "Reset and wipe"
     override val vaultNotInitialized = "Vault not initialized"
+    override val vaultLockFailedTitle = "Could not lock securely"
+    override val vaultLockFailedBody = "Stade remains unlocked because it could not securely remove the local database. Try again after resolving the storage error."
     override fun wrongPinRemaining(remaining: Int) = "Wrong PIN ($remaining attempts left)"
     override val wrongPin = "Wrong PIN"
     override val wiping = "Wiping…"
