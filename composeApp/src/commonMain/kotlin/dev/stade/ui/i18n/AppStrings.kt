@@ -61,6 +61,22 @@ abstract class AppStrings {
     abstract val viewProfileAction: String
     abstract val deleteContact: String
     abstract val pinChatAction: String
+    abstract val archiveChatAction: String
+    abstract val starMessageAction: String
+    abstract val unstarMessageAction: String
+    abstract val starredMessagesTitle: String
+    abstract val starredMessagesSubtitle: String
+    abstract val noStarredMessages: String
+    abstract val unarchiveChatAction: String
+    abstract val archivedChatsTitle: String
+    abstract val archiveSettingsTitle: String
+    abstract val torConnectingTitle: String
+    abstract val archiveNoticeBanner: String
+    abstract val archiveNoticeUnarchiveBanner: String
+    abstract val keepChatsArchivedTitle: String
+    abstract val keepChatsArchivedSubtitle: String
+    abstract val noArchivedChats: String
+    abstract val backToChatsAction: String
     abstract val unpinChatAction: String
     abstract val noMessages: String
     abstract fun deleteContactTitle(name: String): String

@@ -122,7 +122,9 @@ import dev.stade.ui.screens.GroupMembersScreen
 import dev.stade.ui.screens.JoinStadiumScreen
 import dev.stade.ui.screens.ManageStadiumScreen
 import dev.stade.ui.screens.PinSetupScreen
+import dev.stade.ui.screens.ArchiveSettingsScreen
 import dev.stade.ui.screens.StadeyScreen
+import dev.stade.ui.screens.StarredMessagesScreen
 import dev.stade.ui.screens.getStadeyVisible
 import dev.stade.ui.screens.setStadeyVisible
 import dev.stade.ui.screens.StadiumScreen
@@ -152,6 +154,8 @@ private sealed class PanelRight {
     data object Security : PanelRight()
     data object Transports : PanelRight()
     data object About : PanelRight()
+    data object Starred : PanelRight()
+    data object ArchiveSettings : PanelRight()
     data object Stadey : PanelRight()
     data object AddContact : PanelRight()
     data object Radar : PanelRight()
@@ -203,6 +207,8 @@ fun TwoPanelLayout(
     val connectedSet by container.sync.connectedContacts.collectAsState()
     val versionMismatch by container.sync.peerVersionMismatch.collectAsState()
     val typingSet by container.typing.typingContacts.collectAsState()
+    val archivedKeys by remember(owner.id) { container.archivedChats.observeArchived(owner.id) }
+        .collectAsState(initial = remember(owner.id) { container.archivedChats.archived(owner.id) })
     val pinned by remember(owner.id) { container.pinnedChats.observePinned(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.pinnedChats.pinned(owner.id) })
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
@@ -274,7 +280,7 @@ fun TwoPanelLayout(
         else contacts.filter { it.nickname.contains(query.trim(), ignoreCase = true) }
     }
 
-    val combinedPanelItems = remember(filtered, groups, stadiums, query, contactLastMessages, groupLastMessages, stadiumLastMessages, pinned) {
+    val combinedPanelItems = remember(filtered, groups, stadiums, query, contactLastMessages, groupLastMessages, stadiumLastMessages, pinned, archivedKeys) {
         val q = query.trim()
         val result = mutableListOf<PanelChatItem>()
         groups
@@ -290,6 +296,9 @@ fun TwoPanelLayout(
         filtered.forEachIndexed { i, c ->
             val origIdx = contacts.indexOf(c)
             result.add(PanelChatItem.ContactItem(c, contactLastMessages.getOrNull(origIdx)?.timestamp, pinned[c.id]))
+        }
+        if (q.isBlank()) {
+            result.retainAll { !archivedKeys.contains(it.key) }
         }
         result.sortWith(
             compareByDescending<PanelChatItem> { it.pinnedAt != null }
@@ -768,6 +777,24 @@ fun TwoPanelLayout(
 
                 is PanelRight.About -> AboutScreen(
                     onBack = { right = PanelRight.Settings }
+                )
+
+                is PanelRight.ArchiveSettings -> ArchiveSettingsScreen(
+                    container = container,
+                    onBack = { right = PanelRight.Empty }
+                )
+
+                is PanelRight.Starred -> StarredMessagesScreen(
+                    container = container,
+                    owner = owner,
+                    onBack = { right = PanelRight.Empty },
+                    onOpenMessage = { ref ->
+                        right = when (ref.scope) {
+                            dev.stade.chat.StarScope.DIRECT -> PanelRight.Chat(ref.chatId, ref.messageId)
+                            dev.stade.chat.StarScope.GROUP -> PanelRight.GroupChat(ref.chatId, ref.messageId)
+                            dev.stade.chat.StarScope.STADIUM -> PanelRight.Stadium(ref.chatId, ref.messageId)
+                        }
+                    }
                 )
 
                 is PanelRight.Stadey -> StadeyScreen(

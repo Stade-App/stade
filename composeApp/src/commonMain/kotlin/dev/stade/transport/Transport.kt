@@ -11,7 +11,9 @@ data class TransportInfo(
     val displayName: String,
     val available: Boolean,
     val running: Boolean,
-    val message: String = ""
+    val message: String = "",
+    val bootstrapPercent: Int? = null,
+    val bootstrapPhase: String = ""
 )
 
 interface Connection {

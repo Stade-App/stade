@@ -50,6 +50,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import dev.stade.ui.components.LocalHomeBarClearance
 import dev.stade.AppContainer
 import dev.stade.contact.InviteParseResult
 import dev.stade.identity.LocalIdentity
@@ -126,6 +127,7 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .padding(bottom = LocalHomeBarClearance.current)
                 .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
                 .padding(16.dp)
                 .verticalScroll(scroll),

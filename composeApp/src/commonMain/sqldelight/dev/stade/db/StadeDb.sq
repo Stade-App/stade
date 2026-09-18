@@ -171,6 +171,15 @@ INSERT INTO Message(id, contactId, direction, body, timestamp, delivered, read, 
 selectMessages:
 SELECT * FROM Message WHERE contactId = ? ORDER BY timestamp ASC;
 
+messageById:
+SELECT * FROM Message WHERE id = ?;
+
+groupMessageById:
+SELECT * FROM GroupMessage WHERE id = ?;
+
+stadiumMessageById:
+SELECT * FROM StadiumMessage WHERE id = ?;
+
 selectLastMessage:
 SELECT * FROM Message WHERE contactId = ? ORDER BY timestamp DESC LIMIT 1;
 
@@ -188,6 +197,9 @@ SELECT COUNT(*) FROM Message WHERE contactId = ? AND read = 0 AND direction = 'I
 
 countAllUnread:
 SELECT COUNT(*) FROM Message WHERE read = 0 AND direction = 'IN';
+
+unreadContactIds:
+SELECT DISTINCT contactId FROM Message WHERE read = 0 AND direction = 'IN';
 
 messageExists:
 SELECT COUNT(*) FROM Message WHERE id = ?;
@@ -367,6 +379,9 @@ SELECT id, groupId, senderId, substr(body, 1, 200) AS body, timestamp, outgoing,
 
 countGroupUnread:
 SELECT COUNT(*) FROM GroupMessage WHERE groupId = ? AND read = 0 AND outgoing = 0;
+
+unreadGroupIds:
+SELECT DISTINCT groupId FROM GroupMessage WHERE read = 0 AND outgoing = 0;
 
 markGroupRead:
 UPDATE GroupMessage SET read = 1 WHERE groupId = ?;

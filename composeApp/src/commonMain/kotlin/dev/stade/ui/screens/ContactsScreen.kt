@@ -35,10 +35,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import dev.stade.ui.components.LocalHomeBarClearance
 import dev.stade.stadium.isOfficial
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.BotBadge
-import dev.stade.ui.components.HomeActionBar
 import dev.stade.ui.components.TOP_PILL_GAP
 import dev.stade.ui.components.TOP_PILL_SIZE
 import dev.stade.ui.components.TopBarPill
@@ -53,6 +53,25 @@ import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import app.cash.sqldelight.coroutines.asFlow
+import app.cash.sqldelight.coroutines.mapToList
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.draw.alpha
+import dev.stade.ui.components.StarIntroOverlay
+import dev.stade.ui.components.markStarIntroSeen
+import dev.stade.ui.components.starIntroPending
+import dev.stade.transport.TransportType
+import dev.stade.ui.components.TorBootstrapCard
+import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.PushPin
 import dev.stade.group.GroupInfo
 import androidx.compose.material.icons.filled.Person
@@ -146,7 +165,6 @@ private sealed class ChatListItem {
     }
 }
 
-private val HOME_BAR_CLEARANCE = 96.dp
 private const val SEARCH_FOCUS_DELAY_MS = 80L
 private const val SEARCH_UNMOUNT_DELAY_MS = 180L
 
@@ -262,6 +280,11 @@ fun ContactsScreen(
     onOpenStadium: (String) -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenStadey: () -> Unit = {},
+    onOpenStarred: () -> Unit = {},
+    onOpenArchiveSettings: () -> Unit = {},
+    showArchived: Boolean = false,
+    onOpenArchived: () -> Unit = {},
+    onCloseArchived: () -> Unit = {},
     onAddContact: () -> Unit,
     onCreateGroup: () -> Unit,
     onCreateStadium: () -> Unit = {},
@@ -284,6 +307,33 @@ fun ContactsScreen(
     val typingSet by container.typing.typingContacts.collectAsState()
     val pinned by remember(owner.id) { container.pinnedChats.observePinned(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.pinnedChats.pinned(owner.id) })
+    val archivedKeys by remember(owner.id) { container.archivedChats.observeArchived(owner.id) }
+        .collectAsState(initial = remember(owner.id) { container.archivedChats.archived(owner.id) })
+    var archiveMenuOpen by remember { mutableStateOf(false) }
+    var starPillCenter by remember { mutableStateOf<Offset?>(null) }
+    val torInfo by remember {
+        container.transports.get(TransportType.TOR)?.info ?: MutableStateFlow(null)
+    }.collectAsState()
+    var starIntroRunning by remember { mutableStateOf(starIntroPending(container.db)) }
+    var starPlaced by remember { mutableStateOf(!starIntroRunning) }
+    val autoUnarchive by remember { container.archivedChats.observeAutoUnarchive() }
+        .collectAsState(initial = remember { container.archivedChats.autoUnarchiveOnMessage() })
+    val unreadContactIds by remember {
+        container.db.stadeDbQueries.unreadContactIds().asFlow().mapToList(Dispatchers.Default)
+    }.collectAsState(initial = emptyList())
+    val unreadGroupIds by remember {
+        container.db.stadeDbQueries.unreadGroupIds().asFlow().mapToList(Dispatchers.Default)
+    }.collectAsState(initial = emptyList())
+    val archivedUnreadCount = remember(archivedKeys, unreadContactIds, unreadGroupIds) {
+        archivedKeys.count { key ->
+            when {
+                key.startsWith("grp_") -> unreadGroupIds.contains(key.removePrefix("grp_"))
+                key.startsWith("std_") -> false
+                else -> unreadContactIds.contains(key)
+            }
+        }
+    }
+
     val scope = rememberCoroutineScope()
     val strings = LocalStrings.current
 
@@ -358,6 +408,23 @@ fun ContactsScreen(
                         .padding(top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    val itemArchived = archivedKeys.contains(item.key)
+                    FilledTonalButton(
+                        onClick = {
+                            container.archivedChats.setArchived(owner.id, item.key, !itemArchived)
+                            actionItem = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (itemArchived) Icons.Default.Unarchive else Icons.Default.Archive,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (itemArchived) strings.unarchiveChatAction else strings.archiveChatAction)
+                    }
                     FilledTonalButton(
                         onClick = {
                             container.pinnedChats.setPinned(owner.id, item.key, !itemPinned)
@@ -605,7 +672,7 @@ fun ContactsScreen(
         messageResults = results
     }
 
-    val combinedItems by remember(filtered, groups, stadiums, searchActive, query, contactLastMessages, groupLastMessages, stadiumLastMessages, pinned) {
+    val combinedItems by remember(filtered, groups, stadiums, searchActive, query, contactLastMessages, groupLastMessages, stadiumLastMessages, pinned, archivedKeys, showArchived) {
         derivedStateOf {
             val q = query.trim()
             val result = mutableListOf<ChatListItem>()
@@ -623,6 +690,9 @@ fun ContactsScreen(
                 val origIdx = contacts.indexOf(c)
                 result.add(ChatListItem.ContactItem(c, contactLastMessages.getOrNull(origIdx)?.timestamp, pinned[c.id]))
             }
+            if (!searchActive || q.isBlank()) {
+                result.retainAll { archivedKeys.contains(it.key) == showArchived }
+            }
             result.sortWith(
                 compareByDescending<ChatListItem> { it.pinnedAt != null }
                     .thenByDescending { it.pinnedAt ?: it.sortKey }
@@ -631,202 +701,298 @@ fun ContactsScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                title = {
-                    BoxWithConstraints(
-                        modifier = Modifier.fillMaxWidth().padding(end = 24.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        val barWidth = maxWidth
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Avatar(
-                                name = owner.nickname,
-                                size = 38.dp,
-                                keySeed = owner.publicSigningKey,
-                                avatarBytes = owner.avatar
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    strings.appTitle,
-                                    style = MaterialTheme.typography.titleMedium
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                if (showArchived) {
+                    TopAppBar(
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            titleContentColor = MaterialTheme.colorScheme.onSurface,
+                            actionIconContentColor = MaterialTheme.colorScheme.onSurface,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        title = { Text(strings.archivedChatsTitle) },
+                        navigationIcon = {
+                            IconButton(onClick = onCloseArchived) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = strings.backToChatsAction
                                 )
-                                Text(
-                                    owner.nickname,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        },
+                        actions = {
+                            Box {
+                                IconButton(onClick = { archiveMenuOpen = true }) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = strings.archiveSettingsTitle)
+                                }
+                                DropdownMenu(
+                                    expanded = archiveMenuOpen,
+                                    onDismissRequest = { archiveMenuOpen = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text(strings.archiveSettingsTitle) },
+                                        onClick = {
+                                            archiveMenuOpen = false
+                                            onOpenArchiveSettings()
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    )
+                } else {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        actionIconContentColor = MaterialTheme.colorScheme.onSurface,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    title = {
+                        BoxWithConstraints(
+                            modifier = Modifier.fillMaxWidth().padding(end = 24.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            val barWidth = maxWidth
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Avatar(
+                                    name = owner.nickname,
+                                    size = 38.dp,
+                                    keySeed = owner.publicSigningKey,
+                                    avatarBytes = owner.avatar
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        strings.appTitle,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(
+                                        owner.nickname,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.align(Alignment.CenterEnd),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(TOP_PILL_GAP)
+                            ) {
+                                if (contacts.isNotEmpty()) {
+                                    SearchPill(
+                                        expanded = searchActive,
+                                        query = query,
+                                        expandedWidth = barWidth - TOP_PILL_SIZE - TOP_PILL_GAP,
+                                        focusRequester = focusRequester,
+                                        onQueryChange = { query = it },
+                                        onToggle = {
+                                            if (searchActive) {
+                                                searchActive = false
+                                                query = ""
+                                            } else {
+                                                searchActive = true
+                                            }
+                                        }
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier.onGloballyPositioned { coords ->
+                                        val bounds = coords.boundsInRoot()
+                                        starPillCenter = Offset(bounds.center.x, bounds.center.y)
+                                    }
+                                ) {
+                                    Box(Modifier.alpha(if (starPlaced) 1f else 0f)) {
+                                        TopBarPill(
+                                            icon = Icons.Default.Star,
+                                            contentDescription = strings.starredMessagesTitle,
+                                            sparkleOnClick = true,
+                                            onClick = onOpenStarred
+                                        )
+                                    }
+                                }
+                                TopBarPill(
+                                    icon = Icons.Default.Settings,
+                                    contentDescription = strings.settingsAction,
+                                    spinOnClick = true,
+                                    onClick = onOpenSettings
                                 )
                             }
                         }
-
-                        Row(
-                            modifier = Modifier.align(Alignment.CenterEnd),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(TOP_PILL_GAP)
-                        ) {
-                            if (contacts.isNotEmpty()) {
-                                SearchPill(
-                                    expanded = searchActive,
-                                    query = query,
-                                    expandedWidth = barWidth - TOP_PILL_SIZE - TOP_PILL_GAP,
-                                    focusRequester = focusRequester,
-                                    onQueryChange = { query = it },
-                                    onToggle = {
-                                        if (searchActive) {
-                                            searchActive = false
-                                            query = ""
-                                        } else {
-                                            searchActive = true
+                    }
+                )
+                }
+            },
+        ) { padding ->
+            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    torInfo?.takeIf { it.bootstrapPercent != null && !it.running }?.let { boot ->
+                    item(key = "torBootstrap") {
+                        TorBootstrapCard(
+                            percent = boot.bootstrapPercent ?: 0,
+                            phase = boot.bootstrapPhase
+                        )
+                    }
+                }
+                versionMismatch?.let { mismatch ->
+                        item(key = "versionNotice") {
+                            UpdateRequiredBanner(
+                                message = if (mismatch.peerIsNewer) strings.updateRequiredByYou
+                                    else strings.updateRequiredByPeer,
+                                dismissLabel = strings.updateAction,
+                                onDismiss = { container.sync.clearVersionMismatch() }
+                            )
+                        }
+                    }
+                    if (showArchived) {
+                        item(key = "archive-notice") {
+                            ArchiveNoticeBanner(
+                                autoUnarchive = autoUnarchive,
+                                onClick = onOpenArchiveSettings
+                            )
+                        }
+                        if (combinedItems.isEmpty()) {
+                            item(key = "archive-empty") {
+                                Text(
+                                    strings.noArchivedChats,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    } else {
+                        if (!searchActive && archivedKeys.isNotEmpty()) {
+                            item(key = "archived-entry") {
+                                ArchivedEntryRow(
+                                    unreadCount = archivedUnreadCount,
+                                    onClick = onOpenArchived
+                                )
+                            }
+                        }
+                        if (stadeyVisible && !(searchActive && query.isNotBlank())) {
+                            item(key = "stadey") {
+                                StadeyRow(
+                                    onClick = onOpenStadey,
+                                    onLongPress = { showHideStadeyMenu = true }
+                                )
+                            }
+                        }
+                    }
+                    if (!showArchived && contacts.isEmpty() && groups.isEmpty() && stadiums.isEmpty()) {
+                        item {
+                            EmptyContacts(Modifier.fillMaxWidth().fillParentMaxHeight())
+                        }
+                    } else {
+                        items(combinedItems, key = { it.key }) { item ->
+                            when (item) {
+                                is ChatListItem.ContactItem -> {
+                                    val contact = item.contact
+                                    val lastMsg by remember(contact.id) { container.messages.observeLastMessage(contact.id) }
+                                        .collectAsState(initial = remember(contact.id) { container.messages.lastMessage(contact.id) })
+                                    val unread by remember(contact.id) { container.messages.observeUnreadCount(contact.id) }
+                                        .collectAsState(initial = remember(contact.id) { container.messages.unreadCount(contact.id) })
+                                    val preview by remember(lastMsg?.id) {
+                                        derivedStateOf { directChatPreview(lastMsg, strings) }
+                                    }
+                                    ContactRow(
+                                        contact = contact,
+                                        connected = connectedSet.contains(contact.id),
+                                        typing = typingSet.contains(contact.id),
+                                        lastMessage = preview,
+                                        unread = unread,
+                                        pinned = item.pinnedAt != null,
+                                        onClick = { onOpenChat(contact.id) },
+                                        onLongPress = { actionItem = item }
+                                    )
+                                }
+                                is ChatListItem.GroupItem -> {
+                                    val group = item.group
+                                    val lastMsg by remember(group.id) { container.groups.observeLastMessage(group.id) }
+                                        .collectAsState(initial = remember(group.id) { container.groups.lastMessage(group.id) })
+                                    val unread by remember(group.id) { container.groups.observeUnreadCount(group.id) }
+                                        .collectAsState(initial = remember(group.id) { container.groups.unreadCount(group.id) })
+                                    val preview by remember(lastMsg?.id) {
+                                        derivedStateOf { container.groupChatPreview(group.id, lastMsg, owner, strings) }
+                                    }
+                                    GroupRow(
+                                        group = group,
+                                        lastMessage = preview,
+                                        unread = unread,
+                                        pinned = item.pinnedAt != null,
+                                        onClick = { onOpenGroupChat(group.id) },
+                                        onLongPress = { actionItem = item }
+                                    )
+                                }
+                                is ChatListItem.StadiumItem -> {
+                                    val stadium = item.stadium
+                                    StadiumRow(
+                                        stadium = stadium,
+                                        pinned = item.pinnedAt != null,
+                                        onClick = { onOpenStadium(stadium.id) },
+                                        onLongPress = { actionItem = item }
+                                    )
+                                }
+                            }
+                        }
+                        if (searchActive && query.isNotBlank() && messageResults.isNotEmpty()) {
+                            item {
+                                Text(
+                                    strings.searchResultsSectionMessages,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+                            items(messageResults, key = { "msg_" + it.messageId }) { result ->
+                                MessageSearchRow(
+                                    result = result,
+                                    onClick = {
+                                        when {
+                                            result.isStadium -> onOpenStadiumMessage(result.chatId, result.messageId)
+                                            result.isGroup -> onOpenGroupMessage(result.chatId, result.messageId)
+                                            else -> onOpenChatMessage(result.chatId, result.messageId)
                                         }
                                     }
                                 )
                             }
-                            TopBarPill(
-                                icon = Icons.Default.Settings,
-                                contentDescription = strings.settingsAction,
-                                spinOnClick = true,
-                                onClick = onOpenSettings
-                            )
                         }
-                    }
-                }
-            )
-        },
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                versionMismatch?.let { mismatch ->
-                    item(key = "versionNotice") {
-                        UpdateRequiredBanner(
-                            message = if (mismatch.peerIsNewer) strings.updateRequiredByYou
-                                else strings.updateRequiredByPeer,
-                            dismissLabel = strings.updateAction,
-                            onDismiss = { container.sync.clearVersionMismatch() }
-                        )
-                    }
-                }
-                if (stadeyVisible && !(searchActive && query.isNotBlank())) {
-                    item(key = "stadey") {
-                        StadeyRow(
-                            onClick = onOpenStadey,
-                            onLongPress = { showHideStadeyMenu = true }
-                        )
-                    }
-                }
-                if (contacts.isEmpty() && groups.isEmpty() && stadiums.isEmpty()) {
-                    item {
-                        EmptyContacts(Modifier.fillMaxWidth().fillParentMaxHeight())
-                    }
-                } else {
-                    items(combinedItems, key = { it.key }) { item ->
-                        when (item) {
-                            is ChatListItem.ContactItem -> {
-                                val contact = item.contact
-                                val lastMsg by remember(contact.id) { container.messages.observeLastMessage(contact.id) }
-                                    .collectAsState(initial = remember(contact.id) { container.messages.lastMessage(contact.id) })
-                                val unread by remember(contact.id) { container.messages.observeUnreadCount(contact.id) }
-                                    .collectAsState(initial = remember(contact.id) { container.messages.unreadCount(contact.id) })
-                                val preview by remember(lastMsg?.id) {
-                                    derivedStateOf { directChatPreview(lastMsg, strings) }
+                        if (searchActive && query.isNotBlank() && combinedItems.isEmpty() && messageResults.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        strings.noSearchResults,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
-                                ContactRow(
-                                    contact = contact,
-                                    connected = connectedSet.contains(contact.id),
-                                    typing = typingSet.contains(contact.id),
-                                    lastMessage = preview,
-                                    unread = unread,
-                                    pinned = item.pinnedAt != null,
-                                    onClick = { onOpenChat(contact.id) },
-                                    onLongPress = { actionItem = item }
-                                )
-                            }
-                            is ChatListItem.GroupItem -> {
-                                val group = item.group
-                                val lastMsg by remember(group.id) { container.groups.observeLastMessage(group.id) }
-                                    .collectAsState(initial = remember(group.id) { container.groups.lastMessage(group.id) })
-                                val unread by remember(group.id) { container.groups.observeUnreadCount(group.id) }
-                                    .collectAsState(initial = remember(group.id) { container.groups.unreadCount(group.id) })
-                                val preview by remember(lastMsg?.id) {
-                                    derivedStateOf { container.groupChatPreview(group.id, lastMsg, owner, strings) }
-                                }
-                                GroupRow(
-                                    group = group,
-                                    lastMessage = preview,
-                                    unread = unread,
-                                    pinned = item.pinnedAt != null,
-                                    onClick = { onOpenGroupChat(group.id) },
-                                    onLongPress = { actionItem = item }
-                                )
-                            }
-                            is ChatListItem.StadiumItem -> {
-                                val stadium = item.stadium
-                                StadiumRow(
-                                    stadium = stadium,
-                                    pinned = item.pinnedAt != null,
-                                    onClick = { onOpenStadium(stadium.id) },
-                                    onLongPress = { actionItem = item }
-                                )
                             }
                         }
                     }
-                    if (searchActive && query.isNotBlank() && messageResults.isNotEmpty()) {
-                        item {
-                            Text(
-                                strings.searchResultsSectionMessages,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                            )
-                        }
-                        items(messageResults, key = { "msg_" + it.messageId }) { result ->
-                            MessageSearchRow(
-                                result = result,
-                                onClick = {
-                                    when {
-                                        result.isStadium -> onOpenStadiumMessage(result.chatId, result.messageId)
-                                        result.isGroup -> onOpenGroupMessage(result.chatId, result.messageId)
-                                        else -> onOpenChatMessage(result.chatId, result.messageId)
-                                    }
-                                }
-                            )
-                        }
+                    item(key = "homeBarClearance") {
+                        Spacer(Modifier.height(LocalHomeBarClearance.current))
                     }
-                    if (searchActive && query.isNotBlank() && combinedItems.isEmpty() && messageResults.isEmpty()) {
-                        item {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    strings.noSearchResults,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                    item { Spacer(Modifier.height(HOME_BAR_CLEARANCE)) }
                 }
             }
-
-            HomeActionBar(
-                onAddContact = onAddContact,
-                onCreateGroup = onCreateGroup,
-                onCreateStadium = onCreateStadium,
-                onJoinStadium = onJoinStadium,
-                onOpenRadar = onOpenRadar,
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
         }
+
+    if (starIntroRunning) {
+        StarIntroOverlay(
+            targetCenter = starPillCenter,
+            onStarPlaced = { starPlaced = true },
+            onFinished = {
+                markStarIntroSeen(container.db)
+                starIntroRunning = false
+            }
+        )
+    }
     }
 }
 
@@ -1240,3 +1406,52 @@ private fun StadiumRow(
 }
 
 
+
+@Composable
+private fun ArchivedEntryRow(
+    unreadCount: Int,
+    onClick: () -> Unit
+) {
+    val strings = LocalStrings.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.Archive,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(Modifier.width(18.dp))
+        Text(
+            strings.archivedChatsTitle,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f)
+        )
+        if (unreadCount > 0) {
+            Text(
+                unreadCount.toString(),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun ArchiveNoticeBanner(autoUnarchive: Boolean, onClick: () -> Unit) {
+    val strings = LocalStrings.current
+    Text(
+        if (autoUnarchive) strings.archiveNoticeUnarchiveBanner else strings.archiveNoticeBanner,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp)
+    )
+}

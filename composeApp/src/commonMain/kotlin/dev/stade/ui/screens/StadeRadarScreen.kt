@@ -79,6 +79,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
+import dev.stade.ui.components.LocalHomeBarClearance
 import dev.stade.AppContainer
 import dev.stade.contact.InviteParseResult
 import dev.stade.contact.InvitePayload
@@ -249,7 +250,7 @@ fun StadeRadarScreen(
             )
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize().padding(padding).padding(bottom = LocalHomeBarClearance.current)) {
             if (session.status == RadarStatus.Scanning) {
                 Column(Modifier.fillMaxSize()) {
                     RadarStage(

@@ -68,6 +68,22 @@ object TurkishStrings : AppStrings() {
     override val viewProfileAction = "Profili görüntüle"
     override val deleteContact = "Kişiyi sil"
     override val pinChatAction = "Sohbeti sabitle"
+    override val archiveChatAction = "Ar\u015fivle"
+    override val starMessageAction = "Y\u0131ld\u0131zla"
+    override val unstarMessageAction = "Y\u0131ld\u0131z\u0131 kald\u0131r"
+    override val starredMessagesTitle = "Y\u0131ld\u0131zl\u0131 mesajlar"
+    override val starredMessagesSubtitle = "Sonras\u0131 i\u00e7in kaydetti\u011fin mesajlar"
+    override val noStarredMessages = "Y\u0131ld\u0131zlad\u0131\u011f\u0131n mesajlar burada g\u00f6r\u00fcn\u00fcr."
+    override val unarchiveChatAction = "Ar\u015fivden \u00e7\u0131kar"
+    override val archivedChatsTitle = "Ar\u015fiv"
+    override val archiveSettingsTitle = "Ar\u015fiv ayarlar\u0131"
+    override val torConnectingTitle = "Tor devresi kuruluyor"
+    override val archiveNoticeBanner = "Yeni mesaj geldi\u011finde bu sohbetler ar\u015fivde kal\u0131r. De\u011fi\u015ftirmek i\u00e7in dokun."
+    override val archiveNoticeUnarchiveBanner = "Yeni mesaj geldi\u011finde bu sohbetler sohbet listesine geri d\u00f6ner. De\u011fi\u015ftirmek i\u00e7in dokun."
+    override val keepChatsArchivedTitle = "Sohbetleri ar\u015fivde tut"
+    override val keepChatsArchivedSubtitle = "Yeni mesaj geldi\u011finde ar\u015fivlenmi\u015f sohbetler ar\u015fivde kal\u0131r."
+    override val noArchivedChats = "Ar\u015fivlenmi\u015f sohbet yok."
+    override val backToChatsAction = "Sohbetlere d\u00f6n"
     override val unpinChatAction = "Sabitlemeyi kaldır"
     override val noMessages = "Henüz mesaj yok"
     override fun deleteContactTitle(name: String) = "\"$name\" silinsin mi?"
@@ -326,11 +342,11 @@ object TurkishStrings : AppStrings() {
     override val duressPinTitle = "Tehlike PIN'i"
     override val duressPinSetSubtitle = "Ayarlandı — PIN'iniz yerine girilmesi bu cihazı siler"
     override val duressPinNotSetSubtitle = "Ayarlanmadı"
-    override val duressPinInfoTitle = "Bask\u0131 PIN\u2019i nas\u0131l \u00e7al\u0131\u015f\u0131r"
+    override val duressPinInfoTitle = "Tehlike PIN\u2019i nas\u0131l \u00e7al\u0131\u015f\u0131r"
     override val duressPinInfoBody =
         "Kilit ekran\u0131nda ger\u00e7ek PIN\u2019in yerine bunu girersen Stade bu cihazdaki her \u015feyi " +
-        "an\u0131nda siler \u2014 kimli\u011fin, ki\u015filerin, mesajlar\u0131n, gruplar\u0131n ve stadyumlar\u0131n. " +
-        "Uygulama ard\u0131ndan yeni kurulmu\u015f gibi g\u00f6r\u00fcn\u00fcr; bask\u0131 PIN\u2019i kullan\u0131ld\u0131\u011f\u0131na dair bir iz kalmaz. " +
+        "an\u0131nda siler \u2014 kimli\u011fin, ki\u015filerin, mesajlar\u0131n, gruplar\u0131n ve stadiumlar\u0131n. " +
+        "Uygulama ard\u0131ndan yeni kurulmu\u015f gibi g\u00f6r\u00fcn\u00fcr; Tehlike PIN\u2019i kullan\u0131ld\u0131\u011f\u0131na dair bir iz kalmaz. " +
         "Uyar\u0131 ya da onay yoktur ve sonras\u0131nda hi\u00e7bir \u015fey geri getirilemez. " +
         "Ki\u015filerine bildirim gitmez."
     override val clearDuressPinAction = "Tehlike PIN'ini kaldır"

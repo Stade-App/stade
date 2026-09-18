@@ -54,7 +54,15 @@ class TorTransport(
             embedded!!.statusFlow.collectLatest { st ->
                 when (st) {
                     is TorStatus.Bootstrapping -> {
-                        state.value = TransportInfo(type, "Tor", available = false, running = false, message = "Tor boot ${st.percent}% · ${st.summary}")
+                        state.value = TransportInfo(
+                            type,
+                            "Tor",
+                            available = false,
+                            running = false,
+                            message = "Tor boot ${st.percent}% · ${st.summary}",
+                            bootstrapPercent = st.percent,
+                            bootstrapPhase = st.summary
+                        )
                     }
                     is TorStatus.Failed -> {
                         state.value = TransportInfo(type, "Tor", available = false, running = false, message = "failed to start: ${st.reason}")

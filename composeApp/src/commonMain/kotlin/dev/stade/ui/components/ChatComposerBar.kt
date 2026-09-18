@@ -91,6 +91,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import dev.stade.audio.RecordedClip
 import dev.stade.audio.rememberAudioPlayer
 import dev.stade.ui.decodeToImageBitmap
@@ -415,7 +416,8 @@ fun ChatComposerBar(
                             DropdownMenu(
                                 expanded = plusOpen,
                                 onDismissRequest = { plusOpen = false },
-                                shape = RoundedCornerShape(18.dp)
+                                shape = RoundedCornerShape(18.dp),
+                                properties = PopupProperties(focusable = false)
                             ) {
                                 DropdownMenuItem(
                                     text = { Text(strings.padAttachMedia) },

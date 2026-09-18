@@ -37,6 +37,8 @@ import dev.stade.ui.screens.PinSetupMode
 import dev.stade.ui.screens.PinSetupScreen
 import dev.stade.radar.isRadarSupported
 import dev.stade.ui.screens.StadeRadarScreen
+import dev.stade.ui.screens.StarredMessagesScreen
+import dev.stade.ui.screens.ArchiveSettingsScreen
 import dev.stade.ui.screens.StadeyScreen
 import dev.stade.ui.screens.SecuritySettingsScreen
 import dev.stade.ui.screens.SettingsScreen
@@ -55,7 +57,26 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.navigationBarsPadding
+import dev.stade.ui.components.HomeActionBar
+import dev.stade.ui.components.HomeDestination
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import dev.stade.ui.components.HOME_BAR_HEIGHT
+import dev.stade.ui.components.LocalHomeBarClearance
+import androidx.compose.foundation.background
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.draw.clipToBounds
 import dev.stade.ui.theme.StadeTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import kotlinx.coroutines.Dispatchers
@@ -65,8 +86,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.rememberLazyListState
 
-private const val NAV_SLIDE_MS = 260
-private const val NAV_FADE_MS = 180
+private const val NAV_SLIDE_MS = 300
+private const val NAV_FADE_MS = 140
+
+private val NavEnterEasing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+private val NavExitEasing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
 
 internal fun screenKey(s: Screen): String = when (s) {
     is Screen.Chat -> "chat:" + s.contactId
@@ -80,11 +104,15 @@ internal fun screenKey(s: Screen): String = when (s) {
 }
 
 internal fun screenDepth(s: Screen): Int = when (s) {
+    is Screen.Chat -> s.returnTo?.let { screenDepth(it) + 1 } ?: 2
+    is Screen.GroupChat -> s.returnTo?.let { screenDepth(it) + 1 } ?: 2
+    is Screen.Stadium -> s.returnTo?.let { screenDepth(it) + 1 } ?: 2
     Screen.Onboarding -> 0
     Screen.Contacts -> 1
-    Screen.Settings, Screen.Stadey, Screen.AddContact, Screen.Radar,
+    Screen.Settings, Screen.Stadey, Screen.AddContact, Screen.Radar, Screen.Archived,
     Screen.CreateGroup, Screen.CreateStadium, Screen.JoinStadium -> 2
-    Screen.Security, Screen.Transports, Screen.About -> 3
+    Screen.Security, Screen.Transports, Screen.About, Screen.Starred -> 3
+    Screen.ArchiveSettings -> 3
     is Screen.GroupMembers, is Screen.ManageStadium, is Screen.Verify, is Screen.PinSetup -> 3
     else -> 2
 }
@@ -92,11 +120,11 @@ internal fun screenDepth(s: Screen): Int = when (s) {
 sealed interface Screen {
     data object Onboarding : Screen
     data object Contacts : Screen
-    data class Chat(val contactId: String, val highlightMessageId: String? = null) : Screen
-    data class GroupChat(val groupId: String, val highlightMessageId: String? = null) : Screen
+    data class Chat(val contactId: String, val highlightMessageId: String? = null, val returnTo: Screen? = null) : Screen
+    data class GroupChat(val groupId: String, val highlightMessageId: String? = null, val returnTo: Screen? = null) : Screen
     data class GroupMembers(val groupId: String) : Screen
     data object CreateGroup : Screen
-    data class Stadium(val stadiumId: String, val highlightMessageId: String? = null) : Screen
+    data class Stadium(val stadiumId: String, val highlightMessageId: String? = null, val returnTo: Screen? = null) : Screen
     data object CreateStadium : Screen
     data class ManageStadium(val stadiumId: String) : Screen
     data object JoinStadium : Screen
@@ -106,6 +134,9 @@ sealed interface Screen {
     data object Transports : Screen
     data object About : Screen
     data object Stadey : Screen
+    data object Starred : Screen
+    data object ArchiveSettings : Screen
+    data object Archived : Screen
     data object AddContact : Screen
     data object Radar : Screen
     data class PinSetup(val requireCurrent: Boolean, val returnTo: Screen, val mode: PinSetupMode = PinSetupMode.Primary) : Screen
@@ -258,6 +289,7 @@ private fun UnlockedApp(
     val scope = rememberCoroutineScope()
     var identity by remember { mutableStateOf<LocalIdentity?>(null) }
     var screen by remember { mutableStateOf<Screen>(Screen.Onboarding) }
+    var barIntroPlayed by remember { mutableStateOf(false) }
     val settingsListState = rememberLazyListState()
 
     val isInForeground by container.isAppInForeground.collectAsState()
@@ -323,6 +355,7 @@ private fun UnlockedApp(
         if (current != null) {
             container.connections.start(current)
             container.groupChat.start(current, this)
+            container.archiveService.start(current, this)
             container.stadiumChat.start(current, this)
             container.avatars.start(current, this)
             container.typing.start(container.sync, this)
@@ -423,11 +456,11 @@ private fun UnlockedApp(
                     screen !is Screen.Contacts
         ) {
             when (val s = screen) {
-                is Screen.Chat -> screen = Screen.Contacts
-                is Screen.GroupChat -> screen = Screen.Contacts
+                is Screen.Chat -> screen = s.returnTo ?: Screen.Contacts
+                is Screen.GroupChat -> screen = s.returnTo ?: Screen.Contacts
                 is Screen.GroupMembers -> screen = Screen.GroupChat(s.groupId)
                 Screen.CreateGroup -> screen = Screen.Contacts
-                is Screen.Stadium -> screen = Screen.Contacts
+                is Screen.Stadium -> screen = s.returnTo ?: Screen.Contacts
                 is Screen.ManageStadium -> screen = Screen.Stadium(s.stadiumId)
                 Screen.CreateStadium -> screen = Screen.Contacts
                 Screen.JoinStadium -> screen = Screen.Contacts
@@ -439,6 +472,9 @@ private fun UnlockedApp(
                 Screen.Transports -> screen = Screen.Settings
                 Screen.About -> screen = Screen.Settings
                 Screen.Stadey -> screen = Screen.Contacts
+                Screen.Starred -> screen = Screen.Contacts
+                Screen.ArchiveSettings -> screen = Screen.Archived
+                Screen.Archived -> screen = Screen.Contacts
                 Screen.AddContact -> screen = Screen.Contacts
                 Screen.Radar -> screen = Screen.Contacts
                 is Screen.PinSetup -> screen = s.returnTo
@@ -446,215 +482,286 @@ private fun UnlockedApp(
             }
         }
 
-        AnimatedContent(
-            targetState = screen,
-            modifier = Modifier.fillMaxSize(),
-            contentKey = { screenKey(it) },
-            transitionSpec = {
-                val forward = screenDepth(targetState) >= screenDepth(initialState)
-                if (forward) {
-                    (slideInHorizontally(tween(NAV_SLIDE_MS)) { it } + fadeIn(tween(NAV_FADE_MS))) togetherWith
-                        (slideOutHorizontally(tween(NAV_SLIDE_MS)) { -it / 4 } + fadeOut(tween(NAV_FADE_MS)))
-                } else {
-                    (slideInHorizontally(tween(NAV_SLIDE_MS)) { -it / 4 } + fadeIn(tween(NAV_FADE_MS))) togetherWith
-                        (slideOutHorizontally(tween(NAV_SLIDE_MS)) { it } + fadeOut(tween(NAV_FADE_MS)))
-                }
-            },
-            label = "screenNav"
-        ) { target ->
-            val twoPanelNow = isWideScreen && identity != null &&
-                    target != Screen.Onboarding &&
-                    target !is Screen.PinSetup
-            when {
-                target is Screen.PinSetup -> {
-                    val s = target as Screen.PinSetup
-                    PinSetupScreen(
-                        vault = container.vault,
-                        requireCurrent = s.requireCurrent,
-                        mode = s.mode,
-                        onDone = { screen = s.returnTo },
-                        onCancel = { screen = s.returnTo }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .navigationBarsPadding()
+                .clipToBounds()
+        ) {
+            AnimatedContent(
+                targetState = screen,
+                modifier = Modifier.fillMaxSize(),
+                contentKey = { screenKey(it) },
+                transitionSpec = {
+                    val forward = screenDepth(targetState) >= screenDepth(initialState)
+                    val enterSlide = tween<IntOffset>(NAV_SLIDE_MS, easing = NavEnterEasing)
+                    val exitSlide = tween<IntOffset>(NAV_SLIDE_MS, easing = NavExitEasing)
+                    val enterFade = tween<Float>(NAV_FADE_MS, easing = LinearEasing)
+                    val exitFade = tween<Float>(NAV_SLIDE_MS, easing = LinearEasing)
+                    val transition = if (forward) {
+                        (slideInHorizontally(enterSlide) { it } + fadeIn(enterFade)) togetherWith
+                            (slideOutHorizontally(exitSlide) { -it / 4 } + fadeOut(exitFade, targetAlpha = 0.85f))
+                    } else {
+                        (slideInHorizontally(enterSlide) { -it / 4 } + fadeIn(enterFade)) togetherWith
+                            (slideOutHorizontally(exitSlide) { it } + fadeOut(exitFade, targetAlpha = 0.85f))
+                    }
+                    transition.using(SizeTransform(clip = false))
+                },
+                label = "screenNav"
+            ) { target ->
+                val pageBarClearance =
+                    if (!showTwoPanel && identity != null && homeBarDestination(target) != null) {
+                        HOME_BAR_HEIGHT
+                    } else {
+                        0.dp
+                    }
+                CompositionLocalProvider(LocalHomeBarClearance provides pageBarClearance) {
+                Box(Modifier.fillMaxSize()) {
+                val twoPanelNow = isWideScreen && identity != null &&
+                        target != Screen.Onboarding &&
+                        target !is Screen.PinSetup
+                when {
+                    target is Screen.PinSetup -> {
+                        val s = target as Screen.PinSetup
+                        PinSetupScreen(
+                            vault = container.vault,
+                            requireCurrent = s.requireCurrent,
+                            mode = s.mode,
+                            onDone = { screen = s.returnTo },
+                            onCancel = { screen = s.returnTo }
+                        )
+                    }
+                    target == Screen.Onboarding -> OnboardingScreen(
+                        container = container,
+                        presetNickname = presetNickname,
+                        onReady = { identity = it; screen = Screen.Contacts }
                     )
-                }
-                target == Screen.Onboarding -> OnboardingScreen(
-                    container = container,
-                    presetNickname = presetNickname,
-                    onReady = { identity = it; screen = Screen.Contacts }
-                )
-                twoPanelNow -> TwoPanelLayout(
-                    container = container,
-                    owner = identity!!,
-                    onLogout = {
-                        scope.launch {
-                            container.connections.stop()
-                            onWipeRequested()
+                    twoPanelNow -> TwoPanelLayout(
+                        container = container,
+                        owner = identity!!,
+                        onLogout = {
+                            scope.launch {
+                                container.connections.stop()
+                                onWipeRequested()
+                            }
                         }
-                    }
-                )
-                target == Screen.Settings -> SettingsScreen(
-                    container = container,
-                    owner = identity!!,
-                    onBack = { screen = Screen.Contacts },
-                    onOpenTransports = { screen = Screen.Transports },
-                    onOpenSecurity = { screen = Screen.Security },
-                    onOpenAbout = { screen = Screen.About },
-                    onLogout = {
-                        scope.launch {
-                            container.connections.stop()
-                            onWipeRequested()
+                    )
+                    target == Screen.Settings -> SettingsScreen(
+                        container = container,
+                        owner = identity!!,
+                        onBack = { screen = Screen.Contacts },
+                        onOpenTransports = { screen = Screen.Transports },
+                        onOpenSecurity = { screen = Screen.Security },
+                        onOpenAbout = { screen = Screen.About },
+                        onLogout = {
+                            scope.launch {
+                                container.connections.stop()
+                                onWipeRequested()
+                            }
+                        },
+                        listState = settingsListState
+                    )
+                    target == Screen.Security -> SecuritySettingsScreen(
+                        container = container,
+                        onBack = { screen = Screen.Settings },
+                        onOpenPinSetup = { requireCurrent ->
+                            screen = Screen.PinSetup(requireCurrent, Screen.Security)
+                        },
+                        onOpenDuressPinSetup = {
+                            screen = Screen.PinSetup(true, Screen.Security, PinSetupMode.Duress)
                         }
-                    },
-                    listState = settingsListState
-                )
-                target == Screen.Security -> SecuritySettingsScreen(
-                    container = container,
-                    onBack = { screen = Screen.Settings },
-                    onOpenPinSetup = { requireCurrent ->
-                        screen = Screen.PinSetup(requireCurrent, Screen.Security)
-                    },
-                    onOpenDuressPinSetup = {
-                        screen = Screen.PinSetup(true, Screen.Security, PinSetupMode.Duress)
-                    }
-                )
-                target == Screen.Transports -> TransportsScreen(
-                    container = container,
-                    onBack = { screen = Screen.Settings }
-                )
-                target == Screen.About -> AboutScreen(
-                    onBack = { screen = Screen.Settings }
-                )
-                target == Screen.Stadey -> StadeyScreen(
-                    onBack = { screen = Screen.Contacts }
-                )
-                target == Screen.AddContact -> AddContactScreen(
-                    container = container,
-                    owner = identity!!,
-                    onBack = {
-                        container.pendingInvite.value = null
-                        screen = Screen.Contacts
-                    }
-                )
-                target == Screen.Radar -> StadeRadarScreen(
-                    container = container,
-                    owner = identity!!,
-                    onBack = { screen = Screen.Contacts }
-                )
-                target is Screen.Verify -> VerifyContactScreen(
-                    container = container,
-                    owner = identity!!,
-                    contactId = (target as Screen.Verify).contactId,
-                    onBack = {
-                        screen = (target as Screen.Verify).fromScreen
-                    }
-                )
-                target is Screen.Chat -> {
-                    val currentChat = target as Screen.Chat
+                    )
+                    target == Screen.Transports -> TransportsScreen(
+                        container = container,
+                        onBack = { screen = Screen.Settings }
+                    )
+                    target == Screen.About -> AboutScreen(
+                        onBack = { screen = Screen.Settings }
+                    )
+                    target == Screen.Stadey -> StadeyScreen(
+                        onBack = { screen = Screen.Contacts }
+                    )
+                    target == Screen.ArchiveSettings -> ArchiveSettingsScreen(
+                        container = container,
+                        onBack = { screen = Screen.Archived }
+                    )
+                    target == Screen.Starred -> StarredMessagesScreen(
+                        container = container,
+                        owner = identity!!,
+                        onBack = { screen = Screen.Contacts },
+                        onOpenMessage = { ref ->
+                            screen = when (ref.scope) {
+                                dev.stade.chat.StarScope.DIRECT ->
+                                    Screen.Chat(ref.chatId, ref.messageId, Screen.Starred)
+                                dev.stade.chat.StarScope.GROUP ->
+                                    Screen.GroupChat(ref.chatId, ref.messageId, Screen.Starred)
+                                dev.stade.chat.StarScope.STADIUM ->
+                                    Screen.Stadium(ref.chatId, ref.messageId, Screen.Starred)
+                            }
+                        }
+                    )
+                    target == Screen.AddContact -> AddContactScreen(
+                        container = container,
+                        owner = identity!!,
+                        onBack = {
+                            container.pendingInvite.value = null
+                            screen = Screen.Contacts
+                        }
+                    )
+                    target == Screen.Radar -> StadeRadarScreen(
+                        container = container,
+                        owner = identity!!,
+                        onBack = { screen = Screen.Contacts }
+                    )
+                    target is Screen.Verify -> VerifyContactScreen(
+                        container = container,
+                        owner = identity!!,
+                        contactId = (target as Screen.Verify).contactId,
+                        onBack = {
+                            screen = (target as Screen.Verify).fromScreen
+                        }
+                    )
+                    target is Screen.Chat -> {
+                        val currentChat = target as Screen.Chat
 
-                    ChatScreen(
+                        ChatScreen(
+                            container = container,
+                            owner = identity!!,
+                            contactId = currentChat.contactId,
+                            highlightMessageId = currentChat.highlightMessageId,
+                            onBack = { screen = currentChat.returnTo ?: Screen.Contacts },
+                            onOpenProfile = {
+                                screen = Screen.Verify(contactId = currentChat.contactId, fromScreen = currentChat)
+                            },
+                            onContactDeleted = { screen = Screen.Contacts }
+                        )
+                    }
+                    target is Screen.GroupChat -> {
+                        val currentGroupChat = target as Screen.GroupChat
+                        val currentGroupId = currentGroupChat.groupId
+                        GroupChatScreen(
+                            container = container,
+                            owner = identity!!,
+                            groupId = currentGroupId,
+                            highlightMessageId = currentGroupChat.highlightMessageId,
+                            onBack = { screen = currentGroupChat.returnTo ?: Screen.Contacts },
+                            onOpenMembers = { screen = Screen.GroupMembers(currentGroupId) }
+                        )
+                    }
+                    target is Screen.GroupMembers -> {
+                        val currentGroupMembersScreen = target as Screen.GroupMembers
+                        val currentGroupId = currentGroupMembersScreen.groupId
+                        GroupMembersScreen(
+                            container = container,
+                            owner = identity!!,
+                            groupId = currentGroupId,
+                            onBack = { screen = Screen.GroupChat(currentGroupId) },
+                            onOpenProfile = { memberId ->
+                                screen = Screen.Verify(contactId = memberId, fromScreen = currentGroupMembersScreen)
+                            }
+                        )
+                    }
+                    target == Screen.CreateGroup -> CreateGroupScreen(
                         container = container,
                         owner = identity!!,
-                        contactId = currentChat.contactId,
-                        highlightMessageId = currentChat.highlightMessageId,
                         onBack = { screen = Screen.Contacts },
-                        onOpenProfile = {
-                            screen = Screen.Verify(contactId = currentChat.contactId, fromScreen = currentChat)
-                        },
-                        onContactDeleted = { screen = Screen.Contacts }
+                        onGroupCreated = { groupId -> screen = Screen.GroupChat(groupId) }
                     )
-                }
-                target is Screen.GroupChat -> {
-                    val currentGroupChat = target as Screen.GroupChat
-                    val currentGroupId = currentGroupChat.groupId
-                    GroupChatScreen(
+                    target is Screen.Stadium -> {
+                        val currentStadium = target as Screen.Stadium
+                        StadiumScreen(
+                            container = container,
+                            owner = identity!!,
+                            stadiumId = currentStadium.stadiumId,
+                            onBack = { screen = currentStadium.returnTo ?: Screen.Contacts },
+                            onManage = { screen = Screen.ManageStadium(currentStadium.stadiumId) },
+                            highlightMessageId = currentStadium.highlightMessageId
+                        )
+                    }
+                    target is Screen.ManageStadium -> {
+                        val currentManage = target as Screen.ManageStadium
+                        ManageStadiumScreen(
+                            container = container,
+                            owner = identity!!,
+                            stadiumId = currentManage.stadiumId,
+                            onBack = { screen = Screen.Stadium(currentManage.stadiumId) },
+                            onDeleted = { screen = Screen.Contacts }
+                        )
+                    }
+                    target == Screen.CreateStadium -> CreateStadiumScreen(
                         container = container,
                         owner = identity!!,
-                        groupId = currentGroupId,
-                        highlightMessageId = currentGroupChat.highlightMessageId,
                         onBack = { screen = Screen.Contacts },
-                        onOpenMembers = { screen = Screen.GroupMembers(currentGroupId) }
+                        onStadiumCreated = { stadiumId -> screen = Screen.Stadium(stadiumId) }
                     )
-                }
-                target is Screen.GroupMembers -> {
-                    val currentGroupMembersScreen = target as Screen.GroupMembers
-                    val currentGroupId = currentGroupMembersScreen.groupId
-                    GroupMembersScreen(
+                    target == Screen.JoinStadium -> JoinStadiumScreen(
                         container = container,
                         owner = identity!!,
-                        groupId = currentGroupId,
-                        onBack = { screen = Screen.GroupChat(currentGroupId) },
-                        onOpenProfile = { memberId ->
-                            screen = Screen.Verify(contactId = memberId, fromScreen = currentGroupMembersScreen)
-                        }
-                    )
-                }
-                target == Screen.CreateGroup -> CreateGroupScreen(
-                    container = container,
-                    owner = identity!!,
-                    onBack = { screen = Screen.Contacts },
-                    onGroupCreated = { groupId -> screen = Screen.GroupChat(groupId) }
-                )
-                target is Screen.Stadium -> {
-                    val currentStadium = target as Screen.Stadium
-                    StadiumScreen(
-                        container = container,
-                        owner = identity!!,
-                        stadiumId = currentStadium.stadiumId,
                         onBack = { screen = Screen.Contacts },
-                        onManage = { screen = Screen.ManageStadium(currentStadium.stadiumId) }
+                        onJoined = { stadiumId -> screen = Screen.Stadium(stadiumId) }
                     )
-                }
-                target is Screen.ManageStadium -> {
-                    val currentManage = target as Screen.ManageStadium
-                    ManageStadiumScreen(
-                        container = container,
-                        owner = identity!!,
-                        stadiumId = currentManage.stadiumId,
-                        onBack = { screen = Screen.Stadium(currentManage.stadiumId) },
-                        onDeleted = { screen = Screen.Contacts }
-                    )
-                }
-                target == Screen.CreateStadium -> CreateStadiumScreen(
-                    container = container,
-                    owner = identity!!,
-                    onBack = { screen = Screen.Contacts },
-                    onStadiumCreated = { stadiumId -> screen = Screen.Stadium(stadiumId) }
-                )
-                target == Screen.JoinStadium -> JoinStadiumScreen(
-                    container = container,
-                    owner = identity!!,
-                    onBack = { screen = Screen.Contacts },
-                    onJoined = { stadiumId -> screen = Screen.Stadium(stadiumId) }
-                )
-                else -> {
-                    val currentContactsScreen = screen
+                    else -> {
+                        val currentContactsScreen = target
 
-                    ContactsScreen(
-                        container = container,
-                        owner = identity!!,
-                        onOpenChat = { screen = Screen.Chat(it) },
-                        onOpenGroupChat = { screen = Screen.GroupChat(it) },
-                        onOpenStadium = { screen = Screen.Stadium(it) },
-                        onOpenSettings = { screen = Screen.Settings },
-                        onOpenStadey = { screen = Screen.Stadey },
-                        onAddContact = { screen = Screen.AddContact },
-                        onCreateGroup = { screen = Screen.CreateGroup },
-                        onCreateStadium = { screen = Screen.CreateStadium },
-                        onJoinStadium = { screen = Screen.JoinStadium },
-                        onOpenRadar = if (isRadarSupported) ({ screen = Screen.Radar }) else null,
-                        onLongPressVerify = { contactId ->
-                            screen = Screen.Verify(contactId = contactId, fromScreen = currentContactsScreen)
-                        },
-                        onOpenChatMessage = { contactId, messageId ->
-                            screen = Screen.Chat(contactId, highlightMessageId = messageId)
-                        },
-                        onOpenGroupMessage = { groupId, messageId ->
-                            screen = Screen.GroupChat(groupId, highlightMessageId = messageId)
-                        },
-                        onOpenStadiumMessage = { stadiumId, messageId ->
-                            screen = Screen.Stadium(stadiumId, highlightMessageId = messageId)
-                        }
-                    )
+                        ContactsScreen(
+                            container = container,
+                            owner = identity!!,
+                            onOpenChat = { screen = Screen.Chat(it) },
+                            onOpenGroupChat = { screen = Screen.GroupChat(it) },
+                            onOpenStadium = { screen = Screen.Stadium(it) },
+                            onOpenSettings = { screen = Screen.Settings },
+                            onOpenStadey = { screen = Screen.Stadey },
+                            onOpenStarred = { screen = Screen.Starred },
+                            onOpenArchiveSettings = { screen = Screen.ArchiveSettings },
+                            showArchived = currentContactsScreen == Screen.Archived,
+                            onOpenArchived = { screen = Screen.Archived },
+                            onCloseArchived = { screen = Screen.Contacts },
+                            onAddContact = { screen = Screen.AddContact },
+                            onCreateGroup = { screen = Screen.CreateGroup },
+                            onCreateStadium = { screen = Screen.CreateStadium },
+                            onJoinStadium = { screen = Screen.JoinStadium },
+                            onOpenRadar = if (isRadarSupported) ({ screen = Screen.Radar }) else null,
+                            onLongPressVerify = { contactId ->
+                                screen = Screen.Verify(contactId = contactId, fromScreen = currentContactsScreen)
+                            },
+                            onOpenChatMessage = { contactId, messageId ->
+                                screen = Screen.Chat(contactId, highlightMessageId = messageId)
+                            },
+                            onOpenGroupMessage = { groupId, messageId ->
+                                screen = Screen.GroupChat(groupId, highlightMessageId = messageId)
+                            },
+                            onOpenStadiumMessage = { stadiumId, messageId ->
+                                screen = Screen.Stadium(stadiumId, highlightMessageId = messageId)
+                            }
+                        )
+                    }
                 }
+                }
+                }
+            }
+
+            val barDestination = homeBarDestination(screen)
+            var lastBarDestination by remember { mutableStateOf(HomeDestination.NONE) }
+            LaunchedEffect(barDestination) {
+                if (barDestination != null) lastBarDestination = barDestination
+            }
+            AnimatedVisibility(
+                visible = !showTwoPanel && identity != null && barDestination != null,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = slideInVertically(tween(NAV_SLIDE_MS, easing = NavEnterEasing)) { it },
+                exit = slideOutVertically(tween(NAV_SLIDE_MS, easing = NavExitEasing)) { it }
+            ) {
+                HomeActionBar(
+                    onAddContact = { screen = Screen.AddContact },
+                    onCreateGroup = { screen = Screen.CreateGroup },
+                    onCreateStadium = { screen = Screen.CreateStadium },
+                    onJoinStadium = { screen = Screen.JoinStadium },
+                    onOpenRadar = if (isRadarSupported) ({ screen = Screen.Radar }) else null,
+                    selected = barDestination ?: lastBarDestination,
+                    playIntro = !barIntroPlayed,
+                    onIntroFinished = { barIntroPlayed = true }
+                )
             }
         }
 
@@ -673,4 +780,13 @@ private fun UnlockedApp(
             )
         }
     }
+}
+
+private fun homeBarDestination(screen: Screen): HomeDestination? = when (screen) {
+    Screen.Contacts, Screen.Archived, Screen.Starred -> HomeDestination.NONE
+    Screen.AddContact -> HomeDestination.CONTACT
+    Screen.CreateGroup -> HomeDestination.GROUP
+    Screen.CreateStadium, Screen.JoinStadium -> HomeDestination.STADIUM
+    Screen.Radar -> HomeDestination.RADAR
+    else -> null
 }

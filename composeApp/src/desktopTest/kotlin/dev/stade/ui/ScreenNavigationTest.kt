@@ -78,4 +78,59 @@ class ScreenNavigationTest {
         assertTrue(screenKey(Screen.Chat("a")) != screenKey(Screen.GroupChat("a")))
         assertTrue(screenKey(Screen.Stadium("a")) != screenKey(Screen.ManageStadium("a")))
     }
+
+    @Test
+    fun aChatOpenedFromStarredIsDeeperThanStarred() {
+        val fromStarred = Screen.Chat("abc", "m1", Screen.Starred)
+        assertTrue(goesForward(Screen.Starred, fromStarred), "Starred -> chat should go forward")
+        assertTrue(!goesForward(fromStarred, Screen.Starred), "chat -> Starred should go back")
+    }
+
+    @Test
+    fun returnToAppliesToEveryChannel() {
+        val cases = listOf(
+            Screen.Chat("a", "m", Screen.Starred),
+            Screen.GroupChat("g", "m", Screen.Starred),
+            Screen.Stadium("s", "m", Screen.Starred)
+        )
+        for (target in cases) {
+            assertTrue(goesForward(Screen.Starred, target), "Starred -> $target should go forward")
+            assertTrue(!goesForward(target, Screen.Starred), "$target -> Starred should go back")
+        }
+    }
+
+    @Test
+    fun aChatWithoutReturnToKeepsItsNormalDepth() {
+        assertEquals(screenDepth(Screen.Chat("a")), screenDepth(Screen.Chat("a", "m1")))
+        assertTrue(goesForward(Screen.Contacts, Screen.Chat("a")))
+        assertTrue(!goesForward(Screen.Chat("a"), Screen.Contacts))
+    }
+
+    @Test
+    fun archiveSettingsSitsDeeperThanTheChatList() {
+        assertTrue(goesForward(Screen.Contacts, Screen.ArchiveSettings))
+        assertTrue(!goesForward(Screen.ArchiveSettings, Screen.Contacts))
+    }
+
+    @Test
+    fun returnToDoesNotChangeScreenIdentity() {
+        assertEquals(screenKey(Screen.Chat("a")), screenKey(Screen.Chat("a", "m1", Screen.Starred)))
+    }
+
+    @Test
+    fun archivedIsASiblingOfChatsAndDeeperThanTheList() {
+        assertTrue(goesForward(Screen.Contacts, Screen.Archived), "Contacts -> Archived should go forward")
+        assertTrue(!goesForward(Screen.Archived, Screen.Contacts), "Archived -> Contacts should go back")
+    }
+
+    @Test
+    fun archiveSettingsSitsDeeperThanArchived() {
+        assertTrue(goesForward(Screen.Archived, Screen.ArchiveSettings))
+        assertTrue(!goesForward(Screen.ArchiveSettings, Screen.Archived))
+    }
+
+    @Test
+    fun archivedAndContactsAreDistinctDestinations() {
+        assertTrue(screenKey(Screen.Archived) != screenKey(Screen.Contacts))
+    }
 }

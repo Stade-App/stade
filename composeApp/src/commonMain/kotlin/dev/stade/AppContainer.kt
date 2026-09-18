@@ -3,7 +3,10 @@
 import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlCursor
 import app.cash.sqldelight.db.SqlDriver
+import dev.stade.chat.ArchiveService
+import dev.stade.chat.ArchivedChats
 import dev.stade.chat.PinnedChats
+import dev.stade.chat.StarredMessages
 import dev.stade.contact.ContactManager
 import dev.stade.contact.HandshakeService
 import dev.stade.crypto.CryptoApi
@@ -215,12 +218,15 @@ class AppContainer(
     val stadiums = StadiumManager(db, crypto)
     val stickers = StickerManager(db, crypto)
     val pinnedChats = PinnedChats(db)
+    val archivedChats = ArchivedChats(db)
+    val starredMessages = StarredMessages(db)
     val sync = SyncEngine(crypto, pq, contacts, messages, ratchet, outbox, handshake, vanish, groups, stadiums)
     val chat = ChatService(messages, sync, vanish)
     val typing = TypingTracker()
     val scheduledMessages = ScheduledMessageManager(db, crypto)
     val scheduler = ScheduledMessageService(scheduledMessages, chat, contacts)
     val groupChat = GroupChatService(groups, sync, contacts, crypto)
+    val archiveService = ArchiveService(archivedChats, sync)
     val avatars = AvatarService(identities, sync, contacts, crypto)
     val stadiumChat = StadiumChatService(stadiums, sync, contacts, crypto, messages, groups)
     val transports = ConnectionRegistry().also { reg ->

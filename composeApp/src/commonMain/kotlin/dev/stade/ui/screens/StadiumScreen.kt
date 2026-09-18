@@ -109,6 +109,7 @@ import dev.stade.stadium.isOfficial
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.components.LinkifiedText
+import dev.stade.ui.components.centerOnItem
 import dev.stade.ui.components.animateToChatBottom
 import dev.stade.ui.components.jumpToChatBottom
 import dev.stade.message.DraftScope
@@ -119,10 +120,17 @@ import androidx.compose.ui.text.TextRange
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.datetime.Clock
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import dev.stade.ui.components.InlineKeyboardPanel
+import androidx.compose.runtime.CompositionLocalProvider
+import dev.stade.ui.components.LocalStarredIds
+import dev.stade.ui.components.messageEntranceModifier
+import dev.stade.ui.components.rememberMessageEntrance
+import dev.stade.ui.components.BottomInsetPanel
 import dev.stade.ui.components.rememberPanelHeightState
 import dev.stade.ui.components.EmojiStickerPanel
 import dev.stade.ui.components.PadPanel
+import dev.stade.chat.StarScope
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.components.Avatar
@@ -157,7 +165,8 @@ fun StadiumScreen(
     owner: LocalIdentity,
     stadiumId: String,
     onBack: () -> Unit,
-    onManage: () -> Unit
+    onManage: () -> Unit,
+    highlightMessageId: String? = null
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
@@ -166,6 +175,10 @@ fun StadiumScreen(
     var padMode by remember { mutableStateOf<PadMode?>(null) }
     val rawMessages by remember(stadiumId) { container.stadiums.observeMessages(stadiumId) }.collectAsState(initial = null)
     val messages = rawMessages ?: emptyList()
+    val messageEntrance = rememberMessageEntrance(stadiumId)
+    if (rawMessages != null && !messageEntrance.isPrimed) {
+        messageEntrance.prime(messages.map { it.id })
+    }
     val connected by container.sync.connectedContacts.collectAsState()
     val listState = rememberLazyListState()
     val clipboard = LocalClipboardManager.current
@@ -200,9 +213,8 @@ fun StadiumScreen(
     var showEmojiDrawer by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
     val panelState = rememberPanelHeightState()
-    val navBarInsets = WindowInsets.navigationBars
-    val imeInsets = WindowInsets.ime
-    val imeAndNavInsets = remember(imeInsets, navBarInsets) { imeInsets.union(navBarInsets) }
+    val starredIds by remember(owner.id) { container.starredMessages.observeStarredIds(owner.id) }
+        .collectAsState(initial = remember(owner.id) { container.starredMessages.starredIds(owner.id) })
     var showStickerMaker by remember { mutableStateOf(false) }
     val stickers by remember(owner.id) { container.stickers.observeStickers(owner.id) }.collectAsState(initial = emptyList())
     var leaving by remember { mutableStateOf(false) }
@@ -325,19 +337,36 @@ fun StadiumScreen(
         }
     }
 
+    var flashedMessageId by remember(stadiumId) { mutableStateOf<String?>(null) }
     var prevMessageCount by remember(stadiumId) { mutableStateOf(0) }
     var scrollReady by remember(stadiumId) { mutableStateOf(false) }
     LaunchedEffect(rawMessages) {
         if (rawMessages == null) return@LaunchedEffect
-        if (messages.isNotEmpty()) {
-            if (prevMessageCount == 0) {
-                listState.jumpToChatBottom(messages.lastIndex)
-            } else {
-                listState.animateToChatBottom(messages.lastIndex)
+        val jumpingToHighlight = highlightMessageId != null &&
+            messages.any { it.id == highlightMessageId }
+        try {
+            if (messages.isNotEmpty() && !jumpingToHighlight) {
+                if (prevMessageCount == 0) {
+                    listState.jumpToChatBottom(messages.lastIndex)
+                } else {
+                    listState.animateToChatBottom(messages.lastIndex)
+                }
             }
+        } finally {
+            prevMessageCount = messages.size
+            scrollReady = true
         }
-        prevMessageCount = messages.size
-        scrollReady = true
+    }
+
+    LaunchedEffect(highlightMessageId, messages.size) {
+        val target = highlightMessageId ?: return@LaunchedEffect
+        val index = messages.indexOfFirst { it.id == target }
+        if (index >= 0) {
+            listState.centerOnItem(index)
+            flashedMessageId = target
+            delay(1500L)
+            flashedMessageId = null
+        }
     }
 
     val current = stadium
@@ -432,6 +461,23 @@ fun StadiumScreen(
                             }) {
                                 Icon(Icons.Default.ContentCopy, contentDescription = strings.copyMessage)
                             }
+                        }
+                        val allStarred = selectedMessageIds.isNotEmpty() &&
+                            selectedMessageIds.all { starredIds.contains(it) }
+                        IconButton(onClick = {
+                            val targets = selectedMessageIds.toList()
+                            targets.forEach { id ->
+                                container.starredMessages.setStarred(
+                                    owner.id, id, StarScope.STADIUM, stadiumId, !allStarred
+                                )
+                            }
+                            clearSelection()
+                        }) {
+                            Icon(
+                                if (allStarred) Icons.Default.StarBorder else Icons.Default.Star,
+                                contentDescription = if (allStarred) strings.unstarMessageAction
+                                    else strings.starMessageAction
+                            )
                         }
                         val singleSelectedStickerMsg = remember(selectedMessageIds, messages) {
                             if (selectedMessageIds.size != 1) null
@@ -535,15 +581,7 @@ fun StadiumScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .windowInsetsPadding(
-                            if (anyPanelOpen) navBarInsets else imeAndNavInsets
-                        )
-                        .onSizeChanged { size ->
-                            if (size.height < prevColumnHeight && messages.isNotEmpty()) {
-                                scope.launch { listState.animateToChatBottom(messages.lastIndex) }
-                            }
-                            prevColumnHeight = size.height
-                        }
+                        .windowInsetsPadding(WindowInsets.navigationBars)
                 ) {
                     if (!current.isOwner && !connected.contains(current.creatorStadeId)) {
                         Surface(
@@ -573,73 +611,88 @@ fun StadiumScreen(
                             }
                         }
                     }
-                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.fillMaxSize().alpha(if (scrollReady) 1f else 0f),
-                            contentPadding = PaddingValues(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            items(messages, key = { it.id }) { msg ->
-                                val isSelected by remember(msg.id) { derivedStateOf { selectedMessageIds.contains(msg.id) } }
-                                val onShortClick: () -> Unit = { if (inSelectionMode) toggleSelection(msg.id) }
-                                val onLongClick: () -> Unit = { toggleSelection(msg.id) }
-                                when (msg.type) {
-                                    MessageType.IMAGE -> StadiumImageBubble(
-                                        msg = msg,
-                                        selected = isSelected,
-                                        inSelectionMode = inSelectionMode,
-                                        onShortClick = onShortClick,
-                                        onLongClick = onLongClick,
-                                        onSaveImage = { bytes ->
-                                            scope.launch {
-                                                val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
-                                                notify(
-                                                    if (ok) strings.imageSaved else strings.imageSaveFailed,
-                                                    if (ok) StadiumBannerKind.Success else StadiumBannerKind.Error
-                                                )
-                                            }
-                                        },
-                                        onCopyImage = { bytes ->
-                                            scope.launch {
-                                                val ok = copyImageToClipboard(bytes)
-                                                notify(
-                                                    if (ok) strings.imageCopied else strings.imageCopyFailed,
-                                                    if (ok) StadiumBannerKind.Success else StadiumBannerKind.Error
-                                                )
-                                            }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .onSizeChanged { size ->
+                                if (size.height < prevColumnHeight && messages.isNotEmpty()) {
+                                    scope.launch { listState.animateToChatBottom(messages.lastIndex) }
+                                }
+                                prevColumnHeight = size.height
+                            }
+                    ) {
+                        CompositionLocalProvider(LocalStarredIds provides starredIds) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize().alpha(if (scrollReady) 1f else 0f),
+                                contentPadding = PaddingValues(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                items(messages, key = { it.id }) { msg ->
+                                    val isNewMessage = remember(msg.id) { messageEntrance.isNew(msg.id) }
+                                    Box(messageEntranceModifier(isNewMessage, msg.isOwn)) {
+                                        val isSelected by remember(msg.id) { derivedStateOf { selectedMessageIds.contains(msg.id) } }
+                                        val onShortClick: () -> Unit = { if (inSelectionMode) toggleSelection(msg.id) }
+                                        val onLongClick: () -> Unit = { toggleSelection(msg.id) }
+                                        when (msg.type) {
+                                            MessageType.IMAGE -> StadiumImageBubble(
+                                                msg = msg,
+                                                selected = isSelected,
+                                                inSelectionMode = inSelectionMode,
+                                                onShortClick = onShortClick,
+                                                onLongClick = onLongClick,
+                                                onSaveImage = { bytes ->
+                                                    scope.launch {
+                                                        val ok = saveImageToGallery(bytes, "stade_${msg.id}.jpg")
+                                                        notify(
+                                                            if (ok) strings.imageSaved else strings.imageSaveFailed,
+                                                            if (ok) StadiumBannerKind.Success else StadiumBannerKind.Error
+                                                        )
+                                                    }
+                                                },
+                                                onCopyImage = { bytes ->
+                                                    scope.launch {
+                                                        val ok = copyImageToClipboard(bytes)
+                                                        notify(
+                                                            if (ok) strings.imageCopied else strings.imageCopyFailed,
+                                                            if (ok) StadiumBannerKind.Success else StadiumBannerKind.Error
+                                                        )
+                                                    }
+                                                }
+                                            )
+                                            MessageType.PAD_SOUND -> StadiumPadSoundBubble(msg = msg)
+                                            MessageType.MEME_CLIP -> StadiumMemeClipBubble(container = container, msg = msg)
+                                            MessageType.VOICE -> StadiumVoiceBubble(
+                                                msg = msg,
+                                                selected = isSelected,
+                                                inSelectionMode = inSelectionMode,
+                                                onShortClick = onShortClick,
+                                                onLongClick = onLongClick
+                                            )
+                                            MessageType.VIDEO -> StadiumVideoBubble(
+                                                msg = msg,
+                                                selected = isSelected,
+                                                inSelectionMode = inSelectionMode,
+                                                onShortClick = onShortClick,
+                                                onLongClick = onLongClick
+                                            )
+                                            MessageType.STICKER -> StadiumStickerBubble(
+                                                msg = msg,
+                                                selected = isSelected,
+                                                inSelectionMode = inSelectionMode,
+                                                onShortClick = onShortClick,
+                                                onLongClick = onLongClick
+                                            )
+                                            else -> StadiumTextBubble(
+                                                msg = msg,
+                                                selected = isSelected,
+                                                inSelectionMode = inSelectionMode,
+                                                onShortClick = onShortClick,
+                                                onLongClick = onLongClick
+                                            )
                                         }
-                                    )
-                                    MessageType.PAD_SOUND -> StadiumPadSoundBubble(msg = msg)
-                                    MessageType.MEME_CLIP -> StadiumMemeClipBubble(container = container, msg = msg)
-                                    MessageType.VOICE -> StadiumVoiceBubble(
-                                        msg = msg,
-                                        selected = isSelected,
-                                        inSelectionMode = inSelectionMode,
-                                        onShortClick = onShortClick,
-                                        onLongClick = onLongClick
-                                    )
-                                    MessageType.VIDEO -> StadiumVideoBubble(
-                                        msg = msg,
-                                        selected = isSelected,
-                                        inSelectionMode = inSelectionMode,
-                                        onShortClick = onShortClick,
-                                        onLongClick = onLongClick
-                                    )
-                                    MessageType.STICKER -> StadiumStickerBubble(
-                                        msg = msg,
-                                        selected = isSelected,
-                                        inSelectionMode = inSelectionMode,
-                                        onShortClick = onShortClick,
-                                        onLongClick = onLongClick
-                                    )
-                                    else -> StadiumTextBubble(
-                                        msg = msg,
-                                        selected = isSelected,
-                                        inSelectionMode = inSelectionMode,
-                                        onShortClick = onShortClick,
-                                        onLongClick = onLongClick
-                                    )
+                                    }
                                 }
                             }
                         }
@@ -716,10 +769,8 @@ fun StadiumScreen(
 
                         val currentPadMode = padMode
                         val padStadium = current
-                        InlineKeyboardPanel(
-                            visible = currentPadMode != null && padStadium != null,
-                            state = panelState
-                        ) {
+                        val emojiStadium = current
+                        BottomInsetPanel(visible = anyPanelOpen, state = panelState) {
                             if (currentPadMode != null && padStadium != null) {
                                 PadPanel(
                                     container = container,
@@ -742,15 +793,7 @@ fun StadiumScreen(
                                         }
                                     }
                                 )
-                            }
-                        }
-
-                        val emojiStadium = current
-                        InlineKeyboardPanel(
-                            visible = showEmojiDrawer && emojiStadium != null,
-                            state = panelState
-                        ) {
-                            if (emojiStadium != null) {
+                            } else if (showEmojiDrawer && emojiStadium != null) {
                                 EmojiStickerPanel(
                                     stickers = stickers,
                                     onDismiss = { showEmojiDrawer = false },
@@ -938,6 +981,15 @@ private fun StadiumImageBubble(
                     )
                 }
                 Spacer(Modifier.height(3.dp))
+                if (LocalStarredIds.current.contains(msg.id)) {
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = null,
+                        tint = sub,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Spacer(Modifier.size(3.dp))
+                }
                 Text(
                     formatChatTime(msg.timestamp),
                     color = sub,
@@ -1052,6 +1104,15 @@ private fun StadiumVoiceBubble(
                     }
                 }
                 Spacer(Modifier.height(2.dp))
+                if (LocalStarredIds.current.contains(msg.id)) {
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = null,
+                        tint = sub,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Spacer(Modifier.size(3.dp))
+                }
                 Text(
                     formatChatTime(msg.timestamp),
                     color = sub,
@@ -1153,6 +1214,15 @@ private fun StadiumVideoBubble(
                     Text(msg.caption, color = fg, style = MaterialTheme.typography.bodyMedium)
                 }
                 Spacer(Modifier.height(2.dp))
+                if (LocalStarredIds.current.contains(msg.id)) {
+                    Icon(
+                        Icons.Default.Star,
+                        contentDescription = null,
+                        tint = sub,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Spacer(Modifier.size(3.dp))
+                }
                 Text(
                     formatChatTime(msg.timestamp),
                     color = sub,
@@ -1211,6 +1281,15 @@ private fun StadiumStickerBubble(
             } else if (decodeDone) {
                 Icon(Icons.Default.BrokenImage, contentDescription = null, tint = sub, modifier = Modifier.size(28.dp))
             }
+        }
+        if (LocalStarredIds.current.contains(msg.id)) {
+            Icon(
+                Icons.Default.Star,
+                contentDescription = null,
+                tint = sub,
+                modifier = Modifier.size(11.dp)
+            )
+            Spacer(Modifier.size(3.dp))
         }
         Text(
             formatChatTime(msg.timestamp),
