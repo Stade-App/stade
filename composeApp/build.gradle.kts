@@ -104,8 +104,8 @@ android {
         applicationId = "dev.stade"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "0.2.8"
+        versionCode = 23
+        versionName = "0.2.9"
     }
 
     val localProps = Properties().also { props ->
@@ -143,6 +143,14 @@ android {
         debug {
             isMinifyEnabled = false
         }
+        create("profiling") {
+            initWith(getByName("release"))
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {
@@ -178,7 +186,7 @@ compose.desktop {
                 "java.desktop"
             )
             packageName = "Stade"
-            packageVersion = "0.2.8"
+            packageVersion = "0.2.9"
             windows {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.ico"))
                 menuGroup = "Stade"

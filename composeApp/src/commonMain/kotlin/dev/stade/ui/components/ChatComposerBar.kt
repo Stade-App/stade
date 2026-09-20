@@ -94,6 +94,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
+import kotlinx.coroutines.delay
 import dev.stade.audio.RecordedClip
 import dev.stade.audio.rememberAudioPlayer
 import dev.stade.ui.decodeToImageBitmap
@@ -409,8 +410,21 @@ fun ChatComposerBar(
                                 animationSpec = tween(240, easing = FastOutSlowInEasing),
                                 label = "plusRotation"
                             )
+                            var plusJustDismissed by remember { mutableStateOf(false) }
+                            LaunchedEffect(plusJustDismissed) {
+                                if (plusJustDismissed) {
+                                    delay(250)
+                                    plusJustDismissed = false
+                                }
+                            }
                             IconButton(
-                                onClick = { plusOpen = !plusOpen },
+                                onClick = {
+                                    if (plusJustDismissed) {
+                                        plusJustDismissed = false
+                                    } else {
+                                        plusOpen = !plusOpen
+                                    }
+                                },
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
@@ -424,7 +438,10 @@ fun ChatComposerBar(
                             }
                             DropdownMenu(
                                 expanded = plusOpen,
-                                onDismissRequest = { plusOpen = false },
+                                onDismissRequest = {
+                                    plusOpen = false
+                                    plusJustDismissed = true
+                                },
                                 shape = RoundedCornerShape(18.dp),
                                 properties = PopupProperties(focusable = false)
                             ) {

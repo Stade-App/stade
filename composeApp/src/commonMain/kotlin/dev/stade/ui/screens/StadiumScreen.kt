@@ -87,7 +87,6 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -110,7 +109,7 @@ import dev.stade.stadium.isOfficial
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.components.LinkifiedText
-import dev.stade.ui.components.centerOnItem
+import dev.stade.ui.components.centerOnChatMessage
 import dev.stade.ui.components.animateToChatBottom
 import dev.stade.ui.components.jumpToChatBottom
 import dev.stade.message.DraftScope
@@ -183,7 +182,6 @@ fun StadiumScreen(
     val connected by container.sync.connectedContacts.collectAsState()
     val listState = rememberLazyListState()
     val clipboard = LocalClipboardManager.current
-    var prevColumnHeight by remember { mutableStateOf(Int.MAX_VALUE) }
 
     LaunchedEffect(stadiumId) {
         val current = container.stadiums.getStadium(stadiumId) ?: return@LaunchedEffect
@@ -363,7 +361,7 @@ fun StadiumScreen(
         val target = highlightMessageId ?: return@LaunchedEffect
         val index = messages.indexOfFirst { it.id == target }
         if (index >= 0) {
-            listState.centerOnItem(index)
+            listState.centerOnChatMessage(index, messages.size)
             flashedMessageId = target
             delay(1500L)
             flashedMessageId = null
@@ -612,25 +610,21 @@ fun StadiumScreen(
                             }
                         }
                     }
+                    val displayMessages = remember(messages) { messages.asReversed() }
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .onSizeChanged { size ->
-                                if (size.height < prevColumnHeight && messages.isNotEmpty()) {
-                                    scope.launch { listState.animateToChatBottom(messages.lastIndex) }
-                                }
-                                prevColumnHeight = size.height
-                            }
                     ) {
                         CompositionLocalProvider(LocalStarredIds provides starredIds) {
                             LazyColumn(
                                 state = listState,
                                 modifier = Modifier.fillMaxSize().alpha(if (scrollReady) 1f else 0f),
                                 contentPadding = PaddingValues(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                reverseLayout = true
                             ) {
-                                items(messages, key = { it.id }) { msg ->
+                                items(displayMessages, key = { it.id }) { msg ->
                                     val isNewMessage = remember(msg.id) { messageEntrance.isNew(msg.id) }
                                     Box(messageEntranceModifier(isNewMessage, msg.isOwn)) {
                                         val isSelected by remember(msg.id) { derivedStateOf { selectedMessageIds.contains(msg.id) } }

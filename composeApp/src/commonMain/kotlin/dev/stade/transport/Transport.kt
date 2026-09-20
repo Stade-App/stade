@@ -13,7 +13,8 @@ data class TransportInfo(
     val running: Boolean,
     val message: String = "",
     val bootstrapPercent: Int? = null,
-    val bootstrapPhase: String = ""
+    val bootstrapPhase: String = "",
+    val failed: Boolean = false
 )
 
 interface Connection {

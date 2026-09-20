@@ -117,7 +117,6 @@ fun TorBootstrapCard(
                     )
                 }
 
-                // a packet running the built part of the circuit
                 val litEnd = first + span * progress
                 if (litEnd > first && sweep.value <= 0f) {
                     val travelled = first + (litEnd - first) * pulse

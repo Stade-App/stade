@@ -68,7 +68,6 @@ private val BAR_MAX_WIDTH = 440.dp
 
 val HOME_BAR_HEIGHT = 96.dp
 
-/** Bottom space a screen must leave clear for the floating nav bar, 0.dp where it is hidden. */
 val LocalHomeBarClearance = androidx.compose.runtime.compositionLocalOf { 0.dp }
 
 private const val BAR_INTRO_MS = 1150
@@ -169,7 +168,6 @@ fun HomeActionBar(
                     val left = pillIndex * slot
                     val lastIndex = (order.size - 1).toFloat()
 
-                    // outer corners follow the bar's own capsule; inner ones stay square-ish
                     val capsule = size.height / 2f
                     val inner = ITEM_PILL_RADIUS.toPx().coerceAtMost(capsule)
                     val leftEdge = (1f - pillIndex.coerceIn(0f, 1f))
@@ -316,7 +314,7 @@ private fun HomeAction(
                 translationY = (1f - pop) * 26.dp.toPx()
                 rotationZ = (1f - pop) * 22f
             }
-            .padding(vertical = 8.dp),
+            .padding(horizontal = 8.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(

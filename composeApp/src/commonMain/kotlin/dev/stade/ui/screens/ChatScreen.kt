@@ -123,7 +123,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
@@ -182,7 +181,7 @@ import dev.stade.ui.components.PadMode
 import dev.stade.ui.components.PadSoundBubble
 import dev.stade.ui.components.LinkifiedText
 import dev.stade.ui.components.HIGHLIGHT_FLASH_MS
-import dev.stade.ui.components.centerOnItem
+import dev.stade.ui.components.centerOnChatMessage
 import dev.stade.ui.components.animateToChatBottom
 import dev.stade.ui.components.jumpToChatBottom
 import dev.stade.message.DraftScope
@@ -321,7 +320,7 @@ fun ChatScreen(
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 if (inSelectionMode ||
                     source != NestedScrollSource.Drag ||
-                    listState.canScrollForward ||
+                    listState.canScrollBackward ||
                     available.y == 0f
                 ) {
                     return Offset.Zero
@@ -471,10 +470,8 @@ fun ChatScreen(
 
     LaunchedEffect(peerTyping) {
         if (!peerTyping || !scrollReady) return@LaunchedEffect
-        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
-        if (lastVisible >= messages.lastIndex) {
-            listState.animateScrollToItem(messages.size)
-        }
+        if (listState.firstVisibleItemIndex > 1) return@LaunchedEffect
+        listState.animateScrollToItem(0)
     }
 
     var flashedMessageId by remember { mutableStateOf<String?>(null) }
@@ -483,7 +480,7 @@ fun ChatScreen(
         val index = messages.indexOfFirst { it.id == messageId }
         if (index < 0) return
         scope.launch {
-            listState.centerOnItem(index)
+            listState.centerOnChatMessage(index, messages.size, if (peerTyping) 1 else 0)
             flashedMessageId = messageId
             delay(HIGHLIGHT_FLASH_MS)
             flashedMessageId = null
@@ -493,7 +490,7 @@ fun ChatScreen(
         val target = highlightMessageId ?: return@LaunchedEffect
         val index = messages.indexOfFirst { it.id == target }
         if (index >= 0) {
-            listState.centerOnItem(index)
+            listState.centerOnChatMessage(index, messages.size, if (peerTyping) 1 else 0)
             flashedMessageId = target
             delay(1500L)
             flashedMessageId = null
@@ -579,7 +576,6 @@ fun ChatScreen(
 
     var replyTarget by remember { mutableStateOf<Message?>(null) }
 
-    var prevColumnHeight by remember { mutableStateOf(Int.MAX_VALUE) }
 
     if (showDeleteDialog && contact != null) {
         AlertDialog(
@@ -1004,16 +1000,11 @@ fun ChatScreen(
                     }
                 } else {
                     val messagesById = remember(messages) { messages.associateBy { it.id } }
+                    val displayMessages = remember(messages) { messages.asReversed() }
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .onSizeChanged { size ->
-                                if (size.height < prevColumnHeight && messages.isNotEmpty()) {
-                                    scope.launch { listState.animateToChatBottom(messages.lastIndex) }
-                                }
-                                prevColumnHeight = size.height
-                            }
                     ) {
                         CompositionLocalProvider(LocalStarredIds provides starredIds) {
                             LazyColumn(
@@ -1027,9 +1018,14 @@ fun ChatScreen(
                                         else Modifier
                                     ),
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
-                                contentPadding = PaddingValues(vertical = 12.dp)
+                                contentPadding = PaddingValues(vertical = 12.dp),
+                                reverseLayout = true
                             ) {
-                                itemsIndexed(messages, key = { _, msg -> msg.id }) { idx, msg ->
+                                if (peerTyping) {
+                                    item(key = TYPING_BUBBLE_KEY) { TypingBubble() }
+                                }
+                                itemsIndexed(displayMessages, key = { _, msg -> msg.id }) { displayIdx, msg ->
+                                    val idx = messages.lastIndex - displayIdx
                                     val isNewMessage = remember(msg.id) { messageEntrance.isNew(msg.id) }
                                     Box(messageEntranceModifier(isNewMessage, msg.direction == MessageDirection.OUT)) {
                                         val prev = messages.getOrNull(idx - 1)
@@ -1183,9 +1179,6 @@ fun ChatScreen(
                                             }
                                         }
                                     }
-                                }
-                                if (peerTyping) {
-                                    item(key = TYPING_BUBBLE_KEY) { TypingBubble() }
                                 }
                             }
                         }

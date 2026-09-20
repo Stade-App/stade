@@ -72,8 +72,10 @@ abstract class AppStrings {
     abstract val archiveSettingsTitle: String
     abstract val torConnectingTitle: String
     abstract val torSetupComplete: String
-    abstract val torActiveLabel: String
-    abstract val torInactiveLabel: String
+    abstract val torStatusOffline: String
+    abstract val torStatusConnecting: String
+    abstract val torStatusConnected: String
+    abstract val torStatusFailed: String
     abstract val archiveNoticeBanner: String
     abstract val archiveNoticeUnarchiveBanner: String
     abstract val keepChatsArchivedTitle: String

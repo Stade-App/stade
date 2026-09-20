@@ -17,13 +17,10 @@ import androidx.compose.runtime.remember
 import dev.stade.AppContainer
 import dev.stade.identity.LocalIdentity
 import dev.stade.transport.TransportType
+import dev.stade.ui.rememberNetworkOnline
 import kotlinx.coroutines.flow.MutableStateFlow
 import dev.stade.ui.i18n.LocalStrings
 
-/**
- * Avatar, app name and the signed-in nickname, shown on every bottom-bar destination so the
- * identity you are acting as never leaves the screen.
- */
 @Composable
 fun HomeIdentityHeader(
     container: AppContainer,
@@ -34,7 +31,7 @@ fun HomeIdentityHeader(
     val torInfo by remember {
         container.transports.get(TransportType.TOR)?.info ?: MutableStateFlow(null)
     }.collectAsState()
-    val torRunning = torInfo?.running == true
+    val onionState = onionStateOf(rememberNetworkOnline(), torInfo)
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Avatar(
             name = owner.nickname,
@@ -55,8 +52,8 @@ fun HomeIdentityHeader(
                 )
                 Spacer(Modifier.width(6.dp))
                 OnionIndicator(
-                    active = torRunning,
-                    contentDescription = if (torRunning) strings.torActiveLabel else strings.torInactiveLabel,
+                    state = onionState,
+                    contentDescription = onionStateLabel(onionState),
                     size = 14.dp
                 )
             }

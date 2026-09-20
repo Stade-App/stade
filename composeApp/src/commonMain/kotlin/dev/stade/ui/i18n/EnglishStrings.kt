@@ -79,8 +79,10 @@ object EnglishStrings : AppStrings() {
     override val archiveSettingsTitle = "Archive settings"
     override val torConnectingTitle = "Building Tor circuit"
     override val torSetupComplete = "Setup complete, Tor is active"
-    override val torActiveLabel = "Tor is active"
-    override val torInactiveLabel = "Tor is not connected"
+    override val torStatusOffline = "No internet connection"
+    override val torStatusConnecting = "Connecting to Tor"
+    override val torStatusConnected = "Connected to Tor"
+    override val torStatusFailed = "Tor could not connect"
     override val archiveNoticeBanner = "These chats stay archived when new messages are received. Tap to change."
     override val archiveNoticeUnarchiveBanner = "These chats move back to your inbox when new messages are received. Tap to change."
     override val keepChatsArchivedTitle = "Keep chats archived"
@@ -347,7 +349,7 @@ object EnglishStrings : AppStrings() {
     override val duressPinInfoTitle = "How the duress PIN works"
     override val duressPinInfoBody =
         "Enter this PIN on the lock screen instead of your real one and Stade immediately erases " +
-        "everything on this device \u2014 your identity, contacts, messages, groups and Stadiums. " +
+        "everything on this device — your identity, contacts, messages, groups and Stadiums. " +
         "The app then looks exactly like a fresh install, with no sign a duress PIN was used. " +
         "There is no warning, no confirmation, and nothing can be recovered afterwards. " +
         "Your contacts are not notified."
@@ -693,7 +695,7 @@ object EnglishStrings : AppStrings() {
     override val padRefresh = "Refresh"
     override val padEmpty = "Nothing here yet."
     override val padRetry = "Try again"
-    override val padDownloading = "Downloading\u2026"
+    override val padDownloading = "Downloading…"
     override val padSendFailed = "That one could not be sent."
     override val padSoundTag = "PADDY"
     override val padMemeTag = "MEMEPAD"

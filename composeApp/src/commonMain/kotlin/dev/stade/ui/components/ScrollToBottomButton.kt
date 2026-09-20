@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -26,7 +25,7 @@ import kotlinx.coroutines.launch
 fun ScrollToBottomButton(listState: LazyListState, modifier: Modifier = Modifier) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
-    val visible by remember(listState) { derivedStateOf { listState.canScrollForward } }
+    val visible by remember(listState) { derivedStateOf { listState.canScrollBackward } }
 
     AnimatedVisibility(
         visible = visible,
@@ -36,13 +35,7 @@ fun ScrollToBottomButton(listState: LazyListState, modifier: Modifier = Modifier
     ) {
         SmallFloatingActionButton(
             onClick = {
-                scope.launch {
-                    val lastIndex = (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
-                    listState.animateScrollToItem(lastIndex)
-                    if (listState.canScrollForward) {
-                        listState.animateScrollBy(listState.layoutInfo.viewportSize.height.toFloat())
-                    }
-                }
+                scope.launch { listState.animateScrollToItem(0) }
             },
             shape = CircleShape,
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,

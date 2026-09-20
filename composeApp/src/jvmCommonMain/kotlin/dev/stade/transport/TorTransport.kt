@@ -65,7 +65,7 @@ class TorTransport(
                         )
                     }
                     is TorStatus.Failed -> {
-                        state.value = TransportInfo(type, "Tor", available = false, running = false, message = "failed to start: ${st.reason}")
+                        state.value = TransportInfo(type, "Tor", available = false, running = false, message = "failed to start: ${st.reason}", failed = true)
                     }
                     is TorStatus.Ready -> {
                         if (st.published && !onionPublished) {
@@ -102,7 +102,7 @@ class TorTransport(
         val bridgeConfig = parseBridgeConfig(configProvider())
         val ready = runCatching { embedded!!.ensureReady(boundPort, bridgeConfig) }.getOrElse { err ->
             runCatching { preBoundServer?.close() }
-            state.value = TransportInfo(type, "Tor", available = false, running = false, message = "failed to start: ${err.message ?: err::class.simpleName}")
+            state.value = TransportInfo(type, "Tor", available = false, running = false, message = "failed to start: ${err.message ?: err::class.simpleName}", failed = true)
             return
         }
         mutex.withLock {

@@ -4,33 +4,34 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.withFrameNanos
 
-private const val BOTTOM_ANCHOR = 100_000
-
-/** How long a jumped-to message stays highlighted. */
 const val HIGHLIGHT_FLASH_MS = 1500L
 
 suspend fun LazyListState.jumpToChatBottom(lastIndex: Int) {
     if (lastIndex < 0) return
-    scrollToItem(lastIndex, BOTTOM_ANCHOR)
-    withFrameNanos { }
-    scrollToItem(lastIndex, BOTTOM_ANCHOR)
+    scrollToItem(0)
 }
 
 suspend fun LazyListState.animateToChatBottom(lastIndex: Int) {
     if (lastIndex < 0) return
-    animateScrollToItem(lastIndex, BOTTOM_ANCHOR)
+    animateScrollToItem(0)
 }
 
-suspend fun LazyListState.centerOnItem(index: Int) {
-    if (index < 0) return
+suspend fun LazyListState.centerOnChatMessage(
+    chronologicalIndex: Int,
+    messageCount: Int,
+    leadingItems: Int = 0
+) {
+    if (chronologicalIndex < 0 || chronologicalIndex >= messageCount) return
+    val target = leadingItems + (messageCount - 1 - chronologicalIndex)
     runCatching {
-        scrollToItem(index)
+        scrollToItem(target)
         withFrameNanos { }
         val info = layoutInfo
-        val item = info.visibleItemsInfo.firstOrNull { it.index == index }
+        val item = info.visibleItemsInfo.firstOrNull { it.index == target }
             ?: return@runCatching
         val viewport = info.viewportEndOffset - info.viewportStartOffset
         val centered = ((viewport - item.size) / 2f).coerceAtLeast(0f)
-        if (centered > 0f) animateScrollBy(-centered)
+        val delta = item.offset - centered
+        if (delta != 0f) animateScrollBy(delta)
     }
 }

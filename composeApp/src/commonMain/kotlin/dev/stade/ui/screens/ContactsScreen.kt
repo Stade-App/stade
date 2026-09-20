@@ -36,6 +36,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import dev.stade.ui.components.OnionIndicator
+import dev.stade.ui.components.onionStateLabel
+import dev.stade.ui.components.onionStateOf
+import dev.stade.ui.rememberNetworkOnline
 import dev.stade.ui.components.LocalHomeBarClearance
 import dev.stade.stadium.isOfficial
 import dev.stade.ui.components.Avatar
@@ -316,6 +319,7 @@ fun ContactsScreen(
         container.transports.get(TransportType.TOR)?.info ?: MutableStateFlow(null)
     }.collectAsState()
     val torRunning = torInfo?.running == true
+    val onionState = onionStateOf(rememberNetworkOnline(), torInfo)
     var torCardShown by remember { mutableStateOf(false) }
     var torLastPercent by remember { mutableStateOf(0) }
     var torLastPhase by remember { mutableStateOf("") }
@@ -791,12 +795,8 @@ fun ContactsScreen(
                                         )
                                         Spacer(Modifier.width(6.dp))
                                         OnionIndicator(
-                                            active = torRunning,
-                                            contentDescription = if (torRunning) {
-                                                strings.torActiveLabel
-                                            } else {
-                                                strings.torInactiveLabel
-                                            },
+                                            state = onionState,
+                                            contentDescription = onionStateLabel(onionState),
                                             size = 14.dp
                                         )
                                     }

@@ -109,7 +109,6 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
@@ -130,7 +129,7 @@ import dev.stade.group.GroupMessage
 import dev.stade.identity.LocalIdentity
 import dev.stade.ui.components.LinkifiedText
 import dev.stade.ui.components.HIGHLIGHT_FLASH_MS
-import dev.stade.ui.components.centerOnItem
+import dev.stade.ui.components.centerOnChatMessage
 import dev.stade.ui.components.animateToChatBottom
 import dev.stade.ui.components.jumpToChatBottom
 import dev.stade.message.DraftScope
@@ -359,7 +358,7 @@ fun GroupChatScreen(
         val index = messages.indexOfFirst { it.id == messageId }
         if (index < 0) return
         scope.launch {
-            listState.centerOnItem(index)
+            listState.centerOnChatMessage(index, messages.size)
             flashedMessageId = messageId
             delay(HIGHLIGHT_FLASH_MS)
             flashedMessageId = null
@@ -369,7 +368,7 @@ fun GroupChatScreen(
         val target = highlightMessageId ?: return@LaunchedEffect
         val index = messages.indexOfFirst { it.id == target }
         if (index >= 0) {
-            listState.centerOnItem(index)
+            listState.centerOnChatMessage(index, messages.size)
             flashedMessageId = target
             delay(1500L)
             flashedMessageId = null
@@ -455,7 +454,6 @@ fun GroupChatScreen(
 
     var replyTarget by remember { mutableStateOf<GroupMessage?>(null) }
 
-    var prevColumnHeight by remember { mutableStateOf(Int.MAX_VALUE) }
 
     if (showAddMembersDialog && group != null) {
         val currentMembers = remember(showAddMembersDialog) {
@@ -863,16 +861,11 @@ fun GroupChatScreen(
                     }
                 } else {
                     val messagesById = remember(messages) { messages.associateBy { it.id } }
+                    val displayMessages = remember(messages) { messages.asReversed() }
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            .onSizeChanged { size ->
-                                if (size.height < prevColumnHeight && messages.isNotEmpty()) {
-                                    scope.launch { listState.animateToChatBottom(messages.lastIndex) }
-                                }
-                                prevColumnHeight = size.height
-                            }
                     ) {
                         CompositionLocalProvider(LocalStarredIds provides starredIds) {
                             LazyColumn(
@@ -882,9 +875,11 @@ fun GroupChatScreen(
                                     .padding(horizontal = 8.dp)
                                     .alpha(if (scrollReady) 1f else 0f),
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
-                                contentPadding = PaddingValues(vertical = 12.dp)
+                                contentPadding = PaddingValues(vertical = 12.dp),
+                                reverseLayout = true
                             ) {
-                                itemsIndexed(messages, key = { _, msg -> msg.id }) { idx, msg ->
+                                itemsIndexed(displayMessages, key = { _, msg -> msg.id }) { displayIdx, msg ->
+                                    val idx = messages.lastIndex - displayIdx
                                     val isNewMessage = remember(msg.id) { messageEntrance.isNew(msg.id) }
                                     Box(messageEntranceModifier(isNewMessage, msg.isOwn)) {
                                         val prev = messages.getOrNull(idx - 1)

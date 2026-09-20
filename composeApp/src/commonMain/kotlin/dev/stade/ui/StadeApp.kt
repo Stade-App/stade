@@ -77,6 +77,8 @@ import dev.stade.ui.components.LocalHomeBarClearance
 import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import dev.stade.ui.theme.StadeTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import kotlinx.coroutines.Dispatchers
@@ -290,6 +292,7 @@ private fun UnlockedApp(
     var identity by remember { mutableStateOf<LocalIdentity?>(null) }
     var screen by remember { mutableStateOf<Screen>(Screen.Onboarding) }
     var barIntroPlayed by remember { mutableStateOf(false) }
+    var measuredBarHeight by remember { mutableStateOf(HOME_BAR_HEIGHT) }
     val settingsListState = rememberLazyListState()
 
     val isInForeground by container.isAppInForeground.collectAsState()
@@ -482,6 +485,7 @@ private fun UnlockedApp(
             }
         }
 
+        val density = LocalDensity.current
         Box(
             Modifier
                 .fillMaxSize()
@@ -517,7 +521,7 @@ private fun UnlockedApp(
             ) { target ->
                 val pageBarClearance =
                     if (!showTwoPanel && identity != null && homeBarDestination(target) != null) {
-                        HOME_BAR_HEIGHT
+                        measuredBarHeight
                     } else {
                         0.dp
                     }
@@ -767,7 +771,12 @@ private fun UnlockedApp(
                     selected = barDestination ?: lastBarDestination,
                     playIntro = !barIntroPlayed,
                     onIntroFinished = { barIntroPlayed = true },
-                    modifier = Modifier.navigationBarsPadding()
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .onSizeChanged { size ->
+                            val height = with(density) { size.height.toDp() }
+                            if (height > 0.dp) measuredBarHeight = height
+                        }
                 )
             }
         }
@@ -789,7 +798,6 @@ private fun UnlockedApp(
     }
 }
 
-/** Position of a tab in the bottom bar, used to slide pages the way the tabs are laid out. */
 private fun homeTabIndex(screen: Screen): Int? = when (screen) {
     Screen.Contacts -> 0
     Screen.AddContact -> 1

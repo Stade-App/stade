@@ -15,11 +15,6 @@ import androidx.compose.ui.unit.dp
 private const val ENTRANCE_MS = 280
 private val EntranceEasing = CubicBezierEasing(0.18f, 0.9f, 0.22f, 1f)
 
-/**
- * Remembers which messages have already been on screen, so only messages that genuinely
- * arrive while the chat is open animate in. Everything present when the chat opened, and
- * anything merely scrolled back into view, is treated as already seen.
- */
 @Stable
 class MessageEntrance {
     private var primed = false
