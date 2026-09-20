@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.stade.ui.components.HomeIdentityHeader
 import dev.stade.ui.components.LocalHomeBarClearance
 import dev.stade.AppContainer
 import dev.stade.identity.LocalIdentity
@@ -44,14 +45,9 @@ fun CreateStadiumScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(strings.createStadiumTitle) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = strings.back)
-                    }
-                },
+                title = { HomeIdentityHeader(container = container, owner = owner) },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     navigationIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )

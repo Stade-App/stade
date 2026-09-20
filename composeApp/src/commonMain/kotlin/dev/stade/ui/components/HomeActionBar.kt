@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Link
@@ -91,10 +92,11 @@ private fun overshoot(t: Float, tension: Float = ITEM_POP_TENSION): Float {
     return 1f + c3 * u * u * u + tension * u * u
 }
 
-enum class HomeDestination { NONE, CONTACT, GROUP, STADIUM, RADAR }
+enum class HomeDestination { NONE, CHATS, CONTACT, GROUP, STADIUM, RADAR }
 
 @Composable
 fun HomeActionBar(
+    onOpenChats: () -> Unit,
     onAddContact: () -> Unit,
     onCreateGroup: () -> Unit,
     onCreateStadium: () -> Unit,
@@ -110,6 +112,7 @@ fun HomeActionBar(
 
     val order = remember(onOpenRadar != null) {
         buildList {
+            add(HomeDestination.CHATS)
             add(HomeDestination.CONTACT)
             add(HomeDestination.GROUP)
             add(HomeDestination.STADIUM)
@@ -198,11 +201,19 @@ fun HomeActionBar(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     HomeAction(
+                        icon = Icons.AutoMirrored.Filled.Chat,
+                        label = strings.navChats,
+                        onClick = onOpenChats,
+                        selected = selected == HomeDestination.CHATS,
+                        appear = itemAppear(0, order.size, revealed),
+                        modifier = Modifier.weight(1f)
+                    )
+                    HomeAction(
                         icon = Icons.Default.PersonAdd,
                         label = strings.navContact,
                         onClick = onAddContact,
                         selected = selected == HomeDestination.CONTACT,
-                        appear = itemAppear(0, order.size, revealed),
+                        appear = itemAppear(1, order.size, revealed),
                         modifier = Modifier.weight(1f)
                     )
                     HomeAction(
@@ -210,7 +221,7 @@ fun HomeActionBar(
                         label = strings.navGroup,
                         onClick = onCreateGroup,
                         selected = selected == HomeDestination.GROUP,
-                        appear = itemAppear(1, order.size, revealed),
+                        appear = itemAppear(2, order.size, revealed),
                         modifier = Modifier.weight(1f)
                     )
                     Box(modifier = Modifier.weight(1f)) {
@@ -219,7 +230,7 @@ fun HomeActionBar(
                             label = strings.navStadium,
                             onClick = { stadiumMenuOpen = true },
                             selected = selected == HomeDestination.STADIUM,
-                            appear = itemAppear(2, order.size, revealed),
+                            appear = itemAppear(3, order.size, revealed),
                             modifier = Modifier.fillMaxWidth()
                         )
                         DropdownMenu(
@@ -251,7 +262,7 @@ fun HomeActionBar(
                             label = strings.navRadar,
                             onClick = onOpenRadar,
                             selected = selected == HomeDestination.RADAR,
-                            appear = itemAppear(3, order.size, revealed),
+                            appear = itemAppear(4, order.size, revealed),
                             modifier = Modifier.weight(1f)
                         )
                     }

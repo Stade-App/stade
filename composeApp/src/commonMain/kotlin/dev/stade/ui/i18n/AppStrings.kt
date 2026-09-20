@@ -71,6 +71,9 @@ abstract class AppStrings {
     abstract val archivedChatsTitle: String
     abstract val archiveSettingsTitle: String
     abstract val torConnectingTitle: String
+    abstract val torSetupComplete: String
+    abstract val torActiveLabel: String
+    abstract val torInactiveLabel: String
     abstract val archiveNoticeBanner: String
     abstract val archiveNoticeUnarchiveBanner: String
     abstract val keepChatsArchivedTitle: String
@@ -590,6 +593,7 @@ abstract class AppStrings {
     abstract val radarGhostBody: String
     abstract val radarGhostActive: String
     abstract val navContact: String
+    abstract val navChats: String
     abstract val navGroup: String
     abstract val navStadium: String
     abstract val navRadar: String

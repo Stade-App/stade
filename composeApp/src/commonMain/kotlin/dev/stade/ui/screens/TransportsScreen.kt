@@ -37,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.MutableStateFlow
+import dev.stade.ui.components.TorBootstrapCard
 import dev.stade.AppContainer
 import dev.stade.transport.TransportType
 import dev.stade.transport.isTorBuiltIn
@@ -78,12 +80,25 @@ fun TransportsScreen(container: AppContainer, onBack: () -> Unit) {
         }
     ) { padding ->
         val listState = rememberLazyListState()
+        val torInfo by remember {
+            container.transports.get(TransportType.TOR)?.info ?: MutableStateFlow(null)
+        }.collectAsState()
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(16.dp),
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                val bootstrapping = torInfo?.takeIf { it.bootstrapPercent != null && !it.running }
+                if (bootstrapping != null) {
+                    item(key = "torBootstrapProgress") {
+                        TorBootstrapCard(
+                            percent = bootstrapping.bootstrapPercent ?: 0,
+                            phase = bootstrapping.bootstrapPhase,
+                            modifier = Modifier.padding(horizontal = 0.dp)
+                        )
+                    }
+                }
                 items(configs, key = { it.type.name }) { cfg ->
                     val plugin = container.transports.get(cfg.type)
                     val info by (plugin?.info?.collectAsState(initial = null) ?: remember { mutableStateOf(null) })

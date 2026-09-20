@@ -486,7 +486,6 @@ private fun UnlockedApp(
             Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
-                .navigationBarsPadding()
                 .clipToBounds()
         ) {
             AnimatedContent(
@@ -494,7 +493,13 @@ private fun UnlockedApp(
                 modifier = Modifier.fillMaxSize(),
                 contentKey = { screenKey(it) },
                 transitionSpec = {
-                    val forward = screenDepth(targetState) >= screenDepth(initialState)
+                    val fromTab = homeTabIndex(initialState)
+                    val toTab = homeTabIndex(targetState)
+                    val forward = if (fromTab != null && toTab != null) {
+                        toTab > fromTab
+                    } else {
+                        screenDepth(targetState) >= screenDepth(initialState)
+                    }
                     val enterSlide = tween<IntOffset>(NAV_SLIDE_MS, easing = NavEnterEasing)
                     val exitSlide = tween<IntOffset>(NAV_SLIDE_MS, easing = NavExitEasing)
                     val enterFade = tween<Float>(NAV_FADE_MS, easing = LinearEasing)
@@ -753,6 +758,7 @@ private fun UnlockedApp(
                 exit = slideOutVertically(tween(NAV_SLIDE_MS, easing = NavExitEasing)) { it }
             ) {
                 HomeActionBar(
+                    onOpenChats = { screen = Screen.Contacts },
                     onAddContact = { screen = Screen.AddContact },
                     onCreateGroup = { screen = Screen.CreateGroup },
                     onCreateStadium = { screen = Screen.CreateStadium },
@@ -760,7 +766,8 @@ private fun UnlockedApp(
                     onOpenRadar = if (isRadarSupported) ({ screen = Screen.Radar }) else null,
                     selected = barDestination ?: lastBarDestination,
                     playIntro = !barIntroPlayed,
-                    onIntroFinished = { barIntroPlayed = true }
+                    onIntroFinished = { barIntroPlayed = true },
+                    modifier = Modifier.navigationBarsPadding()
                 )
             }
         }
@@ -782,8 +789,18 @@ private fun UnlockedApp(
     }
 }
 
+/** Position of a tab in the bottom bar, used to slide pages the way the tabs are laid out. */
+private fun homeTabIndex(screen: Screen): Int? = when (screen) {
+    Screen.Contacts -> 0
+    Screen.AddContact -> 1
+    Screen.CreateGroup -> 2
+    Screen.CreateStadium, Screen.JoinStadium -> 3
+    Screen.Radar -> 4
+    else -> null
+}
+
 private fun homeBarDestination(screen: Screen): HomeDestination? = when (screen) {
-    Screen.Contacts, Screen.Archived, Screen.Starred -> HomeDestination.NONE
+    Screen.Contacts, Screen.Archived, Screen.Starred -> HomeDestination.CHATS
     Screen.AddContact -> HomeDestination.CONTACT
     Screen.CreateGroup -> HomeDestination.GROUP
     Screen.CreateStadium, Screen.JoinStadium -> HomeDestination.STADIUM

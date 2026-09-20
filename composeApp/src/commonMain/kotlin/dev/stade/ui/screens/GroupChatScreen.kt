@@ -119,6 +119,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import dev.stade.ui.components.rememberAttachmentBytes
 import dev.stade.AppContainer
 import dev.stade.audio.MIN_VOICE_DURATION_MS
 import dev.stade.audio.RecordedClip
@@ -128,6 +129,7 @@ import dev.stade.audio.rememberAudioRecorder
 import dev.stade.group.GroupMessage
 import dev.stade.identity.LocalIdentity
 import dev.stade.ui.components.LinkifiedText
+import dev.stade.ui.components.HIGHLIGHT_FLASH_MS
 import dev.stade.ui.components.centerOnItem
 import dev.stade.ui.components.animateToChatBottom
 import dev.stade.ui.components.jumpToChatBottom
@@ -352,6 +354,17 @@ fun GroupChatScreen(
     }
 
     var flashedMessageId by remember { mutableStateOf<String?>(null) }
+
+    fun jumpToMessage(messageId: String) {
+        val index = messages.indexOfFirst { it.id == messageId }
+        if (index < 0) return
+        scope.launch {
+            listState.centerOnItem(index)
+            flashedMessageId = messageId
+            delay(HIGHLIGHT_FLASH_MS)
+            flashedMessageId = null
+        }
+    }
     LaunchedEffect(highlightMessageId, messages.size) {
         val target = highlightMessageId ?: return@LaunchedEffect
         val index = messages.indexOfFirst { it.id == target }
@@ -898,8 +911,7 @@ fun GroupChatScreen(
                                                         senderLabel = quotedSenderName,
                                                         snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage)
                                                     ) {
-                                                        val target = messages.indexOfFirst { it.id == quotedMsg.id }
-                                                        if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
+                                                        jumpToMessage(quotedMsg.id)
                                                     }
                                                 }
                                                 else -> GroupReplyQuoteInfo(
@@ -953,7 +965,7 @@ fun GroupChatScreen(
                                                 PadSoundMessage(
                                                     label = msg.padLabel,
                                                     durationMs = msg.padDurationMs,
-                                                    bytes = msg.padSoundBytes(),
+                                                    bytes = rememberAttachmentBytes(msg.id) { msg.padSoundBytes() },
                                                     outgoing = msg.isOwn,
                                                     senderName = senderName,
                                                     showSender = !msg.isOwn && !tight,
@@ -965,7 +977,7 @@ fun GroupChatScreen(
                                                     messageId = msg.id,
                                                     label = msg.padLabel,
                                                     durationMs = msg.padDurationMs,
-                                                    bytes = msg.memeClipBytes(),
+                                                    bytes = rememberAttachmentBytes(msg.id) { msg.memeClipBytes() },
                                                     outgoing = msg.isOwn,
                                                     senderName = senderName,
                                                     showSender = !msg.isOwn && !tight,

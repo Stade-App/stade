@@ -6,6 +6,9 @@ import androidx.compose.runtime.withFrameNanos
 
 private const val BOTTOM_ANCHOR = 100_000
 
+/** How long a jumped-to message stays highlighted. */
+const val HIGHLIGHT_FLASH_MS = 1500L
+
 suspend fun LazyListState.jumpToChatBottom(lastIndex: Int) {
     if (lastIndex < 0) return
     scrollToItem(lastIndex, BOTTOM_ANCHOR)

@@ -685,6 +685,7 @@ fun TwoPanelLayout(
                             onAddContact = { right = PanelRight.AddContact },
                             onCreateGroup = { right = PanelRight.CreateGroup },
                             onCreateStadium = { right = PanelRight.CreateStadium },
+                            onOpenChats = { right = PanelRight.Empty },
                             onJoinStadium = { right = PanelRight.JoinStadium },
                             onOpenRadar = if (isRadarSupported) ({ right = PanelRight.Radar }) else null,
                             modifier = Modifier.align(Alignment.BottomCenter)

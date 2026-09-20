@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import dev.stade.ui.components.OnionIndicator
 import dev.stade.ui.components.LocalHomeBarClearance
 import dev.stade.stadium.isOfficial
 import dev.stade.ui.components.Avatar
@@ -314,6 +315,19 @@ fun ContactsScreen(
     val torInfo by remember {
         container.transports.get(TransportType.TOR)?.info ?: MutableStateFlow(null)
     }.collectAsState()
+    val torRunning = torInfo?.running == true
+    var torCardShown by remember { mutableStateOf(false) }
+    var torLastPercent by remember { mutableStateOf(0) }
+    var torLastPhase by remember { mutableStateOf("") }
+    LaunchedEffect(torInfo) {
+        val info = torInfo ?: return@LaunchedEffect
+        val pct = info.bootstrapPercent
+        if (pct != null && !info.running) {
+            torCardShown = true
+            torLastPercent = pct
+            torLastPhase = info.bootstrapPhase
+        }
+    }
     var starIntroRunning by remember { mutableStateOf(starIntroPending(container.db)) }
     var starPlaced by remember { mutableStateOf(!starIntroRunning) }
     val autoUnarchive by remember { container.archivedChats.observeAutoUnarchive() }
@@ -769,11 +783,23 @@ fun ContactsScreen(
                                         strings.appTitle,
                                         style = MaterialTheme.typography.titleMedium
                                     )
-                                    Text(
-                                        owner.nickname,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            owner.nickname,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        OnionIndicator(
+                                            active = torRunning,
+                                            contentDescription = if (torRunning) {
+                                                strings.torActiveLabel
+                                            } else {
+                                                strings.torInactiveLabel
+                                            },
+                                            size = 14.dp
+                                        )
+                                    }
                                 }
                             }
 
@@ -829,11 +855,13 @@ fun ContactsScreen(
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().padding(padding)) {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    torInfo?.takeIf { it.bootstrapPercent != null && !it.running }?.let { boot ->
+                    if (torCardShown) {
                     item(key = "torBootstrap") {
                         TorBootstrapCard(
-                            percent = boot.bootstrapPercent ?: 0,
-                            phase = boot.bootstrapPhase
+                            percent = torLastPercent,
+                            phase = torLastPhase,
+                            complete = torRunning,
+                            onDismissed = { torCardShown = false }
                         )
                     }
                 }

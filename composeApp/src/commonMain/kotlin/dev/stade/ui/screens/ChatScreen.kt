@@ -134,6 +134,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import dev.stade.ui.components.rememberAttachmentBytes
 import dev.stade.AppContainer
 import dev.stade.audio.MIN_VOICE_DURATION_MS
 import dev.stade.audio.RecordedClip
@@ -180,6 +181,7 @@ import dev.stade.ui.components.VanishDurationSheet
 import dev.stade.ui.components.PadMode
 import dev.stade.ui.components.PadSoundBubble
 import dev.stade.ui.components.LinkifiedText
+import dev.stade.ui.components.HIGHLIGHT_FLASH_MS
 import dev.stade.ui.components.centerOnItem
 import dev.stade.ui.components.animateToChatBottom
 import dev.stade.ui.components.jumpToChatBottom
@@ -476,6 +478,17 @@ fun ChatScreen(
     }
 
     var flashedMessageId by remember { mutableStateOf<String?>(null) }
+
+    fun jumpToMessage(messageId: String) {
+        val index = messages.indexOfFirst { it.id == messageId }
+        if (index < 0) return
+        scope.launch {
+            listState.centerOnItem(index)
+            flashedMessageId = messageId
+            delay(HIGHLIGHT_FLASH_MS)
+            flashedMessageId = null
+        }
+    }
     LaunchedEffect(highlightMessageId, messages.size) {
         val target = highlightMessageId ?: return@LaunchedEffect
         val index = messages.indexOfFirst { it.id == target }
@@ -1036,8 +1049,7 @@ fun ChatScreen(
                                                     senderLabel = if (quotedMsg.direction == MessageDirection.OUT) strings.youLabel else (contact?.nickname ?: ""),
                                                     snippet = previewBody(quotedMsg.displayBody, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage)
                                                 ) {
-                                                    val target = messages.indexOfFirst { it.id == quotedMsg.id }
-                                                    if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
+                                                    jumpToMessage(quotedMsg.id)
                                                 }
                                                 else -> ReplyQuoteInfo(
                                                     senderLabel = "",
@@ -1088,7 +1100,7 @@ fun ChatScreen(
                                                 PadSoundMessage(
                                                     label = msg.padLabel,
                                                     durationMs = msg.padDurationMs,
-                                                    bytes = msg.padSoundBytes(),
+                                                    bytes = rememberAttachmentBytes(msg.id) { msg.padSoundBytes() },
                                                     outgoing = msg.direction == MessageDirection.OUT,
                                                     delivered = if (msg.direction == MessageDirection.OUT) msg.delivered else null
                                                 )
@@ -1098,7 +1110,7 @@ fun ChatScreen(
                                                     messageId = msg.id,
                                                     label = msg.padLabel,
                                                     durationMs = msg.padDurationMs,
-                                                    bytes = msg.memeClipBytes(),
+                                                    bytes = rememberAttachmentBytes(msg.id) { msg.memeClipBytes() },
                                                     outgoing = msg.direction == MessageDirection.OUT,
                                                     delivered = if (msg.direction == MessageDirection.OUT) msg.delivered else null
                                                 )

@@ -3,6 +3,7 @@ package dev.stade.ui.components
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -90,6 +91,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import dev.stade.audio.RecordedClip
@@ -402,15 +404,22 @@ fun ChatComposerBar(
                             innerTextField()
                         }
                         Box {
+                            val plusRotation by animateFloatAsState(
+                                targetValue = if (plusOpen) 135f else 0f,
+                                animationSpec = tween(240, easing = FastOutSlowInEasing),
+                                label = "plusRotation"
+                            )
                             IconButton(
-                                onClick = { plusOpen = true },
+                                onClick = { plusOpen = !plusOpen },
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Icon(
                                     Icons.Default.Add,
                                     contentDescription = strings.padPlusAction,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(26.dp)
+                                    modifier = Modifier
+                                        .size(26.dp)
+                                        .graphicsLayer { rotationZ = plusRotation }
                                 )
                             }
                             DropdownMenu(

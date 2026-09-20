@@ -94,6 +94,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import dev.stade.ui.components.rememberAttachmentBytes
 import dev.stade.AppContainer
 import dev.stade.audio.MIN_VOICE_DURATION_MS
 import dev.stade.audio.RecordedClip
@@ -1350,7 +1351,7 @@ private fun StadiumTopBanner(
 private fun StadiumPadSoundBubble(msg: dev.stade.stadium.StadiumMessage) {
     val player = rememberAudioPlayer()
     var playing by remember(msg.id) { mutableStateOf(false) }
-    val bytes = msg.padSoundBytes()
+    val bytes = rememberAttachmentBytes(msg.id) { msg.padSoundBytes() }
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
         horizontalArrangement = if (msg.isOwn) Arrangement.End else Arrangement.Start
@@ -1375,7 +1376,7 @@ private fun StadiumPadSoundBubble(msg: dev.stade.stadium.StadiumMessage) {
 
 @Composable
 private fun StadiumMemeClipBubble(container: AppContainer, msg: dev.stade.stadium.StadiumMessage) {
-    val bytes = msg.memeClipBytes()
+    val bytes = rememberAttachmentBytes(msg.id) { msg.memeClipBytes() }
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
         horizontalArrangement = if (msg.isOwn) Arrangement.End else Arrangement.Start
