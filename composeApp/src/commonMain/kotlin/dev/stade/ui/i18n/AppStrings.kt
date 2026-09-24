@@ -171,6 +171,7 @@ abstract class AppStrings {
     abstract val vaultMetaUnreadable: String
     abstract val vaultKeyDerivationFailed: String
     abstract val vaultDekDecryptFailed: String
+    abstract val vaultDatabaseDecryptFailed: String
 
     abstract val notifConnectionChannelName: String
     abstract val notifConnectionChannelDesc: String
