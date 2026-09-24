@@ -151,24 +151,23 @@ class FileVault(private val rootDir: File) : Vault {
         } else meta
         writeMeta(finalMeta)
         cached = finalMeta
-        dek = decryptedDek
         if (plaintextDb.exists() && !isValidSqliteFile(plaintextDb)) {
-            runCatching { plaintextDb.delete() }
+            runCatching { secureDelete(plaintextDb) }
         }
         if (!plaintextDb.exists()) {
             if (encryptedDb.exists()) {
-                val ok = runCatching {
+                val restored = runCatching {
                     decryptFile(encryptedDb, plaintextDb, decryptedDek)
-                }.isSuccess
-                if (!ok) {
-                    runCatching { secureDelete(encryptedDb) }
+                    isValidSqliteFile(plaintextDb)
+                }.getOrDefault(false)
+                if (!restored) {
                     runCatching { if (plaintextDb.exists()) secureDelete(plaintextDb) }
-                } else if (plaintextDb.exists() && !isValidSqliteFile(plaintextDb)) {
-                    runCatching { plaintextDb.delete() }
-                    runCatching { secureDelete(encryptedDb) }
+                    zero(decryptedDek)
+                    return UnlockOutcome.Error(dev.stade.ui.i18n.I18n.current.vaultDatabaseDecryptFailed)
                 }
             }
         }
+        dek = decryptedDek
         unlocked = true
         syncSessionFile()
         return UnlockOutcome.Success

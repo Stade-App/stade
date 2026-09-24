@@ -187,6 +187,7 @@ object EnglishStrings : AppStrings() {
     override val vaultMetaUnreadable = "Could not read metadata"
     override val vaultKeyDerivationFailed = "Could not derive key"
     override val vaultDekDecryptFailed = "Could not decrypt key"
+    override val vaultDatabaseDecryptFailed = "Could not open vault. The file was not deleted."
 
     override val notifConnectionChannelName = "Connectivity"
     override val notifConnectionChannelDesc = "Stade keeps peer connections alive"

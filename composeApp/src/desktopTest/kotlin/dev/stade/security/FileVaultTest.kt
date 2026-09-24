@@ -2,6 +2,7 @@ package dev.stade.security
 
 import java.nio.file.Files
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -20,6 +21,53 @@ class FileVaultTest {
 
             assertFalse(plaintext.exists())
             assertTrue(root.resolve("stade.db.enc").toFile().exists())
+            assertFalse(vault.isUnlocked())
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun keepsEncryptedDatabaseWhenCiphertextCannotBeDecrypted() {
+        val root = Files.createTempDirectory("stade-vault-test")
+        try {
+            val vault = FileVault(root.toFile())
+            vault.setup("1234")
+            val plaintext = root.resolve("stade.db").toFile()
+            plaintext.writeText("SQLite format 3\u0000test data")
+            vault.flushAndClose()
+
+            val encrypted = root.resolve("stade.db.enc").toFile()
+            val corruptBytes = encrypted.readBytes().also {
+                it[it.lastIndex] = (it.last().toInt() xor 1).toByte()
+            }
+            encrypted.writeBytes(corruptBytes)
+
+            assertTrue(vault.unlock("1234") is UnlockOutcome.Error)
+            assertContentEquals(corruptBytes, encrypted.readBytes())
+            assertFalse(plaintext.exists())
+            assertFalse(vault.isUnlocked())
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun keepsEncryptedDatabaseWhenDecryptedContentIsNotSqlite() {
+        val root = Files.createTempDirectory("stade-vault-test")
+        try {
+            val vault = FileVault(root.toFile())
+            vault.setup("1234")
+            val plaintext = root.resolve("stade.db").toFile()
+            plaintext.writeText("bu bir SQLite veritabanı değil")
+            vault.flushAndClose()
+
+            val encrypted = root.resolve("stade.db.enc").toFile()
+            val encryptedBytes = encrypted.readBytes()
+
+            assertTrue(vault.unlock("1234") is UnlockOutcome.Error)
+            assertContentEquals(encryptedBytes, encrypted.readBytes())
+            assertFalse(plaintext.exists())
             assertFalse(vault.isUnlocked())
         } finally {
             root.toFile().deleteRecursively()
