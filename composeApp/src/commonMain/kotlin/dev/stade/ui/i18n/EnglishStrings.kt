@@ -27,6 +27,8 @@ object EnglishStrings : AppStrings() {
     override val vaultNotInitialized = "Vault not initialized"
     override val vaultLockFailedTitle = "Could not lock securely"
     override val vaultLockFailedBody = "Stade remains unlocked because it could not securely remove the local database. Try again after resolving the storage error."
+    override val databaseSchemaFailedTitle = "Could not open local database"
+    override val databaseSchemaFailedBody = "Stade left this database untouched to avoid losing data. Update the app and try again; if the problem continues, contact support while keeping the existing database."
     override fun wrongPinRemaining(remaining: Int) = "Wrong PIN ($remaining attempts left)"
     override val wrongPin = "Wrong PIN"
     override val wiping = "Wiping…"

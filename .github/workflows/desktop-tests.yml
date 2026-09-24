@@ -1,0 +1,27 @@
+name: Masaüstü Testleri
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: gradlew çalıştırma izni
+        run: chmod +x gradlew
+
+      - name: Masaüstü testlerini çalıştır
+        run: ./gradlew :composeApp:desktopTest --stacktrace

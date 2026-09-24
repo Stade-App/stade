@@ -24,6 +24,8 @@ abstract class AppStrings {
     abstract val vaultNotInitialized: String
     abstract val vaultLockFailedTitle: String
     abstract val vaultLockFailedBody: String
+    abstract val databaseSchemaFailedTitle: String
+    abstract val databaseSchemaFailedBody: String
     abstract fun wrongPinRemaining(remaining: Int): String
     abstract val wrongPin: String
     abstract val wiping: String

@@ -27,6 +27,8 @@ object TurkishStrings : AppStrings() {
     override val vaultNotInitialized = "Kasa başlatılmamış"
     override val vaultLockFailedTitle = "Güvenli şekilde kilitlenemedi"
     override val vaultLockFailedBody = "Stade, yerel veritabanını güvenle kaldıramadığı için kilit açık kaldı. Depolama hatasını çözdükten sonra tekrar deneyin."
+    override val databaseSchemaFailedTitle = "Yerel veritabanı açılamadı"
+    override val databaseSchemaFailedBody = "Stade, verileri silmemek için bu veritabanını açmadı. Uygulamayı güncelleyip tekrar deneyin; sorun sürerse mevcut veritabanını koruyarak destek alın."
     override fun wrongPinRemaining(remaining: Int) = "Şifre hatalı ($remaining hak kaldı)"
     override val wrongPin = "Şifre hatalı"
     override val wiping = "Siliniyor…"
