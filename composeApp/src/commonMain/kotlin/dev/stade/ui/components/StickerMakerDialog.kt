@@ -47,6 +47,7 @@ import dev.stade.media.isBackgroundRemovalSupported
 import dev.stade.media.removeImageBackground
 import dev.stade.media.rememberNavigationBarHeight
 import dev.stade.ui.decodeToImageBitmap
+import dev.stade.message.MAX_ATTACHMENT_BYTES
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.rememberMediaPickerLauncher
 import kotlinx.coroutines.Dispatchers
@@ -59,7 +60,8 @@ private enum class StickerMakerStep { Picking, Processing, Preview }
 @Composable
 fun StickerMakerDialog(
     onSave: (ByteArray) -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onTooLarge: () -> Unit = {}
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
@@ -77,6 +79,10 @@ fun StickerMakerDialog(
                 onCancel()
                 return@rememberMediaPickerLauncher
             }
+            if (isGifBytes(bytes)) {
+                if (bytes.size > MAX_ATTACHMENT_BYTES) onTooLarge() else onSave(bytes)
+                return@rememberMediaPickerLauncher
+            }
             originalBytes = bytes
             step = StickerMakerStep.Processing
             scope.launch {
@@ -89,7 +95,8 @@ fun StickerMakerDialog(
             }
         },
         onVideo = {},
-        imagesOnly = true
+        imagesOnly = true,
+        preserveAnimatedGif = true
     )
 
     LaunchedEffect(Unit) { picker.launch() }

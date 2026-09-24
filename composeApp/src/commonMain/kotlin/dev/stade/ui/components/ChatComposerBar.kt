@@ -38,7 +38,6 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.filled.BrokenImage
@@ -123,7 +122,6 @@ fun ChatComposerBar(
     onLongPressSend: (() -> Unit)? = null,
     onPickMedia: () -> Unit,
     onOpenPaddy: () -> Unit = {},
-    onOpenMemepad: () -> Unit = {},
     onToggleRecording: () -> Unit,
     onCancelRecording: () -> Unit = {},
     recordingElapsedMs: Long = 0L,
@@ -472,25 +470,6 @@ fun ChatComposerBar(
                                     onClick = {
                                         plusOpen = false
                                         onOpenPaddy()
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(strings.padMemepadTitle)
-                                            Text(
-                                                strings.padMemepadSubtitle,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Movie, contentDescription = null)
-                                    },
-                                    onClick = {
-                                        plusOpen = false
-                                        onOpenMemepad()
                                     }
                                 )
                             }

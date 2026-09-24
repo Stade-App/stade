@@ -45,7 +45,6 @@ import kotlin.math.abs
 import kotlin.math.sin
 
 private val PAD_ACCENT = Color(0xFFFF5C8A)
-private val MEME_ACCENT = Color(0xFF7C5CFF)
 
 @Composable
 fun PadSoundBubble(
@@ -114,61 +113,6 @@ fun PadSoundBubble(
             }
             Spacer(Modifier.width(8.dp))
             PadPulse(active = playing, tint = PAD_ACCENT)
-        }
-    }
-}
-
-@Composable
-fun MemeClipBubble(
-    label: String,
-    durationMs: Long,
-    modifier: Modifier = Modifier,
-    delivered: Boolean? = null,
-    content: @Composable () -> Unit
-) {
-    val strings = LocalStrings.current
-    Surface(
-        modifier = modifier.widthIn(max = 280.dp).clip(RoundedCornerShape(20.dp)),
-        shape = RoundedCornerShape(20.dp),
-        color = MEME_ACCENT.copy(alpha = 0.14f)
-    ) {
-        Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-            ) {
-                content()
-            }
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                PadTag(strings.padMemeTag, MEME_ACCENT)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    label.ifBlank { strings.padMemeTag },
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (durationMs > 0) {
-                    Text(
-                        formatPadDuration(durationMs),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (delivered != null) {
-                    Spacer(Modifier.width(6.dp))
-                    DeliveryStatusDots(
-                        delivered = delivered,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
         }
     }
 }

@@ -7,6 +7,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import dev.stade.ui.components.isGifBytes
 import java.io.ByteArrayOutputStream
 
 actual class MediaPickerLauncher(private val doLaunch: () -> Unit) {
@@ -17,7 +18,8 @@ actual class MediaPickerLauncher(private val doLaunch: () -> Unit) {
 actual fun rememberMediaPickerLauncher(
     onImages: (List<ByteArray>) -> Unit,
     onVideo: (ByteArray) -> Unit,
-    imagesOnly: Boolean
+    imagesOnly: Boolean,
+    preserveAnimatedGif: Boolean
 ): MediaPickerLauncher {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
@@ -36,8 +38,9 @@ actual fun rememberMediaPickerLauncher(
                 }
             } else {
                 runCatching {
-                    context.contentResolver.openInputStream(uri)?.readBytes()
-                        ?.let { compressImageForAttach(it) }
+                    context.contentResolver.openInputStream(uri)?.readBytes()?.let { raw ->
+                        if (preserveAnimatedGif && isGifBytes(raw)) raw else compressImageForAttach(raw)
+                    }
                 }.getOrNull()?.let { images.add(it) }
             }
         }

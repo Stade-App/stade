@@ -55,16 +55,6 @@ class ChatService(
     ): Message =
         send(owner, contact, encodePadBody(PAD_SOUND_BODY_PREFIX, bytes, name, durationMs), replyToId)
 
-    suspend fun sendMemeClip(
-        owner: LocalIdentity,
-        contact: Contact,
-        bytes: ByteArray,
-        name: String,
-        durationMs: Long,
-        replyToId: String? = null
-    ): Message =
-        send(owner, contact, encodePadBody(MEME_CLIP_BODY_PREFIX, bytes, name, durationMs), replyToId)
-
     suspend fun sendSticker(owner: LocalIdentity, contact: Contact, stickerBytes: ByteArray, replyToId: String? = null): Message {
         val body = encodeStickerBody(stickerBytes)
         return send(owner, contact, body, replyToId)

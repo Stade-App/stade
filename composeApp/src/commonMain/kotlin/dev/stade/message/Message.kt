@@ -5,7 +5,7 @@ import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 enum class MessageDirection { IN, OUT }
-enum class MessageType { TEXT, IMAGE, VOICE, VIDEO, STICKER, PAD_SOUND, MEME_CLIP }
+enum class MessageType { TEXT, IMAGE, VOICE, VIDEO, STICKER, PAD_SOUND, UNSUPPORTED }
 const val IMAGE_BODY_PREFIX = "STADE_IMG_V1:"
 const val VOICE_BODY_PREFIX = "STADE_VOI_V1:"
 const val VIDEO_BODY_PREFIX = "STADE_VID_V1:"
@@ -18,8 +18,11 @@ const val VANISH_TAG_PREFIX = "STADE_VTG_V1:"
 const val AVATAR_BODY_PREFIX = "STADE_AVT_V1:"
 const val TYPING_BODY_PREFIX = "STADE_TYP_V1:"
 const val PAD_SOUND_BODY_PREFIX = "STADE_PAD_V1:"
-const val MEME_CLIP_BODY_PREFIX = "STADE_MEM_V1:"
 const val MAX_PAD_NAME_LEN = 48
+
+val RETIRED_BODY_PREFIXES = listOf("STADE_MEM_V1:")
+
+fun isRetiredBody(body: String): Boolean = RETIRED_BODY_PREFIXES.any { body.startsWith(it) }
 
 const val MAX_ATTACHMENT_BYTES = 1800 * 1024
 private const val MAX_ATTACHMENT_BASE64_CHARS = ((MAX_ATTACHMENT_BYTES + 2) / 3) * 4
@@ -59,7 +62,7 @@ data class Message(
             effectiveBody.startsWith(VIDEO_BODY_PREFIX) -> MessageType.VIDEO
             effectiveBody.startsWith(STICKER_BODY_PREFIX) -> MessageType.STICKER
             effectiveBody.startsWith(PAD_SOUND_BODY_PREFIX) -> MessageType.PAD_SOUND
-            effectiveBody.startsWith(MEME_CLIP_BODY_PREFIX) -> MessageType.MEME_CLIP
+            isRetiredBody(effectiveBody) -> MessageType.UNSUPPORTED
             else -> MessageType.TEXT
         }
 
@@ -110,20 +113,15 @@ data class Message(
     fun padSoundBytes(): ByteArray? =
         if (type == MessageType.PAD_SOUND) parsePadBytes(effectiveBody, PAD_SOUND_BODY_PREFIX) else null
 
-    fun memeClipBytes(): ByteArray? =
-        if (type == MessageType.MEME_CLIP) parsePadBytes(effectiveBody, MEME_CLIP_BODY_PREFIX) else null
-
     val padLabel: String
         get() = when (type) {
             MessageType.PAD_SOUND -> parsePadName(effectiveBody, PAD_SOUND_BODY_PREFIX)
-            MessageType.MEME_CLIP -> parsePadName(effectiveBody, MEME_CLIP_BODY_PREFIX)
             else -> ""
         }
 
     val padDurationMs: Long
         get() = when (type) {
             MessageType.PAD_SOUND -> parsePadDurationMs(effectiveBody, PAD_SOUND_BODY_PREFIX)
-            MessageType.MEME_CLIP -> parsePadDurationMs(effectiveBody, MEME_CLIP_BODY_PREFIX)
             else -> 0L
         }
 }

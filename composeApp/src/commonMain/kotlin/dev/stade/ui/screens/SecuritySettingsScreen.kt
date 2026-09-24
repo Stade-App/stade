@@ -75,6 +75,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
 import dev.stade.security.SessionTimeout
+import dev.stade.security.getLockOnShutdownEnabled
+import dev.stade.security.isLockOnShutdownSupported
+import dev.stade.security.setLockOnShutdownEnabled
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import dev.stade.ui.components.PlatformVerticalScrollbar
 import dev.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.Dispatchers
@@ -123,6 +127,7 @@ private fun SecuritySettingsContent(
     var refreshTick by remember { mutableStateOf(0) }
     val scrambleEnabled = remember(refreshTick) { container.secrets.isScrambleKeypadEnabled() }
     val sessionTimeout = remember(refreshTick) { container.secrets.sessionTimeoutSeconds() }
+    val lockOnShutdown by getLockOnShutdownEnabled()
     val screenshotBlockingEnabled = remember(refreshTick) { container.secrets.isScreenshotBlockingEnabled() }
     val linkPreviewsEnabled = remember(refreshTick) { dev.stade.link.getLinkPreviewsEnabled(container.db) }
     var timeoutMenuOpen by remember { mutableStateOf(false) }
@@ -312,6 +317,16 @@ private fun SecuritySettingsContent(
                                     )
                                 }
                             }
+                        }
+                        if (isLockOnShutdownSupported) {
+                            SecuritySwitchRow(
+                                icon = Icons.Default.PowerSettingsNew,
+                                tint = MaterialTheme.colorScheme.primary,
+                                title = strings.lockOnShutdownTitle,
+                                subtitle = strings.lockOnShutdownSubtitle,
+                                checked = lockOnShutdown,
+                                onCheckedChange = { setLockOnShutdownEnabled(it) }
+                            )
                         }
                     }
                 }

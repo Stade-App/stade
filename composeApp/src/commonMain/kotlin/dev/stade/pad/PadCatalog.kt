@@ -10,8 +10,6 @@ object PadConfig {
     const val CATALOG_TTL_MS = 6L * 60 * 60 * 1000
     const val MAX_CATALOG_BYTES = 256 * 1024
     const val MAX_SOUND_BYTES = 4 * 1024 * 1024
-    const val MAX_MEME_BYTES = 1_500 * 1024
-    const val MAX_THUMB_BYTES = 128 * 1024
     const val FETCH_TIMEOUT_MS = 20_000L
     const val ASSET_TIMEOUT_MS = 90_000L
 }
@@ -24,9 +22,7 @@ data class PadAsset(
     val durationMs: Long = 0,
     val sizeBytes: Long = 0,
     val sha256: String = "",
-    val url: String = "",
-    val thumbUrl: String = "",
-    val thumbSha256: String = ""
+    val url: String = ""
 ) {
     val hasIntegrity: Boolean
         get() = id.isNotBlank() && name.isNotBlank() &&
@@ -36,10 +32,9 @@ data class PadAsset(
 @Serializable
 data class PadCatalog(
     val version: Int = 1,
-    val sounds: List<PadAsset> = emptyList(),
-    val memes: List<PadAsset> = emptyList()
+    val sounds: List<PadAsset> = emptyList()
 ) {
-    val isEmpty: Boolean get() = sounds.isEmpty() && memes.isEmpty()
+    val isEmpty: Boolean get() = sounds.isEmpty()
 }
 
 sealed interface PadLoadState {

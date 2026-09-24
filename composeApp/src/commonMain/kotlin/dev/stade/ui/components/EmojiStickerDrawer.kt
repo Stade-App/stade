@@ -43,7 +43,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import dev.stade.sticker.Sticker
 import dev.stade.emoji.CustomEmojiCatalog
-import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.ExperimentalResourceApi
@@ -165,9 +164,6 @@ fun EmojiStickerPanel(
                             }
                         }
                         items(stickers, key = { it.id }) { sticker ->
-                            val bitmap = remember(sticker.id) {
-                                runCatching { sticker.imageBytes.decodeToImageBitmap() }.getOrNull()
-                            }
                             Box(
                                 modifier = Modifier
                                     .padding(4.dp)
@@ -183,13 +179,11 @@ fun EmojiStickerPanel(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (bitmap != null) {
-                                    Image(
-                                        bitmap = bitmap,
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
+                                AnimatedImage(
+                                    bytes = sticker.imageBytes,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize()
+                                )
                             }
                         }
                     }

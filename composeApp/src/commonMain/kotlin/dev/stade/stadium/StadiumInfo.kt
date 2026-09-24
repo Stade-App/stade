@@ -3,7 +3,7 @@ package dev.stade.stadium
 import dev.stade.message.IMAGE_BODY_PREFIX
 import dev.stade.message.decodeInboundAttachment
 import dev.stade.message.MessageType
-import dev.stade.message.MEME_CLIP_BODY_PREFIX
+import dev.stade.message.isRetiredBody
 import dev.stade.message.PAD_SOUND_BODY_PREFIX
 import dev.stade.message.parsePadBytes
 import dev.stade.message.parsePadDurationMs
@@ -43,7 +43,7 @@ data class StadiumMessage(
             body.startsWith(VIDEO_BODY_PREFIX) -> MessageType.VIDEO
             body.startsWith(STICKER_BODY_PREFIX) -> MessageType.STICKER
             body.startsWith(PAD_SOUND_BODY_PREFIX) -> MessageType.PAD_SOUND
-            body.startsWith(MEME_CLIP_BODY_PREFIX) -> MessageType.MEME_CLIP
+            isRetiredBody(body) -> MessageType.UNSUPPORTED
             else -> MessageType.TEXT
         }
 
@@ -94,20 +94,15 @@ data class StadiumMessage(
     fun padSoundBytes(): ByteArray? =
         if (type == MessageType.PAD_SOUND) parsePadBytes(body, PAD_SOUND_BODY_PREFIX) else null
 
-    fun memeClipBytes(): ByteArray? =
-        if (type == MessageType.MEME_CLIP) parsePadBytes(body, MEME_CLIP_BODY_PREFIX) else null
-
     val padLabel: String
         get() = when (type) {
             MessageType.PAD_SOUND -> parsePadName(body, PAD_SOUND_BODY_PREFIX)
-            MessageType.MEME_CLIP -> parsePadName(body, MEME_CLIP_BODY_PREFIX)
             else -> ""
         }
 
     val padDurationMs: Long
         get() = when (type) {
             MessageType.PAD_SOUND -> parsePadDurationMs(body, PAD_SOUND_BODY_PREFIX)
-            MessageType.MEME_CLIP -> parsePadDurationMs(body, MEME_CLIP_BODY_PREFIX)
             else -> 0L
         }
 }

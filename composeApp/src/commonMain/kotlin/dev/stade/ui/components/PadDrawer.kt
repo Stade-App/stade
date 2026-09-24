@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.filled.Close
@@ -60,14 +59,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class PadMode { SOUNDS, MEMES }
-
 private enum class PadProblem { DOWNLOAD, FORMAT }
 
 @Composable
 fun PadPanel(
     container: AppContainer,
-    mode: PadMode,
     onDismiss: () -> Unit,
     onSend: (PadAsset, ByteArray) -> Unit
 ) {
@@ -111,19 +107,19 @@ fun PadPanel(
             }
             Spacer(Modifier.width(8.dp))
             Icon(
-                if (mode == PadMode.SOUNDS) Icons.Default.GraphicEq else Icons.Default.Movie,
+                Icons.Default.GraphicEq,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary
             )
             Spacer(Modifier.width(10.dp))
             Column {
                 Text(
-                    if (mode == PadMode.SOUNDS) strings.padPaddyTitle else strings.padMemepadTitle,
+                    strings.padPaddyTitle,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    if (mode == PadMode.SOUNDS) strings.padPaddySubtitle else strings.padMemepadSubtitle,
+                    strings.padPaddySubtitle,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -158,7 +154,7 @@ fun PadPanel(
             }
 
             is PadLoadState.Ready -> {
-                val items = if (mode == PadMode.SOUNDS) current.catalog.sounds else current.catalog.memes
+                val items = current.catalog.sounds
                 if (items.isEmpty()) {
                     PadMessage(strings.padEmpty) {
                         TextButton(onClick = { reloadKey++ }) { Text(strings.padRetry) }
@@ -168,13 +164,13 @@ fun PadPanel(
                         if (busyId == null) {
                             busyId = asset.id
                             scope.launch {
-                                val max = if (mode == PadMode.SOUNDS) {
+                                val bytes = fetchPadAsset(
+                                    container,
+                                    asset.url,
+                                    asset.sha256,
                                     PadConfig.MAX_SOUND_BYTES
-                                } else {
-                                    PadConfig.MAX_MEME_BYTES
-                                }
-                                val bytes = fetchPadAsset(container, asset.url, asset.sha256, max)
-                                val prepared = if (bytes != null && mode == PadMode.SOUNDS) {
+                                )
+                                val prepared = if (bytes != null) {
                                     withContext(Dispatchers.Default) { preparePadSound(bytes) }
                                 } else {
                                     null
@@ -182,7 +178,6 @@ fun PadPanel(
                                 busyId = null
                                 when {
                                     bytes == null -> problem = PadProblem.DOWNLOAD
-                                    mode != PadMode.SOUNDS -> onSend(asset, bytes)
                                     prepared != null -> {
                                         problem = null
                                         onSend(asset.copy(durationMs = prepared.durationMs), prepared.bytes)
@@ -192,11 +187,7 @@ fun PadPanel(
                             }
                         }
                     }
-                    if (mode == PadMode.SOUNDS) {
-                        SoundGrid(items, busyId, pick)
-                    } else {
-                        MemeList(items, busyId, pick)
-                    }
+                    SoundGrid(items, busyId, pick)
                 }
             }
         }
@@ -272,64 +263,6 @@ private fun SoundGrid(items: List<PadAsset>, busyId: String?, onPick: (PadAsset)
                             textAlign = TextAlign.Center,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        }
-    }
-    }
-}
-
-@Composable
-private fun MemeList(items: List<PadAsset>, busyId: String?, onPick: (PadAsset) -> Unit) {
-    LazyColumn(
-    modifier = Modifier.heightIn(max = 420.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-    items(items, key = { it.id }) { asset ->
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .clickable(enabled = busyId == null) { onPick(asset) },
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (busyId == asset.id) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        asset.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (asset.durationMs > 0) {
-                        Text(
-                            formatPadDuration(asset.durationMs),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

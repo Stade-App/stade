@@ -10,5 +10,6 @@ expect class MediaPickerLauncher {
 expect fun rememberMediaPickerLauncher(
     onImages: (List<ByteArray>) -> Unit,
     onVideo: (ByteArray) -> Unit,
-    imagesOnly: Boolean = false
+    imagesOnly: Boolean = false,
+    preserveAnimatedGif: Boolean = false
 ): MediaPickerLauncher

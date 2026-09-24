@@ -23,11 +23,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Podcasts
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -65,6 +65,7 @@ private val ITEM_PILL_RADIUS = 20.dp
 private val BAR_INNER_INSET = 8.dp
 private const val INDICATOR_ANIM_MS = 260
 private val BAR_MAX_WIDTH = 440.dp
+private val CREATE_BUTTON_SIZE = 46.dp
 
 val HOME_BAR_HEIGHT = 96.dp
 
@@ -91,7 +92,7 @@ private fun overshoot(t: Float, tension: Float = ITEM_POP_TENSION): Float {
     return 1f + c3 * u * u * u + tension * u * u
 }
 
-enum class HomeDestination { NONE, CHATS, CONTACT, GROUP, STADIUM, RADAR }
+enum class HomeDestination { NONE, CHATS, CREATE, RADAR }
 
 @Composable
 fun HomeActionBar(
@@ -107,14 +108,12 @@ fun HomeActionBar(
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
-    var stadiumMenuOpen by remember { mutableStateOf(false) }
+    var createMenuOpen by remember { mutableStateOf(false) }
 
     val order = remember(onOpenRadar != null) {
         buildList {
             add(HomeDestination.CHATS)
-            add(HomeDestination.CONTACT)
-            add(HomeDestination.GROUP)
-            add(HomeDestination.STADIUM)
+            add(HomeDestination.CREATE)
             if (onOpenRadar != null) add(HomeDestination.RADAR)
         }
     }
@@ -128,7 +127,7 @@ fun HomeActionBar(
         label = "pillIndex"
     )
     val pillAlpha by animateFloatAsState(
-        targetValue = if (selectedIndex >= 0) 1f else 0f,
+        targetValue = if (selectedIndex >= 0 && selected != HomeDestination.CREATE) 1f else 0f,
         animationSpec = tween(INDICATOR_ANIM_MS),
         label = "pillAlpha"
     )
@@ -206,41 +205,40 @@ fun HomeActionBar(
                         appear = itemAppear(0, order.size, revealed),
                         modifier = Modifier.weight(1f)
                     )
-                    HomeAction(
-                        icon = Icons.Default.PersonAdd,
-                        label = strings.navContact,
-                        onClick = onAddContact,
-                        selected = selected == HomeDestination.CONTACT,
-                        appear = itemAppear(1, order.size, revealed),
-                        modifier = Modifier.weight(1f)
-                    )
-                    HomeAction(
-                        icon = Icons.Default.GroupAdd,
-                        label = strings.navGroup,
-                        onClick = onCreateGroup,
-                        selected = selected == HomeDestination.GROUP,
-                        appear = itemAppear(2, order.size, revealed),
-                        modifier = Modifier.weight(1f)
-                    )
-                    Box(modifier = Modifier.weight(1f)) {
-                        HomeAction(
-                            icon = Icons.Default.Podcasts,
-                            label = strings.navStadium,
-                            onClick = { stadiumMenuOpen = true },
-                            selected = selected == HomeDestination.STADIUM,
-                            appear = itemAppear(3, order.size, revealed),
-                            modifier = Modifier.fillMaxWidth()
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        HomeCreateAction(
+                            label = strings.navCreateAction,
+                            selected = selected == HomeDestination.CREATE,
+                            expanded = createMenuOpen,
+                            appear = itemAppear(1, order.size, revealed),
+                            onClick = { createMenuOpen = true }
                         )
                         DropdownMenu(
-                            expanded = stadiumMenuOpen,
-                            onDismissRequest = { stadiumMenuOpen = false },
+                            expanded = createMenuOpen,
+                            onDismissRequest = { createMenuOpen = false },
                             offset = DpOffset(x = 0.dp, y = 8.dp)
                         ) {
+                            DropdownMenuItem(
+                                text = { Text(strings.addContactTitle) },
+                                leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null) },
+                                onClick = {
+                                    createMenuOpen = false
+                                    onAddContact()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(strings.createGroupTitle) },
+                                leadingIcon = { Icon(Icons.Default.GroupAdd, contentDescription = null) },
+                                onClick = {
+                                    createMenuOpen = false
+                                    onCreateGroup()
+                                }
+                            )
                             DropdownMenuItem(
                                 text = { Text(strings.createStadiumAction) },
                                 leadingIcon = { Icon(Icons.Default.AddCircleOutline, contentDescription = null) },
                                 onClick = {
-                                    stadiumMenuOpen = false
+                                    createMenuOpen = false
                                     onCreateStadium()
                                 }
                             )
@@ -248,7 +246,7 @@ fun HomeActionBar(
                                 text = { Text(strings.joinStadiumAction) },
                                 leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
                                 onClick = {
-                                    stadiumMenuOpen = false
+                                    createMenuOpen = false
                                     onJoinStadium()
                                 }
                             )
@@ -260,12 +258,87 @@ fun HomeActionBar(
                             label = strings.navRadar,
                             onClick = onOpenRadar,
                             selected = selected == HomeDestination.RADAR,
-                            appear = itemAppear(4, order.size, revealed),
+                            appear = itemAppear(2, order.size, revealed),
                             modifier = Modifier.weight(1f)
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun HomeCreateAction(
+    label: String,
+    selected: Boolean,
+    expanded: Boolean,
+    appear: Float,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val press by animateFloatAsState(
+        targetValue = if (pressed) 0.92f else 1f,
+        animationSpec = tween(INDICATOR_ANIM_MS, easing = FastOutSlowInEasing),
+        label = "createPress"
+    )
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 135f else 0f,
+        animationSpec = tween(240, easing = FastOutSlowInEasing),
+        label = "createRotation"
+    )
+    val containerColor by animateColorAsState(
+        targetValue = if (selected || expanded) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.primaryContainer
+        },
+        animationSpec = tween(INDICATOR_ANIM_MS),
+        label = "createContainer"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected || expanded) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        },
+        animationSpec = tween(INDICATOR_ANIM_MS),
+        label = "createContent"
+    )
+
+    Surface(
+        modifier = modifier
+            .size(CREATE_BUTTON_SIZE)
+            .graphicsLayer {
+                val pop = overshoot(appear)
+                alpha = (appear * 2f).coerceIn(0f, 1f)
+                val entrance = 0.2f + 0.8f * pop
+                scaleX = press * entrance
+                scaleY = press * entrance
+                translationY = (1f - pop) * 26.dp.toPx()
+                rotationZ = (1f - pop) * 22f
+            }
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick
+            ),
+        shape = CircleShape,
+        color = containerColor,
+        shadowElevation = 2.dp
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = label,
+                tint = contentColor,
+                modifier = Modifier
+                    .size(25.dp)
+                    .graphicsLayer { rotationZ = rotation }
+            )
         }
     }
 }

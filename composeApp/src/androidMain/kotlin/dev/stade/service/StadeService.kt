@@ -6,6 +6,11 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import androidx.core.content.ContextCompat
+import dev.stade.security.getLockOnShutdownEnabled
 import android.net.ConnectivityManager
 import android.net.Network
 import android.os.IBinder
@@ -38,6 +43,7 @@ class StadeService : Service() {
     private val hiddenNotifId = NotificationIds.HIDDEN_MESSAGES
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var shutdownReceiver: BroadcastReceiver? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -47,6 +53,7 @@ class StadeService : Service() {
         startForeground(notificationId, buildForegroundNotification())
         observeMessages()
         registerNetworkCallback()
+        registerShutdownReceiver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
@@ -60,8 +67,31 @@ class StadeService : Service() {
             }
         }
         networkCallback = null
+        shutdownReceiver?.let { receiver ->
+            runCatching { unregisterReceiver(receiver) }
+        }
+        shutdownReceiver = null
         scope.cancel()
         super.onDestroy()
+    }
+
+    private fun registerShutdownReceiver() {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SHUTDOWN)
+            addAction("android.intent.action.QUICKBOOT_POWEROFF")
+            addAction("com.htc.intent.action.QUICKBOOT_POWEROFF")
+        }
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (!getLockOnShutdownEnabled().value) return
+                val app = application as? StadeApplication ?: return
+                runCatching { app.boot.markLocked() }
+                runCatching { app.vault.flushAndClose() }
+            }
+        }
+        runCatching {
+            ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        }.onSuccess { shutdownReceiver = receiver }
     }
 
     private fun registerNetworkCallback() {
@@ -308,7 +338,7 @@ private fun padAwarePreview(body: String): String {
     val strings = dev.stade.ui.i18n.I18n.current
     return when (dev.stade.message.padPreviewKind(body)) {
         dev.stade.message.MessageType.PAD_SOUND -> strings.padSentSound(null, false)
-        dev.stade.message.MessageType.MEME_CLIP -> strings.padSentMeme(null, false)
+        dev.stade.message.MessageType.UNSUPPORTED -> strings.unsupportedMessage
         else -> dev.stade.message.previewBody(
             body,
             strings.photoMessage,

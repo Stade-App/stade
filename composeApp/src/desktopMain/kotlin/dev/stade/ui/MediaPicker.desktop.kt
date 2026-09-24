@@ -3,6 +3,7 @@ package dev.stade.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import dev.stade.ui.components.isGifBytes
 import dev.stade.ui.i18n.LocalStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,7 +36,8 @@ private fun openNativeMediaDialog(title: String, imagesOnly: Boolean): Array<Fil
 actual fun rememberMediaPickerLauncher(
     onImages: (List<ByteArray>) -> Unit,
     onVideo: (ByteArray) -> Unit,
-    imagesOnly: Boolean
+    imagesOnly: Boolean,
+    preserveAnimatedGif: Boolean
 ): MediaPickerLauncher {
     val scope = rememberCoroutineScope()
     val title = LocalStrings.current.selectMediaTitle
@@ -53,7 +55,10 @@ actual fun rememberMediaPickerLauncher(
                             video = runCatching { file.readBytes() }.getOrNull()
                         }
                     } else {
-                        runCatching { compressImageForAttach(file.readBytes()) }.getOrNull()?.let { images.add(it) }
+                        runCatching {
+                            val raw = file.readBytes()
+                            if (preserveAnimatedGif && isGifBytes(raw)) raw else compressImageForAttach(raw)
+                        }.getOrNull()?.let { images.add(it) }
                     }
                 }
                 if (images.isNotEmpty()) onImages(images)

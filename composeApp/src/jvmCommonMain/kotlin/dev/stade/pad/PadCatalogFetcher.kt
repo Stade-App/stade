@@ -127,8 +127,7 @@ actual suspend fun fetchPadCatalog(container: AppContainer, force: Boolean): Pad
             ?: return@withContext null
         val cleaned = PadCatalog(
             version = parsed.version,
-            sounds = parsed.sounds.filter { it.hasIntegrity },
-            memes = parsed.memes.filter { it.hasIntegrity }
+            sounds = parsed.sounds.filter { it.hasIntegrity }
         )
         runCatching {
             queries.putKv(PadConfig.CATALOG_CACHE_KEY, text.encodeToByteArray())

@@ -19,7 +19,7 @@ fun directChatPreview(message: Message?, strings: AppStrings): String? {
     val isSelf = msg.direction == MessageDirection.OUT
     when (padPreviewKind(msg.body)) {
         MessageType.PAD_SOUND -> return strings.padSentSound(null, isSelf)
-        MessageType.MEME_CLIP -> return strings.padSentMeme(null, isSelf)
+        MessageType.UNSUPPORTED -> return strings.unsupportedMessage
         else -> Unit
     }
     val sender = if (isSelf) strings.previewYouPrefix else null
@@ -41,7 +41,7 @@ fun AppContainer.groupChatPreview(
     }
     when (padPreviewKind(msg.body)) {
         MessageType.PAD_SOUND -> return strings.padSentSound(padSender, isSelf)
-        MessageType.MEME_CLIP -> return strings.padSentMeme(padSender, isSelf)
+        MessageType.UNSUPPORTED -> return strings.unsupportedMessage
         else -> Unit
     }
     val sender = if (isSelf) {

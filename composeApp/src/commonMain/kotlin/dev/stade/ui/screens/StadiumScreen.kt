@@ -128,6 +128,8 @@ import dev.stade.ui.components.BottomInsetPanel
 import dev.stade.ui.components.rememberPanelHeightState
 import dev.stade.ui.components.EmojiStickerPanel
 import dev.stade.ui.components.PadPanel
+import dev.stade.ui.components.AnimatedImage
+import dev.stade.ui.components.UnsupportedMessageBubble
 import dev.stade.chat.StarScope
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -141,9 +143,6 @@ import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.FullScreenImageViewer
 import dev.stade.ui.components.ScrollToBottomButton
 import dev.stade.ui.components.StickerMakerDialog
-import dev.stade.ui.components.MemeClipPlayer
-import dev.stade.ui.components.MemeClipBubble
-import dev.stade.ui.components.PadMode
 import dev.stade.ui.components.PadSoundBubble
 import dev.stade.audio.rememberAudioPlayer
 import dev.stade.ui.components.formatChatTime
@@ -172,7 +171,7 @@ fun StadiumScreen(
     val scope = rememberCoroutineScope()
     val stadiums by remember(owner.id) { container.stadiums.observeStadiums(owner.id) }.collectAsState(initial = emptyList())
     val stadium = remember(stadiums, stadiumId) { stadiums.find { it.id == stadiumId } }
-    var padMode by remember { mutableStateOf<PadMode?>(null) }
+    var padOpen by remember { mutableStateOf(false) }
     val rawMessages by remember(stadiumId) { container.stadiums.observeMessages(stadiumId) }.collectAsState(initial = null)
     val messages = rawMessages ?: emptyList()
     val messageEntrance = rememberMessageEntrance(stadiumId)
@@ -414,15 +413,19 @@ fun StadiumScreen(
                     .onFailure { notify(strings.stickerCreationFailed, StadiumBannerKind.Error) }
                 showStickerMaker = false
             },
-            onCancel = { showStickerMaker = false }
+            onCancel = { showStickerMaker = false },
+            onTooLarge = {
+                notify(strings.stickerGifTooLarge, StadiumBannerKind.Error)
+                showStickerMaker = false
+            }
         )
     }
 
-    val anyPanelOpen = showEmojiDrawer || padMode != null
+    val anyPanelOpen = showEmojiDrawer || padOpen
 
     fun closePanels() {
         showEmojiDrawer = false
-        padMode = null
+        padOpen = false
     }
 
     PlatformBackHandler(enabled = anyPanelOpen) { closePanels() }
@@ -657,7 +660,7 @@ fun StadiumScreen(
                                                 }
                                             )
                                             MessageType.PAD_SOUND -> StadiumPadSoundBubble(msg = msg)
-                                            MessageType.MEME_CLIP -> StadiumMemeClipBubble(container = container, msg = msg)
+                                            MessageType.UNSUPPORTED -> UnsupportedMessageBubble(outgoing = msg.isOwn)
                                             MessageType.VOICE -> StadiumVoiceBubble(
                                                 msg = msg,
                                                 selected = isSelected,
@@ -746,44 +749,31 @@ fun StadiumScreen(
                             onOpenPaddy = {
                                 keyboardController?.hide()
                                 showEmojiDrawer = false
-                                padMode = PadMode.SOUNDS
-                            },
-                            onOpenMemepad = {
-                                keyboardController?.hide()
-                                showEmojiDrawer = false
-                                padMode = PadMode.MEMES
+                                padOpen = true
                             },
                             onToggleRecording = { toggleRecording() },
                             onInputFocused = { closePanels() },
                             onOpenEmojiPicker = {
                                 keyboardController?.hide()
-                                padMode = null
+                                padOpen = false
                                 showEmojiDrawer = true
                             }
                         )
 
-                        val currentPadMode = padMode
-                        val padStadium = current
+                                                val padStadium = current
                         val emojiStadium = current
                         BottomInsetPanel(visible = anyPanelOpen, state = panelState) {
-                            if (currentPadMode != null && padStadium != null) {
+                            if (padOpen && padStadium != null) {
                                 PadPanel(
                                     container = container,
-                                    mode = currentPadMode,
-                                    onDismiss = { padMode = null },
+                                                                        onDismiss = { padOpen = false },
                                     onSend = { asset, bytes ->
-                                        padMode = null
+                                        padOpen = false
                                         scope.launch {
                                             runCatching {
-                                                if (currentPadMode == PadMode.SOUNDS) {
-                                                    container.stadiumChat.postPadSound(
-                                                        owner, padStadium, bytes, asset.name, asset.durationMs
-                                                    )
-                                                } else {
-                                                    container.stadiumChat.postMemeClip(
-                                                        owner, padStadium, bytes, asset.name, asset.durationMs
-                                                    )
-                                                }
+                                                container.stadiumChat.postPadSound(
+                                                    owner, padStadium, bytes, asset.name, asset.durationMs
+                                                )
                                             }
                                         }
                                     }
@@ -1245,9 +1235,6 @@ private fun StadiumStickerBubble(
         stickerBytes = bytes
         decodeDone = true
     }
-    val bitmap = remember(stickerBytes) {
-        stickerBytes?.let { runCatching { it.decodeToImageBitmap() }.getOrNull() }
-    }
     val tint by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent)
     val currentOnTap by rememberUpdatedState { if (inSelectionMode) onShortClick() }
     val currentOnLongClick by rememberUpdatedState(onLongClick)
@@ -1266,9 +1253,10 @@ private fun StadiumStickerBubble(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(modifier = Modifier.size(120.dp), contentAlignment = Alignment.Center) {
-            if (bitmap != null) {
-                androidx.compose.foundation.Image(
-                    bitmap = bitmap,
+            val stickerData = stickerBytes
+            if (stickerData != null) {
+                AnimatedImage(
+                    bytes = stickerData,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
@@ -1368,20 +1356,3 @@ private fun StadiumPadSoundBubble(msg: dev.stade.stadium.StadiumMessage) {
     }
 }
 
-@Composable
-private fun StadiumMemeClipBubble(container: AppContainer, msg: dev.stade.stadium.StadiumMessage) {
-    val bytes = rememberAttachmentBytes(msg.id) { msg.memeClipBytes() }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
-        horizontalArrangement = if (msg.isOwn) Arrangement.End else Arrangement.Start
-    ) {
-        MemeClipBubble(label = msg.padLabel, durationMs = msg.padDurationMs) {
-            MemeClipPlayer(
-                container = container,
-                messageId = msg.id,
-                bytes = bytes,
-                modifier = Modifier.fillMaxWidth().height(190.dp)
-            )
-        }
-    }
-}

@@ -281,6 +281,8 @@ abstract class AppStrings {
     abstract val scrambleKeypadOffSubtitle: String
     abstract val sessionSection: String
     abstract val autoLockTitle: String
+    abstract val lockOnShutdownTitle: String
+    abstract val lockOnShutdownSubtitle: String
     abstract fun autoLockSubtitle(label: String): String
     abstract fun sessionTimeoutLabel(seconds: Int): String
     abstract val autoLockNeverInfoTitle: String
@@ -389,6 +391,29 @@ abstract class AppStrings {
     abstract val keepOriginalBackgroundOption: String
     abstract val saveStickerAction: String
     abstract val stickerCreationFailed: String
+    abstract val stickerGifTooLarge: String
+    abstract val backupSection: String
+    abstract val backupExportTitle: String
+    abstract val backupExportSubtitle: String
+    abstract val backupExportDialogTitle: String
+    abstract val backupExportDialogBody: String
+    abstract val backupExportAction: String
+    abstract val backupRestoreTitle: String
+    abstract val backupRestoreSubtitle: String
+    abstract val backupRestoreDialogTitle: String
+    abstract val backupRestoreDialogBody: String
+    abstract val backupRestoreAction: String
+    abstract val backupPassphraseLabel: String
+    abstract val backupPassphraseRepeatLabel: String
+    abstract val backupPassphraseTooShort: String
+    abstract val backupPassphraseMismatch: String
+    abstract val backupExported: String
+    abstract val backupRestored: String
+    abstract val backupRestoredNoOnion: String
+    abstract val backupWrongPassphrase: String
+    abstract val backupNotABackup: String
+    abstract val backupDamaged: String
+    abstract val backupFailed: String
     abstract val deleteStickerConfirmTitle: String
     abstract val deleteStickerConfirmBody: String
     abstract val saveStickerToPackAction: String
@@ -594,10 +619,8 @@ abstract class AppStrings {
     abstract val radarGhostTitle: String
     abstract val radarGhostBody: String
     abstract val radarGhostActive: String
-    abstract val navContact: String
     abstract val navChats: String
-    abstract val navGroup: String
-    abstract val navStadium: String
+    abstract val navCreateAction: String
     abstract val navRadar: String
     abstract val previewYouPrefix: String
     abstract val updateRequiredByYou: String
@@ -607,8 +630,6 @@ abstract class AppStrings {
     abstract val padAttachMedia: String
     abstract val padPaddyTitle: String
     abstract val padPaddySubtitle: String
-    abstract val padMemepadTitle: String
-    abstract val padMemepadSubtitle: String
     abstract val padUnavailable: String
     abstract val padSoundUnsupported: String
     abstract val padDownloadFailed: String
@@ -618,11 +639,10 @@ abstract class AppStrings {
     abstract val padDownloading: String
     abstract val padSendFailed: String
     abstract val padSoundTag: String
-    abstract val padMemeTag: String
     abstract val padTapToPlay: String
     abstract val padTorNotReady: String
     abstract fun padSentSound(sender: String?, isSelf: Boolean): String
-    abstract fun padSentMeme(sender: String?, isSelf: Boolean): String
+    abstract val unsupportedMessage: String
 }
 
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }

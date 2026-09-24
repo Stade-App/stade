@@ -5,7 +5,6 @@ import dev.stade.contact.ContactManager
 import dev.stade.crypto.CryptoApi
 import dev.stade.crypto.Encoding
 import dev.stade.identity.LocalIdentity
-import dev.stade.message.MEME_CLIP_BODY_PREFIX
 import dev.stade.message.PAD_SOUND_BODY_PREFIX
 import dev.stade.message.encodeImageBody
 import dev.stade.message.encodePadBody
@@ -148,16 +147,6 @@ class GroupChatService(
         replyToId: String? = null
     ): Boolean =
         sendMessage(owner, groupId, encodePadBody(PAD_SOUND_BODY_PREFIX, bytes, name, durationMs), replyToId)
-
-    suspend fun sendMemeClip(
-        owner: LocalIdentity,
-        groupId: String,
-        bytes: ByteArray,
-        name: String,
-        durationMs: Long,
-        replyToId: String? = null
-    ): Boolean =
-        sendMessage(owner, groupId, encodePadBody(MEME_CLIP_BODY_PREFIX, bytes, name, durationMs), replyToId)
 
     suspend fun sendSticker(owner: LocalIdentity, groupId: String, stickerBytes: ByteArray, replyToId: String? = null): Boolean {
         return sendMessage(owner, groupId, encodeStickerBody(stickerBytes), replyToId)

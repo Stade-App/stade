@@ -50,6 +50,8 @@ class FileVault(private val rootDir: File) : Vault {
 
     override fun isUnlocked(): Boolean = unlocked
 
+    override fun metaPath(): String = metaFile.absolutePath
+
     override fun plaintextDbPath(): String = plaintextDb.absolutePath
 
     override fun encryptedDbPath(): String = encryptedDb.absolutePath

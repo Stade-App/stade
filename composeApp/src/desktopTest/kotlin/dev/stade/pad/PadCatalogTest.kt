@@ -13,8 +13,7 @@ private fun parse(text: String): PadCatalog? =
 
 private fun usable(catalog: PadCatalog): PadCatalog = PadCatalog(
     version = catalog.version,
-    sounds = catalog.sounds.filter { it.hasIntegrity },
-    memes = catalog.memes.filter { it.hasIntegrity }
+    sounds = catalog.sounds.filter { it.hasIntegrity }
 )
 
 class PadCatalogTest {
@@ -26,15 +25,13 @@ class PadCatalogTest {
               "version": 1,
               "sounds": [
                 {
-                }
-              ],
-              "memes": [
+                },
                 {
                   "id": "alikoc",
                   "name": "Ali Koç Göğe Bakıyor",
                   "durationMs": 23000,
                   "sha256": "af3a952f158307e8d16cd5d6a5a085b924d64a85f34a08cf273d0bede7517e88",
-                  "url": "https://stade.dev/pad/memes/alikoc.mp4"
+                  "url": "https://stade.dev/pad/sounds/alikoc.wav"
                 }
               ]
             }
@@ -45,32 +42,31 @@ class PadCatalogTest {
             "an empty placeholder object must not make the whole catalog unparseable"
         )
         val ready = usable(parsed)
-        assertEquals(1, ready.memes.size, "the valid meme entry should survive")
-        assertEquals("alikoc", ready.memes.first().id)
-        assertTrue(ready.sounds.isEmpty(), "the placeholder entry should be dropped, not kept")
+        assertEquals(1, ready.sounds.size, "the valid sound entry should survive")
+        assertEquals("alikoc", ready.sounds.first().id)
     }
 
     @Test
     fun entriesWithoutIntegrityAreDropped() {
         val text = """
             {
-              "memes": [
-                {"id": "no-hash", "name": "No hash", "url": "https://stade.dev/a.mp4"},
+              "sounds": [
+                {"id": "no-hash", "name": "No hash", "url": "https://stade.dev/a.wav"},
                 {"id": "no-url", "name": "No url", "sha256": "${"a".repeat(64)}"},
-                {"id": "ok", "name": "Fine", "sha256": "${"b".repeat(64)}", "url": "https://stade.dev/b.mp4"}
+                {"id": "ok", "name": "Fine", "sha256": "${"b".repeat(64)}", "url": "https://stade.dev/b.wav"}
               ]
             }
         """.trimIndent()
         val ready = usable(assertNotNull(parse(text)))
-        assertEquals(listOf("ok"), ready.memes.map { it.id })
+        assertEquals(listOf("ok"), ready.sounds.map { it.id })
     }
 
     @Test
     fun aShortHashIsRejected() {
         val text = """
-            {"memes": [{"id": "x", "name": "X", "sha256": "abc", "url": "https://stade.dev/x.mp4"}]}
+            {"sounds": [{"id": "x", "name": "X", "sha256": "abc", "url": "https://stade.dev/x.wav"}]}
         """.trimIndent()
-        assertTrue(usable(assertNotNull(parse(text))).memes.isEmpty())
+        assertTrue(usable(assertNotNull(parse(text))).sounds.isEmpty())
     }
 
     @Test
@@ -88,9 +84,26 @@ class PadCatalogTest {
     @Test
     fun unknownFieldsAreIgnored() {
         val text = """
-            {"memes": [{"id": "x", "name": "X", "sha256": "${"c".repeat(64)}",
-             "url": "https://stade.dev/x.mp4", "somethingNew": 42}]}
+            {"sounds": [{"id": "x", "name": "X", "sha256": "${"c".repeat(64)}",
+             "url": "https://stade.dev/x.wav", "somethingNew": 42}]}
         """.trimIndent()
-        assertEquals(1, usable(assertNotNull(parse(text))).memes.size)
+        assertEquals(1, usable(assertNotNull(parse(text))).sounds.size)
+    }
+
+    @Test
+    fun aRetiredMemeSectionIsIgnored() {
+        val text = """
+            {
+              "version": 1,
+              "sounds": [
+                {"id": "ok", "name": "Fine", "sha256": "${"d".repeat(64)}", "url": "https://stade.dev/b.wav"}
+              ],
+              "memes": [
+                {"id": "gone", "name": "Gone", "sha256": "${"e".repeat(64)}", "url": "https://stade.dev/g.mp4"}
+              ]
+            }
+        """.trimIndent()
+        val ready = usable(assertNotNull(parse(text)))
+        assertEquals(listOf("ok"), ready.sounds.map { it.id })
     }
 }

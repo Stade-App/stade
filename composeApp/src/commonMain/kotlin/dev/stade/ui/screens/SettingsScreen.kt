@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.SettingsEthernet
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -102,6 +103,9 @@ import dev.stade.ui.theme.getDynamicColorEnabled
 import dev.stade.ui.theme.isDynamicColorSupported
 import dev.stade.ui.theme.setDynamicColorEnabled
 import dev.stade.ui.i18n.AppLocale
+import dev.stade.ui.BackupOutcome
+import dev.stade.ui.rememberBackupIo
+import dev.stade.ui.components.BackupPassphraseDialog
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.i18n.getLocalePreference
 import dev.stade.ui.i18n.setLocalePreference
@@ -129,6 +133,18 @@ fun SettingsScreen(
     val notificationPrivacyEnabled by getNotificationPrivacyEnabled()
     val runInBackgroundEnabled by getRunInBackgroundEnabledCommon()
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showBackupDialog by remember { mutableStateOf(false) }
+    var backupMessage by remember { mutableStateOf<String?>(null) }
+    val backupIo = rememberBackupIo(container.vault) { outcome ->
+        backupMessage = when (outcome) {
+            is BackupOutcome.Exported -> strings.backupExported
+            is BackupOutcome.Cancelled -> null
+            is BackupOutcome.WrongPassphrase -> strings.backupWrongPassphrase
+            is BackupOutcome.NotABackup -> strings.backupNotABackup
+            is BackupOutcome.Damaged -> strings.backupDamaged
+            else -> strings.backupFailed
+        }
+    }
     val clipboardManager = LocalClipboardManager.current
     var fingerprintCopied by remember { mutableStateOf(false) }
     val currentLocale by getLocalePreference()
@@ -149,6 +165,31 @@ fun SettingsScreen(
             delay(2000)
             fingerprintCopied = false
         }
+    }
+
+    if (showBackupDialog) {
+        BackupPassphraseDialog(
+            title = strings.backupExportDialogTitle,
+            body = strings.backupExportDialogBody,
+            confirmLabel = strings.backupExportAction,
+            requireConfirmation = true,
+            onConfirm = { passphrase ->
+                showBackupDialog = false
+                backupIo.exportBackup(passphrase)
+            },
+            onDismiss = { showBackupDialog = false }
+        )
+    }
+
+    backupMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { backupMessage = null },
+            title = { Text(strings.backupSection) },
+            text = { Text(message, style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = {
+                TextButton(onClick = { backupMessage = null }) { Text(strings.closeAction) }
+            }
+        )
     }
 
     if (showLogoutDialog) {
@@ -482,6 +523,19 @@ fun SettingsScreen(
                         title = strings.aboutTitle,
                         subtitle = strings.aboutSubtitle,
                         onClick = onOpenAbout
+                    )
+                }
+            }
+
+            item {
+                SettingsSectionLabel(strings.backupSection)
+                SettingsGroup {
+                    NavigationSettingsRow(
+                        icon = Icons.Default.Save,
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        title = strings.backupExportTitle,
+                        subtitle = strings.backupExportSubtitle,
+                        onClick = { showBackupDialog = true }
                     )
                 }
             }

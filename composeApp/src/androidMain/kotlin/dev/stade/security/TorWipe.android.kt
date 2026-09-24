@@ -7,3 +7,6 @@ actual fun clearTorIdentity() {
     val torDir = File(StadeApplication.instance.filesDir, "stade/tor")
     if (torDir.exists()) runCatching { torDir.deleteRecursively() }
 }
+
+actual fun torIdentityPath(): String =
+    File(StadeApplication.instance.filesDir, "stade/tor/onion.key").absolutePath

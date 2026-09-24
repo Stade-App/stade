@@ -187,7 +187,14 @@ fun StadeApp(boot: BootContext) {
                 !initialized -> {
                     val nickname = pendingNickname
                     if (nickname == null) {
-                        WelcomeUsernameScreen(onNext = { pendingNickname = it })
+                        WelcomeUsernameScreen(
+                            onNext = { pendingNickname = it },
+                            vault = vault,
+                            onRestored = {
+                                autoUnlockTried = false
+                                initialized = vault.isInitialized()
+                            }
+                        )
                     } else {
                         PinSetupScreen(
                             vault = vault,
@@ -391,7 +398,7 @@ private fun UnlockedApp(
                         .getOrNull()
                         ?.let { when (dev.stade.message.padPreviewKind(it)) {
                             dev.stade.message.MessageType.PAD_SOUND -> notifStrings.padSentSound(null, false)
-                            dev.stade.message.MessageType.MEME_CLIP -> notifStrings.padSentMeme(null, false)
+                            dev.stade.message.MessageType.UNSUPPORTED -> notifStrings.unsupportedMessage
                             else -> dev.stade.message.previewBody(it, notifStrings.photoMessage, notifStrings.voiceMessage, notifStrings.videoMessage, notifStrings.stickerMessage)
                         } }
                         ?: notifStrings.notifNewMessageFallback
@@ -426,7 +433,7 @@ private fun UnlockedApp(
                     val preview = container.groups.lastMessage(event.groupId)?.body
                         ?.let { when (dev.stade.message.padPreviewKind(it)) {
                             dev.stade.message.MessageType.PAD_SOUND -> notifStrings.padSentSound(null, false)
-                            dev.stade.message.MessageType.MEME_CLIP -> notifStrings.padSentMeme(null, false)
+                            dev.stade.message.MessageType.UNSUPPORTED -> notifStrings.unsupportedMessage
                             else -> dev.stade.message.previewBody(it, notifStrings.photoMessage, notifStrings.voiceMessage, notifStrings.videoMessage, notifStrings.stickerMessage)
                         } }
                         ?: notifStrings.notifNewMessageFallback
@@ -800,18 +807,15 @@ private fun UnlockedApp(
 
 private fun homeTabIndex(screen: Screen): Int? = when (screen) {
     Screen.Contacts -> 0
-    Screen.AddContact -> 1
-    Screen.CreateGroup -> 2
-    Screen.CreateStadium, Screen.JoinStadium -> 3
-    Screen.Radar -> 4
+    Screen.AddContact, Screen.CreateGroup, Screen.CreateStadium, Screen.JoinStadium -> 1
+    Screen.Radar -> 2
     else -> null
 }
 
 private fun homeBarDestination(screen: Screen): HomeDestination? = when (screen) {
     Screen.Contacts, Screen.Archived, Screen.Starred -> HomeDestination.CHATS
-    Screen.AddContact -> HomeDestination.CONTACT
-    Screen.CreateGroup -> HomeDestination.GROUP
-    Screen.CreateStadium, Screen.JoinStadium -> HomeDestination.STADIUM
+    Screen.AddContact, Screen.CreateGroup, Screen.CreateStadium, Screen.JoinStadium ->
+        HomeDestination.CREATE
     Screen.Radar -> HomeDestination.RADAR
     else -> null
 }

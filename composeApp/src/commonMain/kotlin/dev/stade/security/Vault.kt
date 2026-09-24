@@ -14,6 +14,7 @@ interface Vault {
     fun flushAndKeep()
     fun flushAndClose()
     fun wipe()
+    fun metaPath(): String
     fun plaintextDbPath(): String
     fun encryptedDbPath(): String
     fun isScrambleKeypadEnabled(): Boolean
