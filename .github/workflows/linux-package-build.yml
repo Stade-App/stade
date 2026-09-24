@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-linux-packages:
@@ -71,3 +71,28 @@ jobs:
           name: stade-rpm
           path: ${{ env.RPM_FILE }}
           if-no-files-found: error
+
+      - name: Attach packages to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+
+          # Release Notes iş akışı sürümü paralel olarak oluşturur; hazır olmasını bekle
+          for attempt in $(seq 1 20); do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              break
+            fi
+            echo "Release $TAG henüz yok; bekleniyor ($attempt/20)"
+            sleep 15
+          done
+
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::$TAG için bir sürüm bulunamadı, paketler eklenemedi"
+            exit 1
+          fi
+
+          gh release upload "$TAG" "$DEB_FILE" "$RPM_FILE" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "Eklendi: $DEB_FILE, $RPM_FILE -> $TAG"

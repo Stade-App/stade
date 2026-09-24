@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-windows-package:
@@ -50,3 +50,29 @@ jobs:
           name: stade-exe
           path: ${{ env.EXE_FILE }}
           if-no-files-found: error
+
+      - name: Attach installer to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+
+          # Release Notes iş akışı sürümü paralel olarak oluşturur; hazır olmasını bekle
+          for attempt in $(seq 1 20); do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              break
+            fi
+            echo "Release $TAG henüz yok; bekleniyor ($attempt/20)"
+            sleep 15
+          done
+
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::$TAG için bir sürüm bulunamadı, kurulum dosyası eklenemedi"
+            exit 1
+          fi
+
+          gh release upload "$TAG" "$EXE_FILE" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "Eklendi: $EXE_FILE -> $TAG"

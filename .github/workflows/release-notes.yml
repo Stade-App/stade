@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*.*.*"
+  release:
+    types: [created]
   workflow_dispatch:
     inputs:
       target_tag:
@@ -29,31 +31,40 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Eğer manuel tetikleme ile bir tag girildiyse onu kullan, yoksa push edilen tag'i al
+          # Eğer manuel tetikleme ile bir tag girildiyse onu kullan, yoksa push edilen
+          # ya da release olayından gelen tag'i al
           INPUT_TAG="${{ inputs.target_tag }}"
+          EVENT_TAG="${{ github.event.release.tag_name }}"
           if [ -n "$INPUT_TAG" ]; then
             CURRENT_TAG="$INPUT_TAG"
+          elif [ -n "$EVENT_TAG" ]; then
+            CURRENT_TAG="$EVENT_TAG"
           else
             CURRENT_TAG="${GITHUB_REF#refs/tags/}"
           fi
 
-          # Tag'in depoda var olup olmadığını kontrol et
-          if ! git rev-parse "$CURRENT_TAG" >/dev/null 2>&1; then
-            echo "::error::'${CURRENT_TAG}' adında bir tag bulunamadı!"
+          if [ -z "$CURRENT_TAG" ]; then
+            echo "::error::Hangi sürüm için not üretileceği belirlenemedi."
             exit 1
           fi
 
-          # CURRENT_TAG öncesindeki tag'i bul
-          PREV_TAG="$(git tag --sort=-creatordate | grep -A1 -x "$CURRENT_TAG" | tail -n1 || true)"
-          if [ "$PREV_TAG" = "$CURRENT_TAG" ]; then
-            PREV_TAG=""
+          # Taslak sürümlerde tag henüz oluşmaz; o durumda kontrol edilen commit'i kullan
+          if git rev-parse -q --verify "refs/tags/${CURRENT_TAG}^{commit}" >/dev/null; then
+            END_REF="$CURRENT_TAG"
+          else
+            END_REF="HEAD"
+            echo "Tag ${CURRENT_TAG} henüz yok; ${END_REF} üzerinden hesaplanıyor."
           fi
 
+          # Önceki sürümü oluşturma tarihine göre değil, geçmişteki konumuna göre bul
+          PREV_TAG="$(git describe --tags --abbrev=0 --exclude="$CURRENT_TAG" "$END_REF" 2>/dev/null || true)"
+
           if [ -n "$PREV_TAG" ]; then
-            RANGE="${PREV_TAG}..${CURRENT_TAG}"
+            RANGE="${PREV_TAG}..${END_REF}"
           else
-            RANGE="$CURRENT_TAG"
+            RANGE="$END_REF"
           fi
+          echo "Range: $RANGE"
 
           WORKDIR="$(mktemp -d)"
 
@@ -100,7 +111,7 @@ jobs:
             fi
 
             echo "- ${desc} (${hash})" >> "$WORKDIR/$type.md"
-          done < <(git log --no-merges --pretty=format:'%h%x09%s' "$RANGE")
+          done < <(git log --no-merges --pretty=tformat:'%h%x09%s' "$RANGE")
 
           NOTES_FILE="$WORKDIR/notes.md"
           echo "## Changes in ${CURRENT_TAG}" > "$NOTES_FILE"
