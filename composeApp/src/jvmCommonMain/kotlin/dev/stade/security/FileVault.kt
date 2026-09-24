@@ -18,6 +18,7 @@ class FileVault(private val rootDir: File) : Vault {
     private val sessionFile: File = File(rootDir, "stade.session")
 
     private val rng = SecureRandom()
+    private val flushLock = Any()
 
     @Volatile private var unlocked: Boolean = false
     @Volatile private var dek: ByteArray? = null
@@ -269,25 +270,29 @@ class FileVault(private val rootDir: File) : Vault {
     }
 
     override fun flushAndKeep() {
-        val key = dek ?: return
-        if (!plaintextDb.exists()) return
-        encryptFile(plaintextDb, encryptedDb, key)
+        synchronized(flushLock) {
+            val key = dek ?: return
+            if (!plaintextDb.exists()) return
+            encryptFile(plaintextDb, encryptedDb, key)
+        }
     }
 
     override fun flushAndClose() {
-        val key = dek
-        if (key != null && plaintextDb.exists()) {
-            encryptFile(plaintextDb, encryptedDb, key)
+        synchronized(flushLock) {
+            val key = dek
+            if (key != null && plaintextDb.exists()) {
+                encryptFile(plaintextDb, encryptedDb, key)
+            }
+            if (plaintextDb.exists()) {
+                secureDelete(plaintextDb)
+            }
+            val current = dek
+            if (current != null) {
+                zero(current)
+                dek = null
+            }
+            unlocked = false
         }
-        if (plaintextDb.exists()) {
-            secureDelete(plaintextDb)
-        }
-        val current = dek
-        if (current != null) {
-            zero(current)
-            dek = null
-        }
-        unlocked = false
     }
 
     override fun wipe() {
