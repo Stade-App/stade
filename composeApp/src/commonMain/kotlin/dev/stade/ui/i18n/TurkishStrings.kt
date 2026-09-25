@@ -62,6 +62,7 @@ object TurkishStrings : AppStrings() {
     override val closeSearch = "Aramayı kapat"
     override val searchAction = "Ara"
     override val settingsAction = "Ayarlar"
+    override val gearAnnoyed = "Yavaş ol!"
     override val addContactAction = "Kişi ekle"
     override val noContactsTitle = "Henüz kişin yok"
     override val noContactsHint = "İlk kişini eklemek için alttaki çubuğu kullan."

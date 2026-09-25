@@ -21,6 +21,23 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.unit.Dp
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import dev.stade.ui.i18n.LocalStrings
+import kotlinx.datetime.Clock
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -120,6 +137,10 @@ fun TopBarPill(
     }
 }
 
+private const val GEAR_RAPID_WINDOW_MS = 700L
+private const val GEAR_ANGRY_AFTER = 3
+private const val GEAR_ANGRY_HOLD_MS = 1600L
+
 @Composable
 fun SpinningGearButton(
     contentDescription: String,
@@ -127,36 +148,127 @@ fun SpinningGearButton(
     modifier: Modifier = Modifier,
     buttonSize: Dp = TOP_PILL_SIZE,
     iconSize: Dp = 20.dp,
-    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    alreadyOpen: Boolean = false
 ) {
+    val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     val spin = remember { Animatable(0f) }
+    val wobble = remember { Animatable(0f) }
     val haptic = rememberGearHaptic()
 
-    IconButton(
-        onClick = {
-            scope.launch {
-                spin.animateTo(
-                    targetValue = spin.value + 360f,
-                    animationSpec = tween(GEAR_SPIN_MS, easing = FastOutSlowInEasing)
-                )
+    var rapidCount by remember { mutableStateOf(0) }
+    var lastClickAt by remember { mutableStateOf(0L) }
+    var annoyed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(alreadyOpen) {
+        if (!alreadyOpen) {
+            rapidCount = 0
+            annoyed = false
+        }
+    }
+
+    LaunchedEffect(annoyed) {
+        if (!annoyed) return@LaunchedEffect
+        repeat(3) {
+            wobble.animateTo(1f, tween(70, easing = LinearEasing))
+            wobble.animateTo(-1f, tween(70, easing = LinearEasing))
+        }
+        wobble.animateTo(0f, tween(70, easing = LinearEasing))
+        delay(GEAR_ANGRY_HOLD_MS)
+        annoyed = false
+        rapidCount = 0
+    }
+
+    val iconTint by animateColorAsState(
+        targetValue = if (annoyed) MaterialTheme.colorScheme.error else tint,
+        animationSpec = tween(180),
+        label = "gearTint"
+    )
+
+    Box(contentAlignment = Alignment.Center) {
+        IconButton(
+            onClick = {
+                val now = Clock.System.now().toEpochMilliseconds()
+                rapidCount = if (now - lastClickAt <= GEAR_RAPID_WINDOW_MS) rapidCount + 1 else 1
+                lastClickAt = now
+
+                if (alreadyOpen && rapidCount >= GEAR_ANGRY_AFTER) {
+                    annoyed = true
+                    return@IconButton
+                }
+
+                scope.launch {
+                    spin.animateTo(
+                        targetValue = spin.value + 360f,
+                        animationSpec = tween(GEAR_SPIN_MS, easing = FastOutSlowInEasing)
+                    )
+                }
+                scope.launch { haptic.play() }
+                scope.launch {
+                    delay(GEAR_SPIN_HANDOFF_MS)
+                    onClick()
+                }
+            },
+            modifier = modifier.size(buttonSize)
+        ) {
+            Icon(
+                Icons.Default.Settings,
+                contentDescription = contentDescription,
+                tint = iconTint,
+                modifier = Modifier
+                    .size(iconSize)
+                    .graphicsLayer { rotationZ = spin.value + wobble.value * 14f }
+            )
+        }
+
+        if (annoyed) {
+            Popup(alignment = Alignment.TopCenter, offset = IntOffset(0, -(buttonSize.value.toInt() + 18))) {
+                GearSpeechBubble(strings.gearAnnoyed)
             }
-            scope.launch { haptic.play() }
-            scope.launch {
-                delay(GEAR_SPIN_HANDOFF_MS)
-                onClick()
-            }
-        },
-        modifier = modifier.size(buttonSize)
+        }
+    }
+}
+
+@Composable
+private fun GearSpeechBubble(message: String) {
+    val pop = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        pop.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+    }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.graphicsLayer {
+            val s = 0.6f + 0.4f * pop.value
+            scaleX = s
+            scaleY = s
+            alpha = pop.value.coerceIn(0f, 1f)
+            transformOrigin = TransformOrigin(0.5f, 1f)
+        }
     ) {
-        Icon(
-            Icons.Default.Settings,
-            contentDescription = contentDescription,
-            tint = tint,
-            modifier = Modifier
-                .size(iconSize)
-                .graphicsLayer { rotationZ = spin.value }
-        )
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            shadowElevation = 4.dp
+        ) {
+            Text(
+                message,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                maxLines = 1
+            )
+        }
+        val tailColor = MaterialTheme.colorScheme.errorContainer
+        Canvas(Modifier.size(width = 12.dp, height = 6.dp)) {
+            val tail = Path().apply {
+                moveTo(0f, 0f)
+                lineTo(size.width, 0f)
+                lineTo(size.width / 2f, size.height)
+                close()
+            }
+            drawPath(tail, color = tailColor)
+        }
     }
 }
 

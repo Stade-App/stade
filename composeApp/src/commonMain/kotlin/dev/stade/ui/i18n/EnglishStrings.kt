@@ -62,6 +62,7 @@ object EnglishStrings : AppStrings() {
     override val closeSearch = "Close search"
     override val searchAction = "Search"
     override val settingsAction = "Settings"
+    override val gearAnnoyed = "Easy there!"
     override val addContactAction = "Add contact"
     override val noContactsTitle = "No contacts yet"
     override val noContactsHint = "Use the bar at the bottom to add your first contact."

@@ -61,6 +61,7 @@ object KoreanStrings : AppStrings() {
     override val closeSearch = "검색 닫기"
     override val searchAction = "검색"
     override val settingsAction = "설정"
+    override val gearAnnoyed = "천천히 하세요!"
     override val addContactAction = "연락처 추가"
     override val noContactsTitle = "아직 연락처가 없습니다"
     override val noContactsHint = "아래 바를 사용해 첫 연락처를 추가하세요."

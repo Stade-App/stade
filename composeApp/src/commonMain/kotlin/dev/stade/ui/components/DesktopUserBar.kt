@@ -59,6 +59,7 @@ fun DesktopUserBar(
     onCreateStadium: () -> Unit,
     onJoinStadium: () -> Unit,
     onOpenSettings: () -> Unit,
+    settingsOpen: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val strings = LocalStrings.current
@@ -161,6 +162,7 @@ fun DesktopUserBar(
             SpinningGearButton(
                 contentDescription = strings.settingsAction,
                 onClick = onOpenSettings,
+                alreadyOpen = settingsOpen,
                 buttonSize = 38.dp,
                 iconSize = 20.dp,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant

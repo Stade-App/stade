@@ -776,6 +776,11 @@ fun TwoPanelLayout(
                             onCreateStadium = { createDialog = CreateDialog.CreateStadium },
                             onJoinStadium = { createDialog = CreateDialog.JoinStadium },
                             onOpenSettings = { right = PanelRight.Settings },
+                            settingsOpen = right is PanelRight.Settings ||
+                                right is PanelRight.Security ||
+                                right is PanelRight.Transports ||
+                                right is PanelRight.About ||
+                                right is PanelRight.ArchiveSettings,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(horizontal = 10.dp, vertical = 8.dp)

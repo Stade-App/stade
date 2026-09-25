@@ -58,6 +58,7 @@ abstract class AppStrings {
     abstract val closeSearch: String
     abstract val searchAction: String
     abstract val settingsAction: String
+    abstract val gearAnnoyed: String
     abstract val addContactAction: String
     abstract val noContactsTitle: String
     abstract val noContactsHint: String
