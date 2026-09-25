@@ -1,8 +1,10 @@
 ﻿package dev.stade.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -160,6 +162,8 @@ fun StadeApp(boot: BootContext) {
             var container by remember { mutableStateOf<AppContainer?>(null) }
             var pendingNickname by remember { mutableStateOf<String?>(null) }
             var lockFailure by remember { mutableStateOf(false) }
+            var locking by remember { mutableStateOf(false) }
+            var lockTarget by remember { mutableStateOf<AppContainer?>(null) }
             val scope = rememberCoroutineScope()
 
             LaunchedEffect(initialized) {
@@ -209,6 +213,27 @@ fun StadeApp(boot: BootContext) {
                         )
                     }
                 }
+                locking -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                    LaunchedEffect(locking) {
+                        val target = lockTarget
+                        val failure = runCatching {
+                            withContext(Dispatchers.Default) {
+                                target?.close()
+                                vault.flushAndClose()
+                            }
+                        }.exceptionOrNull()
+                        lockTarget = null
+                        if (failure != null) {
+                            boot.markUnlocked()
+                            unlocked = true
+                            lockFailure = true
+                        }
+                        locking = false
+                    }
+                }
                 !unlocked -> {
                     LockScreen(
                         vault = vault,
@@ -244,24 +269,12 @@ fun StadeApp(boot: BootContext) {
                         boot = boot,
                         presetNickname = pendingNickname,
                         onLockRequested = {
-                            scope.launch {
-                                val toClose = container ?: boot.activeContainer()
-                                val failure = runCatching {
-                                    withContext(Dispatchers.Default) {
-                                        toClose?.close()
-                                        vault.flushAndClose()
-                                    }
-                                }.exceptionOrNull()
-                                if (failure != null) {
-                                    container = null
-                                    boot.markUnlocked()
-                                    unlocked = true
-                                    lockFailure = true
-                                    return@launch
-                                }
+                            if (!locking) {
+                                lockTarget = container ?: boot.activeContainer()
                                 container = null
                                 boot.markLocked()
                                 unlocked = false
+                                locking = true
                             }
                         },
                         onWipeRequested = {
