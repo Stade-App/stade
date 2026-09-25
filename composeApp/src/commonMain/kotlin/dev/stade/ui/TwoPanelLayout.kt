@@ -120,6 +120,7 @@ import dev.stade.ui.components.BrandMark
 import dev.stade.ui.components.DESKTOP_USER_BAR_HEIGHT
 import dev.stade.ui.components.DesktopModalHost
 import dev.stade.ui.components.DesktopUserBar
+import dev.stade.ui.components.UpdateAvailableButton
 import dev.stade.ui.components.UpdateRequiredBanner
 import dev.stade.ui.screens.StadeRadarScreen
 import dev.stade.ui.components.formatChatTime
@@ -480,6 +481,7 @@ fun TwoPanelLayout(
                             )
                         },
                         actions = {
+                            UpdateAvailableButton(container = container)
                             if (!showArchived) {
                                 IconButton(onClick = { right = PanelRight.Starred }) {
                                     Icon(

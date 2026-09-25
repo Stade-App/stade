@@ -59,6 +59,20 @@ abstract class AppStrings {
     abstract val searchAction: String
     abstract val settingsAction: String
     abstract val gearAnnoyed: String
+    abstract val updateAvailableTooltip: String
+    abstract val updateDownloadingTooltip: String
+    abstract val updateReadyTitle: String
+    abstract val updateReadyBody: String
+    abstract val updateInstallAction: String
+    abstract val updateLaterAction: String
+    abstract val updateFailedTitle: String
+    abstract val updateFailedBody: String
+    abstract val updateOpenPageAction: String
+    abstract val updateSection: String
+    abstract val updateCheckTitle: String
+    abstract val updateChecking: String
+    abstract val updateUpToDate: String
+    abstract fun updateFoundVersion(version: String): String
     abstract val addContactAction: String
     abstract val noContactsTitle: String
     abstract val noContactsHint: String

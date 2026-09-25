@@ -23,15 +23,20 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.stade.ui.loadPanelHeightDp
+import dev.stade.ui.savePanelHeightDp
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val FALLBACK_PANEL_HEIGHT = 280.dp
 private val MIN_REAL_KEYBOARD = 140.dp
 
+private val sharedPanelHeight = mutableStateOf(
+    loadPanelHeightDp().takeIf { it >= MIN_REAL_KEYBOARD.value.toInt() }?.dp ?: FALLBACK_PANEL_HEIGHT
+)
+
 @Stable
 class PanelHeightState internal constructor() {
-    var height: Dp by mutableStateOf(FALLBACK_PANEL_HEIGHT)
-        internal set
+    val height: Dp get() = sharedPanelHeight.value
 }
 
 @Composable
@@ -45,7 +50,10 @@ fun rememberPanelHeightState(): PanelHeightState {
             .distinctUntilChanged()
             .collect { px ->
                 val dp = with(density) { px.toDp() }
-                if (dp >= MIN_REAL_KEYBOARD) state.height = dp
+                if (dp >= MIN_REAL_KEYBOARD && dp != sharedPanelHeight.value) {
+                    sharedPanelHeight.value = dp
+                    savePanelHeightDp(dp.value.toInt())
+                }
             }
     }
     return state

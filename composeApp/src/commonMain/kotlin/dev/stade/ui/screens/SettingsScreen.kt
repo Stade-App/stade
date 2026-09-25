@@ -106,6 +106,7 @@ import dev.stade.ui.i18n.AppLocale
 import dev.stade.ui.BackupOutcome
 import dev.stade.ui.rememberBackupIo
 import dev.stade.ui.components.BackupPassphraseDialog
+import dev.stade.ui.components.UpdateSettingsSection
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.i18n.getLocalePreference
 import dev.stade.ui.i18n.setLocalePreference
@@ -515,6 +516,8 @@ fun SettingsScreen(
                 }
             }
 
+            item { UpdateSettingsSection(container) }
+
             item {
                 SettingsSectionLabel(strings.aboutSection)
                 SettingsGroup {
@@ -714,7 +717,7 @@ private fun ProfileHeader(
 
 
 @Composable
-private fun SettingsSectionLabel(title: String) {
+internal fun SettingsSectionLabel(title: String) {
     Text(
         text = title.uppercase(),
         style = MaterialTheme.typography.labelSmall,
@@ -725,7 +728,7 @@ private fun SettingsSectionLabel(title: String) {
 
 
 @Composable
-private fun SettingsGroup(content: @Composable () -> Unit) {
+internal fun SettingsGroup(content: @Composable () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -782,7 +785,7 @@ private fun SwitchSettingsRow(
 
 
 @Composable
-private fun NavigationSettingsRow(
+internal fun NavigationSettingsRow(
     icon: ImageVector,
     iconTint: Color,
     title: String,

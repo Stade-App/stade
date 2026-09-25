@@ -1,4 +1,4 @@
-name: Linux Package Build
+name: macOS Package Build
 
 on:
   push:
@@ -10,8 +10,8 @@ permissions:
   contents: write
 
 jobs:
-  build-linux-packages:
-    runs-on: ubuntu-latest
+  build-macos-package:
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,53 +23,31 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Install Linux packaging tools
-        run: sudo apt-get update && sudo apt-get install -y rpm fakeroot
-
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Deb and Rpm packages
-        run: ./gradlew :composeApp:packageDeb :composeApp:packageRpm --stacktrace
+      - name: Build Dmg package
+        run: ./gradlew :composeApp:packageDmg --stacktrace
 
-      - name: Verify package metadata
+      - name: Verify package
         run: |
           set -euo pipefail
-          DEB_FILE="$(find composeApp/build/compose/binaries -name '*.deb' -print -quit)"
-          RPM_FILE="$(find composeApp/build/compose/binaries -name '*.rpm' -print -quit)"
+          DMG_FILE="$(find composeApp/build/compose/binaries -name '*.dmg' -print -quit)"
 
-          if [ -z "$DEB_FILE" ]; then
-            echo "::error::No .deb package was produced"
-            exit 1
-          fi
-          if [ -z "$RPM_FILE" ]; then
-            echo "::error::No .rpm package was produced"
+          if [ -z "$DMG_FILE" ]; then
+            echo "::error::No .dmg package was produced"
             exit 1
           fi
 
-          echo "Deb package: $DEB_FILE"
-          dpkg-deb --info "$DEB_FILE"
-          dpkg-deb --contents "$DEB_FILE"
+          echo "Dmg package: $DMG_FILE"
+          hdiutil imageinfo "$DMG_FILE" >/dev/null
+          echo "DMG_FILE=$DMG_FILE" >> "$GITHUB_ENV"
 
-          echo "Rpm package: $RPM_FILE"
-          rpm -qip "$RPM_FILE"
-          rpm -qlp "$RPM_FILE"
-
-          echo "DEB_FILE=$DEB_FILE" >> "$GITHUB_ENV"
-          echo "RPM_FILE=$RPM_FILE" >> "$GITHUB_ENV"
-
-      - name: Upload Deb package
+      - name: Upload Dmg package
         uses: actions/upload-artifact@v4
         with:
-          name: stade-deb
-          path: ${{ env.DEB_FILE }}
-          if-no-files-found: error
-
-      - name: Upload Rpm package
-        uses: actions/upload-artifact@v4
-        with:
-          name: stade-rpm
-          path: ${{ env.RPM_FILE }}
+          name: stade-dmg
+          path: ${{ env.DMG_FILE }}
           if-no-files-found: error
 
       - name: Sign the installer for the in-app updater
@@ -81,7 +59,7 @@ jobs:
           set -euo pipefail
           # Ed25519 imza, kurulum dosyasinin SHA-256 ozetinin uzerine atilir
           printf '%s' "$UPDATE_SIGNING_KEY" > update-key.pem
-          for FILE in "$DEB_FILE" "$RPM_FILE"; do
+          for FILE in "$DMG_FILE"; do
             [ -n "$FILE" ] || continue
             openssl dgst -sha256 -binary "$FILE" > digest.bin
             openssl pkeyutl -sign -inkey update-key.pem -rawin -in digest.bin -out sig.bin
@@ -90,7 +68,7 @@ jobs:
           done
           rm -f update-key.pem digest.bin sig.bin
 
-      - name: Attach packages to the release
+      - name: Attach installer to the release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -108,9 +86,9 @@ jobs:
           done
 
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "::error::$TAG için bir sürüm bulunamadı, paketler eklenemedi"
+            echo "::error::$TAG için bir sürüm bulunamadı, kurulum dosyası eklenemedi"
             exit 1
           fi
 
-          gh release upload "$TAG" "$DEB_FILE" "$RPM_FILE" ${DEB_FILE}.sig ${RPM_FILE}.sig --repo "$GITHUB_REPOSITORY" --clobber 2>/dev/null || gh release upload "$TAG" "$DEB_FILE" "$RPM_FILE" --repo "$GITHUB_REPOSITORY" --clobber
-          echo "Eklendi: $DEB_FILE, $RPM_FILE -> $TAG"
+          gh release upload "$TAG" "$DMG_FILE" ${DMG_FILE}.sig --repo "$GITHUB_REPOSITORY" --clobber 2>/dev/null || gh release upload "$TAG" "$DMG_FILE" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "Eklendi: $DMG_FILE -> $TAG"

@@ -42,9 +42,9 @@ import androidx.compose.ui.unit.dp
 import dev.stade.ui.components.BrandIcons
 import dev.stade.ui.components.BrandMark
 import dev.stade.ui.components.PlatformVerticalScrollbar
+import dev.stade.APP_VERSION
 import dev.stade.ui.i18n.LocalStrings
 
-private const val APP_VERSION = "0.3.1"
 
 private data class SocialLink(
     val label: String,
