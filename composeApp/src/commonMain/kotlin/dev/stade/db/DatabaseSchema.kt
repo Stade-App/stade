@@ -16,7 +16,7 @@ internal object DatabaseSchema {
         val compatible = runCatching {
             driver.executeQuery(
                 identifier = null,
-                sql = "SELECT mlkemPublicKey, mldsaPublicKey, groupProto FROM Contact LIMIT 0",
+                sql = "SELECT mlkemPublicKey, mldsaPublicKey FROM Contact LIMIT 0",
                 mapper = { _: SqlCursor -> QueryResult.Value(Unit) },
                 parameters = 0
             )

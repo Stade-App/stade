@@ -20,6 +20,22 @@ class DatabaseSchemaTest {
     }
 
     @Test
+    fun schemaAwaitingGroupProtocolMigrationIsAccepted() {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        try {
+            driver.execute(
+                null,
+                "CREATE TABLE Contact (id TEXT NOT NULL PRIMARY KEY, mlkemPublicKey BLOB, mldsaPublicKey BLOB)",
+                0
+            )
+
+            DatabaseSchema.requireCompatible(driver)
+        } finally {
+            driver.close()
+        }
+    }
+
+    @Test
     fun incompatibleSchemaIsRejectedWithoutChangingStoredRows() {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
         try {
