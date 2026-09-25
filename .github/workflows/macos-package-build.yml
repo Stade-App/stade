@@ -57,16 +57,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Ed25519 imza, kurulum dosyasinin SHA-256 ozetinin uzerine atilir
-          printf '%s' "$UPDATE_SIGNING_KEY" > update-key.pem
+          # Ed25519 imza, kurulum dosyasinin SHA-256 ozetinin uzerine atilir.
+          # JDK kullanilir; macOS kosucusundaki LibreSSL Ed25519 desteklemiyor.
           for FILE in "$DMG_FILE"; do
             [ -n "$FILE" ] || continue
-            openssl dgst -sha256 -binary "$FILE" > digest.bin
-            openssl pkeyutl -sign -inkey update-key.pem -rawin -in digest.bin -out sig.bin
-            xxd -p -c 999 sig.bin | tr -d '\n' > "$FILE.sig"
-            echo "imzalandi: $FILE.sig"
+            java .github/scripts/UpdateSigner.java sign "$FILE"
           done
-          rm -f update-key.pem digest.bin sig.bin
 
       - name: Attach installer to the release
         if: startsWith(github.ref, 'refs/tags/')
