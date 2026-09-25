@@ -6,7 +6,7 @@ const val MAX_UPDATE_ASSET_BYTES = 600L * 1024 * 1024
 const val MAX_UPDATE_SIGNATURE_BYTES = 4 * 1024
 const val UPDATE_SIGNATURE_SUFFIX = ".sig"
 
-const val UPDATE_SIGNING_PUBLIC_KEY = ""
+const val UPDATE_SIGNING_PUBLIC_KEY = "9256b3be672836dd7d48f7102cde1c3db1eabf527d61279cb44e76d34bb1db4e"
 
 val updateSignatureRequired: Boolean get() = UPDATE_SIGNING_PUBLIC_KEY.length == 64
 

@@ -13,3 +13,5 @@ out/
 *.jks
 *.keystore
 
+update-key.hex
+*.pem
