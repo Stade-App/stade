@@ -19,6 +19,8 @@
   "vaultNotInitialized": "Vault not initialized",
   "vaultLockFailedTitle": "Could not lock securely",
   "vaultLockFailedBody": "Stade remains unlocked because it could not securely remove the local database. Try again after resolving the storage error.",
+  "databaseSchemaFailedTitle": "Could not open local database",
+  "databaseSchemaFailedBody": "Stade left this database untouched to avoid losing data. Update the app and try again; if the problem continues, contact support while keeping the existing database.",
   "wrongPinRemaining": "Wrong PIN ({remaining} attempts left)",
   "wrongPin": "Wrong PIN",
   "wiping": "Wiping…",

@@ -19,6 +19,8 @@
   "vaultNotInitialized": "Kasa başlatılmamış",
   "vaultLockFailedTitle": "Güvenli şekilde kilitlenemedi",
   "vaultLockFailedBody": "Stade, yerel veritabanını güvenle kaldıramadığı için kilit açık kaldı. Depolama hatasını çözdükten sonra tekrar deneyin.",
+  "databaseSchemaFailedTitle": "Yerel veritabanı açılamadı",
+  "databaseSchemaFailedBody": "Stade, verileri silmemek için bu veritabanını açmadı. Uygulamayı güncelleyip tekrar deneyin; sorun sürerse mevcut veritabanını koruyarak destek alın.",
   "wrongPinRemaining": "Şifre hatalı ({remaining} hak kaldı)",
   "wrongPin": "Şifre hatalı",
   "wiping": "Siliniyor…",

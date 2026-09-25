@@ -19,6 +19,8 @@
   "vaultNotInitialized": "금고가 초기화되지 않았습니다",
   "vaultLockFailedTitle": "안전하게 잠그지 못했습니다",
   "vaultLockFailedBody": "로컬 데이터베이스를 안전하게 제거하지 못해 Stade가 잠기지 않은 상태로 남아 있습니다. 저장소 오류를 해결한 뒤 다시 시도하세요.",
+  "databaseSchemaFailedTitle": "로컬 데이터베이스를 열지 못했습니다",
+  "databaseSchemaFailedBody": "Stade는 데이터를 잃지 않도록 이 데이터베이스를 그대로 두었습니다. 앱을 업데이트한 뒤 다시 시도하세요. 문제가 계속되면 기존 데이터베이스를 그대로 유지한 채 지원에 문의하세요.",
   "wrongPinRemaining": "PIN이 올바르지 않습니다 ({remaining}회 남음)",
   "wrongPin": "PIN이 올바르지 않습니다",
   "wiping": "삭제하는 중…",
