@@ -272,6 +272,13 @@ fun LockScreen(
                     scrambled = scrambleEnabled
                 )
             }
+            if (!isKeypadSupported) {
+                PinConfirmAction(
+                    enabled = pin.length >= PIN_MIN && error == null && !isVerifying && !lockedNow,
+                    label = strings.confirmAction,
+                    onClick = { tryUnlock() }
+                )
+            }
             Spacer(Modifier.height(16.dp))
             TextButton(onClick = { showForgotDialog = true }, enabled = !wiping) {
                 Text(strings.forgotPin)
@@ -586,6 +593,24 @@ fun PinSetupScreen(
                     onCancel = onCancel
                 )
             }
+            if (!isKeypadSupported) {
+                PinConfirmAction(
+                    enabled = when (phase) {
+                        Phase.Current -> currentPin.length >= PIN_MIN && error == null && !isVerifying
+                        Phase.New -> newPin.length >= PIN_MIN
+                        Phase.Confirm -> false
+                    },
+                    label = strings.continueAction,
+                    onClick = {
+                        when (phase) {
+                            Phase.Current -> verifyCurrentAndAdvance()
+                            Phase.New -> if (newPin.length >= PIN_MIN) phase = Phase.Confirm
+                            Phase.Confirm -> {}
+                        }
+                    },
+                    visible = phase != Phase.Confirm
+                )
+            }
             if (!isKeypadSupported && requireCurrent) {
                 Spacer(Modifier.height(8.dp))
                 TextButton(onClick = onCancel, enabled = !isVerifying) {
@@ -593,6 +618,35 @@ fun PinSetupScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PinConfirmAction(
+    enabled: Boolean,
+    label: String,
+    onClick: () -> Unit,
+    visible: Boolean = true
+) {
+    val strings = LocalStrings.current
+    if (!visible) return
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.widthIn(min = 200.dp)
+        ) {
+            Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(label)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            strings.pressEnterHint,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.5f)
+        )
     }
 }
 

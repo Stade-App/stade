@@ -4,7 +4,8 @@ import androidx.compose.runtime.State
 
 enum class AppLocale(val code: String) {
     English("en"),
-    Turkish("tr")
+    Turkish("tr"),
+    Korean("ko")
 }
 
 expect fun getLocalePreference(): State<AppLocale>
@@ -14,5 +15,6 @@ expect fun getSystemLocale(): AppLocale
 fun localeToStrings(locale: AppLocale): AppStrings = when (locale) {
     AppLocale.English -> EnglishStrings
     AppLocale.Turkish -> TurkishStrings
+    AppLocale.Korean -> KoreanStrings
 }
 

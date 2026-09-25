@@ -1,6 +1,9 @@
 ﻿package dev.stade.ui.i18n
 
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 abstract class AppStrings {
     abstract val back: String
@@ -16,6 +19,7 @@ abstract class AppStrings {
 
     abstract val unlockTitle: String
     abstract val unlockSubtitle: String
+    abstract val pressEnterHint: String
     abstract val tooManyAttemptsSubtitle: String
     abstract val forgotPin: String
     abstract val resetPinTitle: String
@@ -649,7 +653,6 @@ abstract class AppStrings {
 val LocalStrings = compositionLocalOf<AppStrings> { EnglishStrings }
 
 object I18n {
-    @Volatile
-    var current: AppStrings = EnglishStrings
+    var current: AppStrings by mutableStateOf(EnglishStrings)
 }
 

@@ -445,7 +445,11 @@ fun ContactsScreen(
                     }
                     FilledTonalButton(
                         onClick = {
-                            container.pinnedChats.setPinned(owner.id, item.key, !itemPinned)
+                            scope.launch {
+                                withContext(Dispatchers.Default) {
+                                    container.pinnedChats.setPinned(owner.id, item.key, !itemPinned)
+                                }
+                            }
                             actionItem = null
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -467,10 +471,14 @@ fun ContactsScreen(
                     }
                     FilledTonalButton(
                         onClick = {
-                            when (item) {
-                                is ChatListItem.ContactItem -> container.contacts.setMuted(item.contact.id, !itemMuted)
-                                is ChatListItem.GroupItem -> container.groups.setMuted(item.group.id, !itemMuted)
-                                is ChatListItem.StadiumItem -> container.stadiums.setMuted(item.stadium.id, !itemMuted)
+                            scope.launch {
+                                withContext(Dispatchers.Default) {
+                                    when (item) {
+                                        is ChatListItem.ContactItem -> container.contacts.setMuted(item.contact.id, !itemMuted)
+                                        is ChatListItem.GroupItem -> container.groups.setMuted(item.group.id, !itemMuted)
+                                        is ChatListItem.StadiumItem -> container.stadiums.setMuted(item.stadium.id, !itemMuted)
+                                    }
+                                }
                             }
                             actionItem = null
                         },
@@ -924,7 +932,7 @@ fun ContactsScreen(
                                         .collectAsState(initial = remember(contact.id) { container.messages.lastMessage(contact.id) })
                                     val unread by remember(contact.id) { container.messages.observeUnreadCount(contact.id) }
                                         .collectAsState(initial = remember(contact.id) { container.messages.unreadCount(contact.id) })
-                                    val preview by remember(lastMsg?.id) {
+                                    val preview by remember(lastMsg?.id, strings) {
                                         derivedStateOf { directChatPreview(lastMsg, strings) }
                                     }
                                     ContactRow(
@@ -944,7 +952,7 @@ fun ContactsScreen(
                                         .collectAsState(initial = remember(group.id) { container.groups.lastMessage(group.id) })
                                     val unread by remember(group.id) { container.groups.observeUnreadCount(group.id) }
                                         .collectAsState(initial = remember(group.id) { container.groups.unreadCount(group.id) })
-                                    val preview by remember(lastMsg?.id) {
+                                    val preview by remember(lastMsg?.id, strings) {
                                         derivedStateOf { container.groupChatPreview(group.id, lastMsg, owner, strings) }
                                     }
                                     GroupRow(
@@ -1225,7 +1233,7 @@ private fun ContactRow(
                         Icon(
                             Icons.Default.PushPin,
                             contentDescription = strings.pinChatAction,
-                            modifier = Modifier.size(14.dp).rotate(45f),
+                            modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -1315,7 +1323,7 @@ private fun GroupRow(
                         Icon(
                             Icons.Default.PushPin,
                             contentDescription = strings.pinChatAction,
-                            modifier = Modifier.size(14.dp).rotate(45f),
+                            modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -1407,7 +1415,7 @@ private fun StadiumRow(
                         Icon(
                             Icons.Default.PushPin,
                             contentDescription = strings.pinChatAction,
-                            modifier = Modifier.size(14.dp).rotate(45f),
+                            modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

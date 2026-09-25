@@ -18,6 +18,7 @@ object TurkishStrings : AppStrings() {
 
     override val unlockTitle = "Kilidi aç"
     override val unlockSubtitle = "Devam etmek için şifreni gir."
+    override val pressEnterHint = "ya da Enter'a bas"
     override val tooManyAttemptsSubtitle = "Çok fazla hatalı giriş. Bekleyin."
     override val forgotPin = "Şifremi unuttum"
     override val resetPinTitle = "Şifreyi sıfırla"

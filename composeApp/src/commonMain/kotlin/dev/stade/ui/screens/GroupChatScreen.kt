@@ -152,6 +152,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import dev.stade.ui.components.QuickReactionBar
+import dev.stade.ui.components.onSecondaryClick
 import dev.stade.ui.components.reactionBarOffsetY
 import kotlinx.coroutines.flow.flowOf
 import dev.stade.ui.components.AnimatedImage
@@ -914,6 +915,7 @@ fun GroupChatScreen(
                                     val isNewMessage = remember(msg.id) { messageEntrance.isNew(msg.id) }
                                     Box(
                                         messageEntranceModifier(isNewMessage, msg.isOwn)
+                                            .onSecondaryClick { toggleSelection(msg.id) }
                                             .then(
                                                 if (msg.id == singleSelectedId) {
                                                     Modifier.onGloballyPositioned { coords ->
@@ -944,7 +946,7 @@ fun GroupChatScreen(
                                         val quotedMsg = remember(msg.id, msg.replyToId, messagesById) {
                                             msg.replyToId?.let { rid -> messagesById[rid] }
                                         }
-                                        val quoted = remember(msg.id, quotedMsg) {
+                                        val quoted = remember(msg.id, quotedMsg, strings) {
                                             when {
                                                 msg.replyToId == null -> null
                                                 quotedMsg != null -> {

@@ -37,7 +37,8 @@ fun CreateStadiumScreen(
     container: AppContainer,
     owner: LocalIdentity,
     onBack: () -> Unit,
-    onStadiumCreated: (String) -> Unit
+    onStadiumCreated: (String) -> Unit,
+    embedded: Boolean = false
 ) {
     val strings = LocalStrings.current
     var name by remember { mutableStateOf("") }
@@ -45,7 +46,13 @@ fun CreateStadiumScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { HomeIdentityHeader(container = container, owner = owner) },
+                title = {
+                    if (embedded) {
+                        Text(strings.createStadiumAction, style = MaterialTheme.typography.titleMedium)
+                    } else {
+                        HomeIdentityHeader(container = container, owner = owner)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,

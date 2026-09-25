@@ -398,6 +398,7 @@ fun SettingsScreen(
                                             when (locale) {
                                                 AppLocale.English -> "English"
                                                 AppLocale.Turkish -> "Türkçe"
+                                                AppLocale.Korean -> "한국어"
                                             }
                                         )
                                     },

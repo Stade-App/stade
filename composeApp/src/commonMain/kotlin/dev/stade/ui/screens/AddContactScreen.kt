@@ -69,7 +69,12 @@ import kotlinx.datetime.Clock
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -> Unit) {
+fun AddContactScreen(
+    container: AppContainer,
+    owner: LocalIdentity,
+    onBack: () -> Unit,
+    embedded: Boolean = false
+) {
     val strings = LocalStrings.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
@@ -122,7 +127,13 @@ fun AddContactScreen(container: AppContainer, owner: LocalIdentity, onBack: () -
                     actionIconContentColor = MaterialTheme.colorScheme.onSurface,
                     navigationIconContentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                title = { HomeIdentityHeader(container = container, owner = owner) },
+                title = {
+                    if (embedded) {
+                        Text(strings.addContactTitle, style = MaterialTheme.typography.titleMedium)
+                    } else {
+                        HomeIdentityHeader(container = container, owner = owner)
+                    }
+                },
             )
         }
     ) { padding ->

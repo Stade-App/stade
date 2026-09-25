@@ -18,6 +18,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -114,6 +117,46 @@ fun TopBarPill(
                 )
             }
         }
+    }
+}
+
+@Composable
+fun SpinningGearButton(
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    buttonSize: Dp = TOP_PILL_SIZE,
+    iconSize: Dp = 20.dp,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant
+) {
+    val scope = rememberCoroutineScope()
+    val spin = remember { Animatable(0f) }
+    val haptic = rememberGearHaptic()
+
+    IconButton(
+        onClick = {
+            scope.launch {
+                spin.animateTo(
+                    targetValue = spin.value + 360f,
+                    animationSpec = tween(GEAR_SPIN_MS, easing = FastOutSlowInEasing)
+                )
+            }
+            scope.launch { haptic.play() }
+            scope.launch {
+                delay(GEAR_SPIN_HANDOFF_MS)
+                onClick()
+            }
+        },
+        modifier = modifier.size(buttonSize)
+    ) {
+        Icon(
+            Icons.Default.Settings,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier
+                .size(iconSize)
+                .graphicsLayer { rotationZ = spin.value }
+        )
     }
 }
 

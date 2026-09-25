@@ -97,6 +97,7 @@ import kotlinx.coroutines.delay
 import dev.stade.audio.RecordedClip
 import dev.stade.audio.rememberAudioPlayer
 import dev.stade.ui.decodeToImageBitmap
+import dev.stade.ui.isTouchPrimaryInput
 import dev.stade.ui.i18n.LocalStrings
 
 data class ChatComposerReplyPreview(val senderLabel: String, val snippet: String)
@@ -534,7 +535,10 @@ fun ChatComposerBar(
                                 }
                             }
                         } else null
-                    ),
+                    )
+                    .onSecondaryClick(enabled = onLongPressSend != null) {
+                        if (voiceButtonMode == VoiceSendMode.SEND) onLongPressSend?.invoke()
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 AnimatedContent(
@@ -624,7 +628,7 @@ private fun RecordingStrip(
         )
         Spacer(Modifier.weight(1f))
         Text(
-            strings.voiceSlideToCancel,
+            if (isTouchPrimaryInput) strings.voiceSlideToCancel else strings.voiceCancelRecording,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 1f - cancelProgress),
             maxLines = 1

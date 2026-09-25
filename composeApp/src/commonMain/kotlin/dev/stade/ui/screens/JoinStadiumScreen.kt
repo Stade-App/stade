@@ -46,7 +46,8 @@ fun JoinStadiumScreen(
     container: AppContainer,
     owner: LocalIdentity,
     onBack: () -> Unit,
-    onJoined: (String) -> Unit = {}
+    onJoined: (String) -> Unit = {},
+    embedded: Boolean = false
 ) {
     val strings = LocalStrings.current
     val clipboard = LocalClipboardManager.current
@@ -62,7 +63,13 @@ fun JoinStadiumScreen(
                     actionIconContentColor = MaterialTheme.colorScheme.onSurface,
                     navigationIconContentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                title = { HomeIdentityHeader(container = container, owner = owner) },
+                title = {
+                    if (embedded) {
+                        Text(strings.joinStadiumAction, style = MaterialTheme.typography.titleMedium)
+                    } else {
+                        HomeIdentityHeader(container = container, owner = owner)
+                    }
+                },
             )
         }
     ) { padding ->

@@ -12,6 +12,15 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +52,10 @@ import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Unarchive
+import androidx.compose.material.icons.filled.StarOutline
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -56,6 +69,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -103,9 +117,9 @@ import dev.stade.stadium.isOfficial
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.BotBadge
 import dev.stade.ui.components.BrandMark
-import dev.stade.radar.isRadarSupported
-import dev.stade.ui.components.HomeActionBar
-import dev.stade.ui.components.TopBarPill
+import dev.stade.ui.components.DESKTOP_USER_BAR_HEIGHT
+import dev.stade.ui.components.DesktopModalHost
+import dev.stade.ui.components.DesktopUserBar
 import dev.stade.ui.components.UpdateRequiredBanner
 import dev.stade.ui.screens.StadeRadarScreen
 import dev.stade.ui.components.formatChatTime
@@ -212,6 +226,13 @@ fun TwoPanelLayout(
     val pinned by remember(owner.id) { container.pinnedChats.observePinned(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.pinnedChats.pinned(owner.id) })
     var right by remember { mutableStateOf<PanelRight>(PanelRight.Empty) }
+    var createDialog by remember { mutableStateOf<CreateDialog?>(null) }
+    var showArchived by remember { mutableStateOf(false) }
+    val autoUnarchive by remember { container.archivedChats.observeAutoUnarchive() }
+        .collectAsState(initial = remember { container.archivedChats.autoUnarchiveOnMessage() })
+    LaunchedEffect(archivedKeys, showArchived) {
+        if (showArchived && archivedKeys.isEmpty()) showArchived = false
+    }
     var query by remember { mutableStateOf("") }
     val settingsListState = rememberLazyListState()
     val stadeyVisible by getStadeyVisible()
@@ -280,7 +301,7 @@ fun TwoPanelLayout(
         else contacts.filter { it.nickname.contains(query.trim(), ignoreCase = true) }
     }
 
-    val combinedPanelItems = remember(filtered, groups, stadiums, query, contactLastMessages, groupLastMessages, stadiumLastMessages, pinned, archivedKeys) {
+    val combinedPanelItems = remember(filtered, groups, stadiums, query, contactLastMessages, groupLastMessages, stadiumLastMessages, pinned, archivedKeys, showArchived) {
         val q = query.trim()
         val result = mutableListOf<PanelChatItem>()
         groups
@@ -298,13 +319,25 @@ fun TwoPanelLayout(
             result.add(PanelChatItem.ContactItem(c, contactLastMessages.getOrNull(origIdx)?.timestamp, pinned[c.id]))
         }
         if (q.isBlank()) {
-            result.retainAll { !archivedKeys.contains(it.key) }
+            result.retainAll { archivedKeys.contains(it.key) == showArchived }
+        } else if (showArchived) {
+            result.retainAll { archivedKeys.contains(it.key) }
         }
         result.sortWith(
             compareByDescending<PanelChatItem> { it.pinnedAt != null }
                 .thenByDescending { it.pinnedAt ?: it.sortKey }
         )
         result
+    }
+
+    val archivedUnreadCount = remember(archivedKeys, contacts, groups) {
+        archivedKeys.count { key ->
+            when {
+                key.startsWith("grp_") -> container.groups.unreadCount(key.removePrefix("grp_")) > 0
+                key.startsWith("std_") -> false
+                else -> container.messages.unreadCount(key) > 0
+            }
+        }
     }
 
     var panelMessageResults by remember { mutableStateOf(emptyList<SearchResult>()) }
@@ -430,27 +463,32 @@ fun TwoPanelLayout(
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = Color.Transparent
                         ),
-                        title = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(name = owner.nickname, size = 32.dp, keySeed = owner.publicSigningKey, avatarBytes = owner.avatar)
-                                Spacer(Modifier.size(10.dp))
-                                Column {
-                                    Text(strings.appTitle, style = MaterialTheme.typography.titleMedium)
-                                    Text(
-                                        owner.nickname,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        navigationIcon = {
+                            if (showArchived) {
+                                IconButton(onClick = { showArchived = false }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = strings.back
                                     )
                                 }
                             }
                         },
-                        actions = {
-                            TopBarPill(
-                                icon = Icons.Default.Settings,
-                                contentDescription = strings.settingsAction,
-                                spinOnClick = true,
-                                onClick = { right = PanelRight.Settings }
+                        title = {
+                            Text(
+                                if (showArchived) strings.archivedChatsTitle else strings.appTitle,
+                                style = MaterialTheme.typography.titleMedium
                             )
+                        },
+                        actions = {
+                            if (!showArchived) {
+                                IconButton(onClick = { right = PanelRight.Starred }) {
+                                    Icon(
+                                        Icons.Default.StarOutline,
+                                        contentDescription = strings.starredMessagesTitle,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     )
                 }
@@ -494,7 +532,29 @@ fun TwoPanelLayout(
                                     )
                                 }
                             }
-                            if (stadeyVisible && query.isBlank()) {
+                            if (!showArchived && query.isBlank() && archivedKeys.isNotEmpty()) {
+                                item(key = "archivedEntry") {
+                                    PanelArchivedRow(
+                                        unreadCount = archivedUnreadCount,
+                                        onClick = { showArchived = true }
+                                    )
+                                }
+                            }
+                            if (showArchived && query.isBlank()) {
+                                item(key = "archiveNotice") {
+                                    Text(
+                                        if (autoUnarchive) strings.archiveNoticeUnarchiveBanner
+                                        else strings.archiveNoticeBanner,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { right = PanelRight.ArchiveSettings }
+                                            .padding(horizontal = 20.dp, vertical = 12.dp)
+                                    )
+                                }
+                            }
+                            if (stadeyVisible && !showArchived && query.isBlank()) {
                                 item(key = "stadey") {
                                     PanelStadeyRow(
                                         selected = right is PanelRight.Stadey,
@@ -546,7 +606,7 @@ fun TwoPanelLayout(
                                                 .collectAsState(initial = remember(contact.id) { container.messages.lastMessage(contact.id) })
                                             val unread by remember(contact.id) { container.messages.observeUnreadCount(contact.id) }
                                                 .collectAsState(initial = remember(contact.id) { container.messages.unreadCount(contact.id) })
-                                            val preview by remember(lastMsg?.id) {
+                                            val preview by remember(lastMsg?.id, strings) {
                                                 derivedStateOf { directChatPreview(lastMsg, strings) }
                                             }
                                             val isSelected by remember(contact.id) {
@@ -574,10 +634,19 @@ fun TwoPanelLayout(
                                                     showDeleteConfirm = true
                                                 },
                                                 onTogglePin = {
-                                                    container.pinnedChats.setPinned(owner.id, item.key, item.pinnedAt == null)
+                                                    scope.launch { withContext(Dispatchers.Default) { container.pinnedChats.setPinned(owner.id, item.key, item.pinnedAt == null) } }
                                                 },
                                                 onToggleMute = {
-                                                    container.contacts.setMuted(contact.id, !contact.muted)
+                                                    scope.launch { withContext(Dispatchers.Default) { container.contacts.setMuted(contact.id, !contact.muted) } }
+                                                },
+                                                archived = archivedKeys.contains(item.key),
+                                                onToggleArchive = {
+                                                    val next = !archivedKeys.contains(item.key)
+                                                    scope.launch {
+                                                        withContext(Dispatchers.Default) {
+                                                            container.archivedChats.setArchived(owner.id, item.key, next)
+                                                        }
+                                                    }
                                                 }
                                             )
                                         }
@@ -587,7 +656,7 @@ fun TwoPanelLayout(
                                                 .collectAsState(initial = remember(group.id) { container.groups.lastMessage(group.id) })
                                             val groupUnread by remember(group.id) { container.groups.observeUnreadCount(group.id) }
                                                 .collectAsState(initial = remember(group.id) { container.groups.unreadCount(group.id) })
-                                            val groupPreview by remember(lastGroupMsg?.id) {
+                                            val groupPreview by remember(lastGroupMsg?.id, strings) {
                                                 derivedStateOf { container.groupChatPreview(group.id, lastGroupMsg, owner, strings) }
                                             }
                                             val isGroupSelected by remember(group.id) {
@@ -608,10 +677,19 @@ fun TwoPanelLayout(
                                                 unread = groupUnread,
                                                 onClick = { right = PanelRight.GroupChat(group.id) },
                                                 onTogglePin = {
-                                                    container.pinnedChats.setPinned(owner.id, item.key, item.pinnedAt == null)
+                                                    scope.launch { withContext(Dispatchers.Default) { container.pinnedChats.setPinned(owner.id, item.key, item.pinnedAt == null) } }
                                                 },
                                                 onToggleMute = {
-                                                    container.groups.setMuted(group.id, !group.muted)
+                                                    scope.launch { withContext(Dispatchers.Default) { container.groups.setMuted(group.id, !group.muted) } }
+                                                },
+                                                archived = archivedKeys.contains(item.key),
+                                                onToggleArchive = {
+                                                    val next = !archivedKeys.contains(item.key)
+                                                    scope.launch {
+                                                        withContext(Dispatchers.Default) {
+                                                            container.archivedChats.setArchived(owner.id, item.key, next)
+                                                        }
+                                                    }
                                                 }
                                             )
                                         }
@@ -632,10 +710,19 @@ fun TwoPanelLayout(
                                                 pinned = item.pinnedAt != null,
                                                 onClick = { right = PanelRight.Stadium(stadium.id) },
                                                 onTogglePin = {
-                                                    container.pinnedChats.setPinned(owner.id, item.key, item.pinnedAt == null)
+                                                    scope.launch { withContext(Dispatchers.Default) { container.pinnedChats.setPinned(owner.id, item.key, item.pinnedAt == null) } }
                                                 },
                                                 onToggleMute = {
-                                                    container.stadiums.setMuted(stadium.id, !stadium.muted)
+                                                    scope.launch { withContext(Dispatchers.Default) { container.stadiums.setMuted(stadium.id, !stadium.muted) } }
+                                                },
+                                                archived = archivedKeys.contains(item.key),
+                                                onToggleArchive = {
+                                                    val next = !archivedKeys.contains(item.key)
+                                                    scope.launch {
+                                                        withContext(Dispatchers.Default) {
+                                                            container.archivedChats.setArchived(owner.id, item.key, next)
+                                                        }
+                                                    }
                                                 }
                                             )
                                         }
@@ -677,18 +764,21 @@ fun TwoPanelLayout(
                                         }
                                     }
                                 }
-                                item { Spacer(Modifier.height(96.dp)) }
+                item { Spacer(Modifier.height(DESKTOP_USER_BAR_HEIGHT + 24.dp)) }
                             }
                         }
 
-                        HomeActionBar(
-                            onAddContact = { right = PanelRight.AddContact },
-                            onCreateGroup = { right = PanelRight.CreateGroup },
-                            onCreateStadium = { right = PanelRight.CreateStadium },
-                            onOpenChats = { right = PanelRight.Empty },
-                            onJoinStadium = { right = PanelRight.JoinStadium },
-                            onOpenRadar = if (isRadarSupported) ({ right = PanelRight.Radar }) else null,
-                            modifier = Modifier.align(Alignment.BottomCenter)
+                        DesktopUserBar(
+                            container = container,
+                            owner = owner,
+                            onAddContact = { createDialog = CreateDialog.AddContact },
+                            onCreateGroup = { createDialog = CreateDialog.CreateGroup },
+                            onCreateStadium = { createDialog = CreateDialog.CreateStadium },
+                            onJoinStadium = { createDialog = CreateDialog.JoinStadium },
+                            onOpenSettings = { right = PanelRight.Settings },
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
                         )
                     }
                 }
@@ -697,8 +787,29 @@ fun TwoPanelLayout(
 
         VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            when (val rp = right) {
+        Box(modifier = Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
+            AnimatedContent(
+                targetState = right,
+                modifier = Modifier.fillMaxSize(),
+                contentKey = { panelKey(it) },
+                transitionSpec = {
+                    val forward = panelDepth(targetState) >= panelDepth(initialState)
+                    val enterSlide = tween<IntOffset>(PANEL_SLIDE_MS, easing = PanelEnterEasing)
+                    val exitSlide = tween<IntOffset>(PANEL_SLIDE_MS, easing = PanelExitEasing)
+                    val enterFade = tween<Float>(PANEL_FADE_MS, easing = LinearEasing)
+                    val exitFade = tween<Float>(PANEL_SLIDE_MS, easing = LinearEasing)
+                    val transition = if (forward) {
+                        (slideInHorizontally(enterSlide) { it } + fadeIn(enterFade)) togetherWith
+                            (slideOutHorizontally(exitSlide) { -it / 4 } + fadeOut(exitFade, targetAlpha = 0.85f))
+                    } else {
+                        (slideInHorizontally(enterSlide) { -it / 4 } + fadeIn(enterFade)) togetherWith
+                            (slideOutHorizontally(exitSlide) { it } + fadeOut(exitFade, targetAlpha = 0.85f))
+                    }
+                    transition.using(SizeTransform(clip = false))
+                },
+                label = "panelNav"
+            ) { rp ->
+            when (rp) {
                 is PanelRight.Empty -> Box(
                     modifier = Modifier.fillMaxSize()
                         .background(MaterialTheme.colorScheme.surfaceContainerLow),
@@ -880,9 +991,59 @@ fun TwoPanelLayout(
                     onJoined = { stadiumId -> right = PanelRight.Stadium(stadiumId) }
                 )
             }
+            }
+        }
+    }
+
+    val openDialog = createDialog
+    if (openDialog != null) {
+        DesktopModalHost(onDismiss = { createDialog = null }) {
+            when (openDialog) {
+                CreateDialog.AddContact -> AddContactScreen(
+                    container = container,
+                    owner = owner,
+                    onBack = {
+                        container.pendingInvite.value = null
+                        createDialog = null
+                    },
+                    embedded = true
+                )
+                CreateDialog.CreateGroup -> CreateGroupScreen(
+                    container = container,
+                    owner = owner,
+                    onBack = { createDialog = null },
+                    onGroupCreated = { groupId ->
+                        createDialog = null
+                        right = PanelRight.GroupChat(groupId)
+                    },
+                    embedded = true
+                )
+                CreateDialog.CreateStadium -> CreateStadiumScreen(
+                    container = container,
+                    owner = owner,
+                    onBack = { createDialog = null },
+                    onStadiumCreated = { stadiumId ->
+                        createDialog = null
+                        right = PanelRight.Stadium(stadiumId)
+                    },
+                    embedded = true
+                )
+                CreateDialog.JoinStadium -> JoinStadiumScreen(
+                    container = container,
+                    owner = owner,
+                    onBack = { createDialog = null },
+                    onJoined = { stadiumId ->
+                        createDialog = null
+                        right = PanelRight.Stadium(stadiumId)
+                    },
+                    embedded = true
+                )
+            }
         }
     }
 }
+
+private enum class CreateDialog { AddContact, CreateGroup, CreateStadium, JoinStadium }
 
 
 @Composable
@@ -1057,7 +1218,9 @@ private fun PanelContactRow(
     onVerifyRequest: () -> Unit,
     onDeleteRequest: () -> Unit,
     onTogglePin: () -> Unit,
-    onToggleMute: () -> Unit
+    onToggleMute: () -> Unit,
+    archived: Boolean = false,
+    onToggleArchive: () -> Unit = {}
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
     val strings = LocalStrings.current
@@ -1160,7 +1323,7 @@ private fun PanelContactRow(
                         Icon(
                             Icons.Default.PushPin,
                             contentDescription = strings.pinChatAction,
-                            modifier = Modifier.size(14.dp).rotate(45f),
+                            modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -1249,6 +1412,20 @@ private fun PanelContactRow(
                     onToggleMute()
                 }
             )
+            DropdownMenuItem(
+                text = { Text(if (archived) strings.unarchiveChatAction else strings.archiveChatAction) },
+                leadingIcon = {
+                    Icon(
+                        if (archived) Icons.Default.Unarchive else Icons.Default.Archive,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onToggleArchive()
+                }
+            )
             HorizontalDivider()
             DropdownMenuItem(
                 text = { Text(strings.viewProfileAction) },
@@ -1296,7 +1473,9 @@ private fun PanelGroupRow(
     unread: Long,
     onClick: () -> Unit,
     onTogglePin: () -> Unit,
-    onToggleMute: () -> Unit
+    onToggleMute: () -> Unit,
+    archived: Boolean = false,
+    onToggleArchive: () -> Unit = {}
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
     val strings = LocalStrings.current
@@ -1374,7 +1553,7 @@ private fun PanelGroupRow(
                         Icon(
                             Icons.Default.PushPin,
                             contentDescription = strings.pinChatAction,
-                            modifier = Modifier.size(14.dp).rotate(45f),
+                            modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -1463,6 +1642,20 @@ private fun PanelGroupRow(
                     onToggleMute()
                 }
             )
+            DropdownMenuItem(
+                text = { Text(if (archived) strings.unarchiveChatAction else strings.archiveChatAction) },
+                leadingIcon = {
+                    Icon(
+                        if (archived) Icons.Default.Unarchive else Icons.Default.Archive,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onToggleArchive()
+                }
+            )
         }
     }
 }
@@ -1474,7 +1667,9 @@ private fun PanelStadiumRow(
     pinned: Boolean,
     onClick: () -> Unit,
     onTogglePin: () -> Unit,
-    onToggleMute: () -> Unit
+    onToggleMute: () -> Unit,
+    archived: Boolean = false,
+    onToggleArchive: () -> Unit = {}
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
     val strings = LocalStrings.current
@@ -1558,7 +1753,7 @@ private fun PanelStadiumRow(
                         Icon(
                             Icons.Default.PushPin,
                             contentDescription = strings.pinChatAction,
-                            modifier = Modifier.size(14.dp).rotate(45f),
+                            modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -1616,6 +1811,103 @@ private fun PanelStadiumRow(
                     onToggleMute()
                 }
             )
+            DropdownMenuItem(
+                text = { Text(if (archived) strings.unarchiveChatAction else strings.archiveChatAction) },
+                leadingIcon = {
+                    Icon(
+                        if (archived) Icons.Default.Unarchive else Icons.Default.Archive,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                onClick = {
+                    showContextMenu = false
+                    onToggleArchive()
+                }
+            )
         }
     }
+}
+
+@Composable
+private fun PanelArchivedRow(unreadCount: Int, onClick: () -> Unit) {
+    val strings = LocalStrings.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.Archive,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(Modifier.width(18.dp))
+        Text(
+            strings.archivedChatsTitle,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f)
+        )
+        if (unreadCount > 0) {
+            Text(
+                unreadCount.toString(),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+private const val PANEL_SLIDE_MS = 300
+private const val PANEL_FADE_MS = 200
+private val PanelEnterEasing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+private val PanelExitEasing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+
+private fun panelKey(panel: PanelRight): String = when (panel) {
+    is PanelRight.Empty -> "empty"
+    is PanelRight.Chat -> "chat:${panel.contactId}"
+    is PanelRight.GroupChat -> "group:${panel.groupId}"
+    is PanelRight.GroupMembers -> "groupMembers:${panel.groupId}"
+    is PanelRight.CreateGroup -> "createGroup"
+    is PanelRight.Stadium -> "stadium:${panel.stadiumId}"
+    is PanelRight.CreateStadium -> "createStadium"
+    is PanelRight.ManageStadium -> "manageStadium:${panel.stadiumId}"
+    is PanelRight.JoinStadium -> "joinStadium"
+    is PanelRight.Settings -> "settings"
+    is PanelRight.Security -> "security"
+    is PanelRight.Transports -> "transports"
+    is PanelRight.About -> "about"
+    is PanelRight.Starred -> "starred"
+    is PanelRight.ArchiveSettings -> "archiveSettings"
+    is PanelRight.Stadey -> "stadey"
+    is PanelRight.AddContact -> "addContact"
+    is PanelRight.Radar -> "radar"
+    is PanelRight.Verify -> "verify:${panel.contactId}"
+    is PanelRight.PinSetup -> "pinSetup"
+}
+
+private fun panelDepth(panel: PanelRight): Int = when (panel) {
+    is PanelRight.Empty -> 0
+    is PanelRight.Chat,
+    is PanelRight.GroupChat,
+    is PanelRight.Stadium,
+    is PanelRight.Stadey,
+    is PanelRight.Settings,
+    is PanelRight.Starred,
+    is PanelRight.AddContact,
+    is PanelRight.CreateGroup,
+    is PanelRight.CreateStadium,
+    is PanelRight.JoinStadium,
+    is PanelRight.Radar -> 1
+    is PanelRight.GroupMembers,
+    is PanelRight.ManageStadium,
+    is PanelRight.Verify,
+    is PanelRight.Security,
+    is PanelRight.Transports,
+    is PanelRight.About,
+    is PanelRight.ArchiveSettings -> 2
+    is PanelRight.PinSetup -> 3
 }

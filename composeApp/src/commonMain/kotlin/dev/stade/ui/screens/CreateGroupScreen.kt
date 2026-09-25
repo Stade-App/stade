@@ -60,7 +60,8 @@ fun CreateGroupScreen(
     container: AppContainer,
     owner: LocalIdentity,
     onBack: () -> Unit,
-    onGroupCreated: (String) -> Unit
+    onGroupCreated: (String) -> Unit,
+    embedded: Boolean = false
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
@@ -73,7 +74,13 @@ fun CreateGroupScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { HomeIdentityHeader(container = container, owner = owner) },
+                title = {
+                    if (embedded) {
+                        Text(strings.createGroupTitle, style = MaterialTheme.typography.titleMedium)
+                    } else {
+                        HomeIdentityHeader(container = container, owner = owner)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,

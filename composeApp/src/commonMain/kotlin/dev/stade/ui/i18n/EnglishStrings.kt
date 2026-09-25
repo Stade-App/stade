@@ -18,6 +18,7 @@ object EnglishStrings : AppStrings() {
 
     override val unlockTitle = "Unlock"
     override val unlockSubtitle = "Enter your PIN to continue."
+    override val pressEnterHint = "or press Enter"
     override val tooManyAttemptsSubtitle = "Too many failed attempts. Please wait."
     override val forgotPin = "Forgot PIN"
     override val resetPinTitle = "Reset PIN"

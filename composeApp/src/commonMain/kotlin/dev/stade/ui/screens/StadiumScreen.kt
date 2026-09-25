@@ -130,6 +130,7 @@ import dev.stade.ui.components.EmojiStickerPanel
 import dev.stade.ui.components.PadPanel
 import dev.stade.ui.components.AnimatedImage
 import dev.stade.ui.components.UnsupportedMessageBubble
+import dev.stade.ui.components.onSecondaryClick
 import dev.stade.chat.StarScope
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -629,7 +630,10 @@ fun StadiumScreen(
                             ) {
                                 items(displayMessages, key = { it.id }) { msg ->
                                     val isNewMessage = remember(msg.id) { messageEntrance.isNew(msg.id) }
-                                    Box(messageEntranceModifier(isNewMessage, msg.isOwn)) {
+                                    Box(
+                                        messageEntranceModifier(isNewMessage, msg.isOwn)
+                                            .onSecondaryClick { toggleSelection(msg.id) }
+                                    ) {
                                         val isSelected by remember(msg.id) { derivedStateOf { selectedMessageIds.contains(msg.id) } }
                                         val onShortClick: () -> Unit = { if (inSelectionMode) toggleSelection(msg.id) }
                                         val onLongClick: () -> Unit = { toggleSelection(msg.id) }

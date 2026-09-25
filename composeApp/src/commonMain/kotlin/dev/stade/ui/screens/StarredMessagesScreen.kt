@@ -81,7 +81,7 @@ fun StarredMessagesScreen(
 
     PlatformBackHandler(enabled = inSelectionMode) { selectedIds = emptySet() }
 
-    val entries = remember(refs) {
+    val entries = remember(refs, strings) {
         refs.mapNotNull { ref -> resolve(container, strings.photoMessage, strings.voiceMessage, strings.videoMessage, strings.stickerMessage, ref) }
     }
 
