@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.core.Animatable
 import kotlin.math.abs
@@ -189,8 +190,9 @@ fun HomeActionBar(
                         return@Canvas
                     }
                     val slot = size.width / order.size
-                    val left = pillIndex * slot
                     val lastIndex = (order.size - 1).toFloat()
+                    val mirrored = layoutDirection == LayoutDirection.Rtl
+                    val left = if (mirrored) size.width - (pillIndex + 1f) * slot else pillIndex * slot
 
                     val impact = pillImpact.value
                     val stretch = 1f + PILL_FALL_STRETCH * (1f - fall)
@@ -209,8 +211,10 @@ fun HomeActionBar(
 
                     val capsule = height / 2f
                     val inner = ITEM_PILL_RADIUS.toPx().coerceAtMost(capsule)
-                    val leftEdge = (1f - pillIndex.coerceIn(0f, 1f))
-                    val rightEdge = (1f - (lastIndex - pillIndex).coerceIn(0f, 1f))
+                    val startEdge = (1f - pillIndex.coerceIn(0f, 1f))
+                    val endEdge = (1f - (lastIndex - pillIndex).coerceIn(0f, 1f))
+                    val leftEdge = if (mirrored) endEdge else startEdge
+                    val rightEdge = if (mirrored) startEdge else endEdge
                     val leftRadius = CornerRadius(lerp(inner, capsule, leftEdge))
                     val rightRadius = CornerRadius(lerp(inner, capsule, rightEdge))
 

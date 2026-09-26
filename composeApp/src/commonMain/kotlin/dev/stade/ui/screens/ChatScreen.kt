@@ -124,6 +124,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
@@ -131,6 +132,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import dev.stade.ui.components.rememberAttachmentBytes
@@ -1757,6 +1759,7 @@ private fun SwipeToReplyRow(
     val maxSwipePx = with(LocalDensity.current) { 64.dp.toPx() }
     val thresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
     val iconProgress = (offsetX.value / thresholdPx).coerceIn(0f, 1f)
+    val dragSign = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1f else 1f
 
     Box(modifier = Modifier.fillMaxWidth()) {
         if (iconProgress > 0f) {
@@ -1795,7 +1798,10 @@ private fun SwipeToReplyRow(
                                 onHorizontalDrag = { change, dragAmount ->
                                     change.consume()
                                     scope.launch {
-                                        offsetX.snapTo((offsetX.value + dragAmount).coerceIn(0f, maxSwipePx))
+                                        offsetX.snapTo(
+                                            (offsetX.value + dragAmount * dragSign)
+                                                .coerceIn(0f, maxSwipePx)
+                                        )
                                     }
                                 }
                             )

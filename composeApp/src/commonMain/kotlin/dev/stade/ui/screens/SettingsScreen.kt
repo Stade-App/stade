@@ -103,6 +103,7 @@ import dev.stade.ui.theme.getDynamicColorEnabled
 import dev.stade.ui.theme.isDynamicColorSupported
 import dev.stade.ui.theme.setDynamicColorEnabled
 import dev.stade.ui.i18n.AppLocale
+import dev.stade.ui.i18n.localeDisplayName
 import dev.stade.ui.BackupOutcome
 import dev.stade.ui.rememberBackupIo
 import dev.stade.ui.components.BackupPassphraseDialog
@@ -394,15 +395,7 @@ fun SettingsScreen(
                         ) {
                             AppLocale.entries.forEach { locale ->
                                 DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            when (locale) {
-                                                AppLocale.English -> "English"
-                                                AppLocale.Turkish -> "Türkçe"
-                                                AppLocale.Korean -> "한국어"
-                                            }
-                                        )
-                                    },
+                                    text = { Text(localeDisplayName(locale)) },
                                     trailingIcon = {
                                         if (locale == currentLocale) {
                                             Icon(Icons.Default.Check, contentDescription = null)

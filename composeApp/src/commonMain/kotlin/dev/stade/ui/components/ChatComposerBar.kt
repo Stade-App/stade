@@ -91,6 +91,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.delay
@@ -137,6 +139,7 @@ fun ChatComposerBar(
     var cancelDragPx by remember { mutableStateOf(0f) }
     val cancelThresholdPx = with(LocalDensity.current) { CANCEL_SLIDE_DISTANCE.toPx() }
     val cancelProgress = (-cancelDragPx / cancelThresholdPx).coerceIn(0f, 1f)
+    val cancelDragSign = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1f else 1f
     LaunchedEffect(isRecording) { if (!isRecording) cancelDragPx = 0f }
     val isFocused by interactionSource.collectIsFocusedAsState()
     LaunchedEffect(isFocused) { if (isFocused) onInputFocused() }
@@ -512,7 +515,8 @@ fun ChatComposerBar(
                             onDragCancel = { cancelDragPx = 0f },
                             onHorizontalDrag = { change, delta ->
                                 change.consume()
-                                val next = (cancelDragPx + delta).coerceIn(-cancelThresholdPx * 1.2f, 0f)
+                                val next = (cancelDragPx + delta * cancelDragSign)
+                                    .coerceIn(-cancelThresholdPx * 1.2f, 0f)
                                 val crossed = -next >= cancelThresholdPx && -cancelDragPx < cancelThresholdPx
                                 cancelDragPx = next
                                 if (crossed) {

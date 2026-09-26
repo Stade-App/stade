@@ -26,9 +26,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.LaunchedEffect
@@ -93,76 +95,79 @@ fun TorBootstrapCard(
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
             Canvas(modifier = Modifier.fillMaxWidth().height(28.dp)) {
-                val nodeRadius = 5.dp.toPx()
-                val y = size.height / 2f
-                val first = nodeRadius
-                val last = size.width - nodeRadius
-                val span = last - first
-                val step = span / (HOPS - 1)
+                val flip = if (layoutDirection == LayoutDirection.Rtl) -1f else 1f
+                scale(scaleX = flip, scaleY = 1f) {
+                    val nodeRadius = 5.dp.toPx()
+                    val y = size.height / 2f
+                    val first = nodeRadius
+                    val last = size.width - nodeRadius
+                    val span = last - first
+                    val step = span / (HOPS - 1)
 
-                drawLine(
-                    color = idle,
-                    start = Offset(first, y),
-                    end = Offset(last, y),
-                    strokeWidth = 2.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-                if (progress > 0f) {
                     drawLine(
-                        color = accent,
+                        color = idle,
                         start = Offset(first, y),
-                        end = Offset(first + span * progress, y),
+                        end = Offset(last, y),
                         strokeWidth = 2.dp.toPx(),
                         cap = StrokeCap.Round
                     )
-                }
-
-                val litEnd = first + span * progress
-                if (litEnd > first && sweep.value <= 0f) {
-                    val travelled = first + (litEnd - first) * pulse
-                    val glow = 1f - abs(pulse - 0.5f) * 2f
-                    drawCircle(
-                        color = accent.copy(alpha = 0.30f * glow),
-                        radius = nodeRadius * 2.1f,
-                        center = Offset(travelled, y)
-                    )
-                    drawCircle(
-                        color = accent.copy(alpha = glow),
-                        radius = nodeRadius * 0.65f,
-                        center = Offset(travelled, y)
-                    )
-                }
-
-                if (sweep.value > 0f) {
-                    drawLine(
-                        color = TOR_READY_GREEN,
-                        start = Offset(first, y),
-                        end = Offset(first + span * sweep.value, y),
-                        strokeWidth = 3.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                }
-
-                for (i in 0 until HOPS) {
-                    val x = first + step * i
-                    val reached = progress >= (i.toFloat() / (HOPS - 1)) - 0.001f
-                    val swept = sweep.value >= (i.toFloat() / (HOPS - 1)) - 0.001f && sweep.value > 0f
-                    val nodeColor = when {
-                        swept -> TOR_READY_GREEN
-                        reached -> accent
-                        else -> idle
+                    if (progress > 0f) {
+                        drawLine(
+                            color = accent,
+                            start = Offset(first, y),
+                            end = Offset(first + span * progress, y),
+                            strokeWidth = 2.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
                     }
-                    drawCircle(
-                        color = if (reached || swept) nodeColor else Color.Transparent,
-                        radius = nodeRadius,
-                        center = Offset(x, y)
-                    )
-                    drawCircle(
-                        color = nodeColor,
-                        radius = nodeRadius,
-                        center = Offset(x, y),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx())
-                    )
+
+                    val litEnd = first + span * progress
+                    if (litEnd > first && sweep.value <= 0f) {
+                        val travelled = first + (litEnd - first) * pulse
+                        val glow = 1f - abs(pulse - 0.5f) * 2f
+                        drawCircle(
+                            color = accent.copy(alpha = 0.30f * glow),
+                            radius = nodeRadius * 2.1f,
+                            center = Offset(travelled, y)
+                        )
+                        drawCircle(
+                            color = accent.copy(alpha = glow),
+                            radius = nodeRadius * 0.65f,
+                            center = Offset(travelled, y)
+                        )
+                    }
+
+                    if (sweep.value > 0f) {
+                        drawLine(
+                            color = TOR_READY_GREEN,
+                            start = Offset(first, y),
+                            end = Offset(first + span * sweep.value, y),
+                            strokeWidth = 3.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                    }
+
+                    for (i in 0 until HOPS) {
+                        val x = first + step * i
+                        val reached = progress >= (i.toFloat() / (HOPS - 1)) - 0.001f
+                        val swept = sweep.value >= (i.toFloat() / (HOPS - 1)) - 0.001f && sweep.value > 0f
+                        val nodeColor = when {
+                            swept -> TOR_READY_GREEN
+                            reached -> accent
+                            else -> idle
+                        }
+                        drawCircle(
+                            color = if (reached || swept) nodeColor else Color.Transparent,
+                            radius = nodeRadius,
+                            center = Offset(x, y)
+                        )
+                        drawCircle(
+                            color = nodeColor,
+                            radius = nodeRadius,
+                            center = Offset(x, y),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx())
+                        )
+                    }
                 }
             }
 

@@ -52,6 +52,7 @@ import dev.stade.ui.screens.WelcomeUsernameScreen
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.i18n.getLocalePreference
 import dev.stade.ui.i18n.localeToStrings
+import dev.stade.ui.i18n.localeToLayoutDirection
 import dev.stade.ui.components.fastLongPressConfiguration
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.animation.AnimatedContent
@@ -84,6 +85,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import dev.stade.ui.theme.StadeTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -156,7 +158,11 @@ fun StadeApp(boot: BootContext) {
         dev.stade.ui.i18n.I18n.current = activeStrings
     }
     StadeTheme {
-        CompositionLocalProvider(LocalStrings provides activeStrings, LocalViewConfiguration provides fastLongPressConfiguration()) {
+        CompositionLocalProvider(
+            LocalStrings provides activeStrings,
+            LocalLayoutDirection provides localeToLayoutDirection(locale),
+            LocalViewConfiguration provides fastLongPressConfiguration()
+        ) {
             var initialized by remember { mutableStateOf(vault.isInitialized()) }
             var unlocked by remember { mutableStateOf(boot.resolveUnlocked()) }
             var autoUnlockTried by remember { mutableStateOf(false) }
