@@ -4,6 +4,9 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -77,6 +80,13 @@ private const val ITEM_POP_TENSION = 2.4f
 
 private val BarRevealEasing = CubicBezierEasing(0.45f, 0f, 0.15f, 1f)
 
+private const val PILL_DROP_MS = 360
+private const val PILL_IMPACT_MS = 90
+private const val PILL_FALL_HEIGHTS = 2.2f
+private const val PILL_FALL_STRETCH = 0.42f
+private const val PILL_IMPACT_SQUASH = 0.34f
+private val PillFallEasing = CubicBezierEasing(0.5f, 0f, 0.9f, 0.62f)
+
 private fun itemAppear(index: Int, count: Int, reveal: Float): Float {
     if (count <= 0) return 1f
     val center = (count - 1) / 2f
@@ -135,13 +145,25 @@ fun HomeActionBar(
     val onSurface = MaterialTheme.colorScheme.onSurface
 
     val reveal = remember { Animatable(if (playIntro) 0f else 1f) }
+    val pillDrop = remember { Animatable(if (playIntro) 0f else 1f) }
+    val pillImpact = remember { Animatable(0f) }
     LaunchedEffect(playIntro) {
         if (!playIntro) {
             reveal.snapTo(1f)
+            pillDrop.snapTo(1f)
+            pillImpact.snapTo(0f)
             return@LaunchedEffect
         }
         reveal.snapTo(0f)
+        pillDrop.snapTo(0f)
+        pillImpact.snapTo(0f)
         reveal.animateTo(1f, tween(BAR_INTRO_MS, easing = BarRevealEasing))
+        pillDrop.animateTo(1f, tween(PILL_DROP_MS, easing = PillFallEasing))
+        pillImpact.animateTo(1f, tween(PILL_IMPACT_MS, easing = LinearEasing))
+        pillImpact.animateTo(
+            0f,
+            spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+        )
         onIntroFinished()
     }
     val revealed = reveal.value
@@ -162,12 +184,30 @@ fun HomeActionBar(
         ) {
             Box(modifier = Modifier.padding(BAR_INNER_INSET)) {
                 Canvas(Modifier.matchParentSize()) {
-                    if (pillAlpha <= 0.01f || order.isEmpty() || revealed < 0.999f) return@Canvas
+                    val fall = pillDrop.value
+                    if (pillAlpha <= 0.01f || order.isEmpty() || revealed < 0.999f || fall <= 0.001f) {
+                        return@Canvas
+                    }
                     val slot = size.width / order.size
                     val left = pillIndex * slot
                     val lastIndex = (order.size - 1).toFloat()
 
-                    val capsule = size.height / 2f
+                    val impact = pillImpact.value
+                    val stretch = 1f + PILL_FALL_STRETCH * (1f - fall)
+                    val scaleY = stretch * (1f - PILL_IMPACT_SQUASH * impact)
+                    val scaleX = (1f / stretch) * (1f + PILL_IMPACT_SQUASH * 0.55f * impact)
+                    val dropOffset = (1f - fall) * size.height * PILL_FALL_HEIGHTS
+
+                    val width = slot * scaleX
+                    val height = size.height * scaleY
+                    val centerX = left + slot / 2f
+                    val centerY = size.height / 2f - dropOffset
+                    val rect = Rect(
+                        Offset(centerX - width / 2f, centerY - height / 2f),
+                        Size(width, height)
+                    )
+
+                    val capsule = height / 2f
                     val inner = ITEM_PILL_RADIUS.toPx().coerceAtMost(capsule)
                     val leftEdge = (1f - pillIndex.coerceIn(0f, 1f))
                     val rightEdge = (1f - (lastIndex - pillIndex).coerceIn(0f, 1f))
@@ -177,7 +217,7 @@ fun HomeActionBar(
                     val shape = Path().apply {
                         addRoundRect(
                             RoundRect(
-                                rect = Rect(Offset(left, 0f), Size(slot, size.height)),
+                                rect = rect,
                                 topLeft = leftRadius,
                                 topRight = rightRadius,
                                 bottomRight = rightRadius,
@@ -185,10 +225,11 @@ fun HomeActionBar(
                             )
                         )
                     }
-                    drawPath(shape, color = onSurface.copy(alpha = 0.10f * pillAlpha))
+                    val appear = pillAlpha * fall
+                    drawPath(shape, color = onSurface.copy(alpha = 0.10f * appear))
                     drawPath(
                         shape,
-                        color = onSurface.copy(alpha = 0.14f * pillAlpha),
+                        color = onSurface.copy(alpha = 0.14f * appear),
                         style = Stroke(width = 1.dp.toPx())
                     )
                 }

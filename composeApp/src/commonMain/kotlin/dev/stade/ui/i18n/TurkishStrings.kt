@@ -472,6 +472,8 @@ object TurkishStrings : AppStrings() {
     override val removingBackgroundLabel = "Arka plan kaldırılıyor…"
     override val removeBackgroundOption = "Arka plan kaldırıldı"
     override val keepOriginalBackgroundOption = "Orijinal"
+    override val rotateLeftAction = "Sola döndür"
+    override val rotateRightAction = "Sağa döndür"
     override val saveStickerAction = "Çıkartmayı kaydet"
     override val stickerCreationFailed = "Çıkartma oluşturulamadı"
     override val stickerGifTooLarge = "Bu GIF çok büyük. 1,8 MB altında bir tane dene."

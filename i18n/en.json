@@ -391,6 +391,8 @@
   "removingBackgroundLabel": "Removing background…",
   "removeBackgroundOption": "Background removed",
   "keepOriginalBackgroundOption": "Original",
+  "rotateLeftAction": "Rotate left",
+  "rotateRightAction": "Rotate right",
   "saveStickerAction": "Save sticker",
   "stickerCreationFailed": "Couldn't create sticker",
   "stickerGifTooLarge": "That GIF is too large. Try one under 1.8 MB.",

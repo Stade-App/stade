@@ -391,6 +391,8 @@
   "removingBackgroundLabel": "Arka plan kaldırılıyor…",
   "removeBackgroundOption": "Arka plan kaldırıldı",
   "keepOriginalBackgroundOption": "Orijinal",
+  "rotateLeftAction": "Sola döndür",
+  "rotateRightAction": "Sağa döndür",
   "saveStickerAction": "Çıkartmayı kaydet",
   "stickerCreationFailed": "Çıkartma oluşturulamadı",
   "stickerGifTooLarge": "Bu GIF çok büyük. 1,8 MB altında bir tane dene.",

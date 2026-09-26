@@ -48,6 +48,12 @@ import dev.stade.media.removeImageBackground
 import dev.stade.media.rememberNavigationBarHeight
 import dev.stade.ui.decodeToImageBitmap
 import dev.stade.message.MAX_ATTACHMENT_BYTES
+import androidx.compose.runtime.produceState
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.automirrored.filled.RotateLeft
+import androidx.compose.material.icons.automirrored.filled.RotateRight
+import dev.stade.media.normalizeRotation
+import dev.stade.media.rotateImageBytes
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.rememberMediaPickerLauncher
 import kotlinx.coroutines.Dispatchers
@@ -71,6 +77,7 @@ fun StickerMakerDialog(
     var removedBgBytes by remember { mutableStateOf<ByteArray?>(null) }
     var useRemovedBg by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    var rotation by remember { mutableStateOf(0) }
 
     val picker = rememberMediaPickerLauncher(
         onImages = { images ->
@@ -131,8 +138,17 @@ fun StickerMakerDialog(
                 return
             }
             val removed = removedBgBytes
-            val shownBytes = if (useRemovedBg && removed != null) removed else original
-            val bitmap = remember(shownBytes) { runCatching { shownBytes.decodeToImageBitmap() }.getOrNull() }
+            val baseBytes = if (useRemovedBg && removed != null) removed else original
+            val shownBytes by produceState(baseBytes, baseBytes, rotation) {
+                value = withContext(Dispatchers.Default) {
+                    runCatching { rotateImageBytes(baseBytes, rotation) }.getOrDefault(baseBytes)
+                }
+            }
+            val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, shownBytes) {
+                value = withContext(Dispatchers.Default) {
+                    runCatching { shownBytes.decodeToImageBitmap() }.getOrNull()
+                }
+            }
 
             Dialog(
                 onDismissRequest = { if (!saving) onCancel() },
@@ -176,12 +192,34 @@ fun StickerMakerDialog(
                     }
 
                     Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        if (bitmap != null) {
+                        bitmap?.let { shown ->
                             Image(
-                                bitmap = bitmap,
+                                bitmap = shown,
                                 contentDescription = null,
                                 modifier = Modifier.fillMaxWidth().padding(24.dp),
                                 contentScale = ContentScale.Fit
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(enabled = !saving, onClick = { rotation = normalizeRotation(rotation - 90) }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.RotateLeft,
+                                contentDescription = strings.rotateLeftAction,
+                                tint = Color.White
+                            )
+                        }
+                        Spacer(Modifier.width(24.dp))
+                        IconButton(enabled = !saving, onClick = { rotation = normalizeRotation(rotation + 90) }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.RotateRight,
+                                contentDescription = strings.rotateRightAction,
+                                tint = Color.White
                             )
                         }
                     }

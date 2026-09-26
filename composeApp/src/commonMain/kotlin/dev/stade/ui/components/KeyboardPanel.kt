@@ -25,10 +25,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.stade.ui.loadPanelHeightDp
 import dev.stade.ui.savePanelHeightDp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private val FALLBACK_PANEL_HEIGHT = 280.dp
 private val MIN_REAL_KEYBOARD = 140.dp
+private const val KEYBOARD_SETTLE_MS = 160L
 
 private val sharedPanelHeight = mutableStateOf(
     loadPanelHeightDp().takeIf { it >= MIN_REAL_KEYBOARD.value.toInt() }?.dp ?: FALLBACK_PANEL_HEIGHT
@@ -48,9 +51,11 @@ fun rememberPanelHeightState(): PanelHeightState {
     LaunchedEffect(state, density, imeInsets, navInsets) {
         snapshotFlow { keyboardHeightPx(imeInsets, navInsets, density) }
             .distinctUntilChanged()
-            .collect { px ->
+            .collectLatest { px ->
                 val dp = with(density) { px.toDp() }
-                if (dp >= MIN_REAL_KEYBOARD && dp != sharedPanelHeight.value) {
+                if (dp < MIN_REAL_KEYBOARD) return@collectLatest
+                delay(KEYBOARD_SETTLE_MS)
+                if (dp != sharedPanelHeight.value) {
                     sharedPanelHeight.value = dp
                     savePanelHeightDp(dp.value.toInt())
                 }

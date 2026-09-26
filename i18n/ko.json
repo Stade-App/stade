@@ -391,6 +391,8 @@
   "removingBackgroundLabel": "배경을 제거하는 중…",
   "removeBackgroundOption": "배경 제거됨",
   "keepOriginalBackgroundOption": "원본",
+  "rotateLeftAction": "왼쪽으로 회전",
+  "rotateRightAction": "오른쪽으로 회전",
   "saveStickerAction": "스티커 저장",
   "stickerCreationFailed": "스티커를 만들지 못했습니다",
   "stickerGifTooLarge": "이 GIF는 너무 큽니다. 1.8MB 미만인 파일을 사용하세요.",

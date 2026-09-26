@@ -473,6 +473,8 @@ object EnglishStrings : AppStrings() {
     override val removingBackgroundLabel = "Removing background…"
     override val removeBackgroundOption = "Background removed"
     override val keepOriginalBackgroundOption = "Original"
+    override val rotateLeftAction = "Rotate left"
+    override val rotateRightAction = "Rotate right"
     override val saveStickerAction = "Save sticker"
     override val stickerCreationFailed = "Couldn't create sticker"
     override val stickerGifTooLarge = "That GIF is too large. Try one under 1.8 MB."

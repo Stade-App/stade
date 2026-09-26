@@ -411,6 +411,8 @@ abstract class AppStrings {
     abstract val removingBackgroundLabel: String
     abstract val removeBackgroundOption: String
     abstract val keepOriginalBackgroundOption: String
+    abstract val rotateLeftAction: String
+    abstract val rotateRightAction: String
     abstract val saveStickerAction: String
     abstract val stickerCreationFailed: String
     abstract val stickerGifTooLarge: String

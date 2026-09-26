@@ -4,11 +4,14 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import dev.stade.ui.decodeToImageBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 const val MAX_GIF_FRAMES = 160
 const val MAX_GIF_FRAME_PIXELS = 1_600_000L
@@ -35,15 +38,18 @@ internal fun StaticImageBytes(
     modifier: Modifier,
     contentScale: ContentScale
 ) {
-    val bitmap: ImageBitmap? = remember(bytes) {
-        runCatching { bytes.decodeToImageBitmap() }.getOrNull()
+    val bitmap: ImageBitmap? by produceState<ImageBitmap?>(initialValue = null, bytes) {
+        value = withContext(Dispatchers.Default) {
+            runCatching { bytes.decodeToImageBitmap() }.getOrNull()
+        }
     }
-    if (bitmap == null) {
+    val ready = bitmap
+    if (ready == null) {
         Box(modifier)
         return
     }
     Image(
-        bitmap = bitmap,
+        bitmap = ready,
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = contentScale

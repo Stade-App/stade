@@ -456,6 +456,8 @@ object KoreanStrings : AppStrings() {
     override val removingBackgroundLabel = "배경을 제거하는 중…"
     override val removeBackgroundOption = "배경 제거됨"
     override val keepOriginalBackgroundOption = "원본"
+    override val rotateLeftAction = "왼쪽으로 회전"
+    override val rotateRightAction = "오른쪽으로 회전"
     override val saveStickerAction = "스티커 저장"
     override val stickerCreationFailed = "스티커를 만들지 못했습니다"
     override val stickerGifTooLarge = "이 GIF는 너무 큽니다. 1.8MB 미만인 파일을 사용하세요."
