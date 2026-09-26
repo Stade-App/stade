@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Shader
 
 internal object NotificationAvatar {
@@ -48,6 +49,40 @@ internal object NotificationAvatar {
         val textY = radius - (textPaint.descent() + textPaint.ascent()) / 2f
         canvas.drawText(initial, radius, textY, textPaint)
 
+        return bitmap
+    }
+
+    fun stadiumBitmap(name: String, sizePx: Int = 128): Bitmap {
+        val seed = name.fold(0) { acc, c -> (acc * 31 + c.code) and 0x7fffffff }
+        val (colorA, colorB) = palette[seed % palette.size]
+
+        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val radius = sizePx / 2f
+
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(0f, 0f, sizePx.toFloat(), sizePx.toFloat(), colorA, colorB, Shader.TileMode.CLAMP)
+        }
+        canvas.drawCircle(radius, radius, radius, bgPaint)
+
+        val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.FILL
+        }
+        canvas.drawCircle(radius, radius, sizePx * 0.085f, glyph)
+
+        val wave = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = sizePx * 0.062f
+            strokeCap = Paint.Cap.ROUND
+        }
+        for (ring in 1..2) {
+            val r = sizePx * (0.075f + 0.105f * ring)
+            val box = RectF(radius - r, radius - r, radius + r, radius + r)
+            canvas.drawArc(box, -48f, 96f, false, wave)
+            canvas.drawArc(box, 132f, 96f, false, wave)
+        }
         return bitmap
     }
 

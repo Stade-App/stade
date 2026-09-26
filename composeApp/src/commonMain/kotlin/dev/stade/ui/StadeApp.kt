@@ -491,6 +491,29 @@ private fun UnlockedApp(
                         unreadTotal = 0
                     )
                 }
+                is dev.stade.sync.SyncEngine.SyncEvent.StadiumMessageReceived -> {
+                    if (!dev.stade.notification.getNotificationsEnabled().value) return@collect
+                    val stadium = container.stadiums.getStadium(event.stadiumId) ?: return@collect
+                    if (stadium.muted) return@collect
+                    if (container.isAppInForeground.value && container.activeContactId == event.stadiumId) return@collect
+                    val notifStrings = dev.stade.ui.i18n.I18n.current
+                    val preview = runCatching { container.stadiums.lastMessage(event.stadiumId)?.body }
+                        .getOrNull()
+                        ?.let { when (dev.stade.message.padPreviewKind(it)) {
+                            dev.stade.message.MessageType.PAD_SOUND -> notifStrings.padSentSound(null, false)
+                            dev.stade.message.MessageType.UNSUPPORTED -> notifStrings.unsupportedMessage
+                            else -> dev.stade.message.previewBody(it, notifStrings.photoMessage, notifStrings.voiceMessage, notifStrings.videoMessage, notifStrings.stickerMessage)
+                        } }
+                        ?: notifStrings.notifNewMessageFallback
+                    val privacy = dev.stade.notification.getNotificationPrivacyEnabled().value
+                    dev.stade.notification.showIncomingMessageNotification(
+                        contactId = event.stadiumId,
+                        senderName = stadium.name,
+                        preview = preview,
+                        privacy = privacy,
+                        unreadTotal = runCatching { container.messages.totalUnread() }.getOrDefault(0L).toInt()
+                    )
+                }
                 is dev.stade.sync.SyncEngine.SyncEvent.StadiumInviteReceived -> {
                     identity?.let { container.beginAcceptStadiumInvite(it, event.code, dev.stade.ui.i18n.I18n.current) }
                 }

@@ -204,6 +204,11 @@ class StadeService : Service() {
                                 val group = container.groups.getGroup(event.groupId) ?: return@collect
                                 if (group.muted) return@collect
                                 if (container.isAppInForeground.value && container.activeContactId == event.groupId) return@collect
+                                if (getNotificationPrivacyEnabled().value) {
+                                    val total = runCatching { container.messages.totalUnread() }.getOrDefault(0L).toInt()
+                                    if (total > 0) showPrivacyNotification(total)
+                                    return@collect
+                                }
                                 val preview = container.groups.lastMessage(event.groupId)?.body
                                     ?.let { padAwarePreview(it) }
                                     ?: dev.stade.ui.i18n.I18n.current.notifNewMessageFallback
@@ -214,6 +219,11 @@ class StadeService : Service() {
                                 val stadium = container.stadiums.getStadium(event.stadiumId)
                                 if (stadium == null || stadium.muted) return@collect
                                 if (container.isAppInForeground.value && container.activeContactId == event.stadiumId) return@collect
+                                if (getNotificationPrivacyEnabled().value) {
+                                    val total = runCatching { container.messages.totalUnread() }.getOrDefault(0L).toInt()
+                                    if (total > 0) showPrivacyNotification(total)
+                                    return@collect
+                                }
                                 val preview = container.stadiums.lastMessage(event.stadiumId)?.body
                                     ?.let { padAwarePreview(it) }
                                     ?: dev.stade.ui.i18n.I18n.current.notifNewMessageFallback
@@ -285,8 +295,12 @@ class StadeService : Service() {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val avatarBitmap = avatarBytes?.let { NotificationAvatar.fromPhotoBytes(it) }
-            ?: runCatching { NotificationAvatar.bitmapFor(senderName, keySeed) }.getOrNull()
+        val avatarBitmap = if (isStadium) {
+            runCatching { NotificationAvatar.stadiumBitmap(senderName) }.getOrNull()
+        } else {
+            avatarBytes?.let { NotificationAvatar.fromPhotoBytes(it) }
+                ?: runCatching { NotificationAvatar.bitmapFor(senderName, keySeed) }.getOrNull()
+        }
         val avatarIcon = avatarBitmap?.let { IconCompat.createWithBitmap(it) }
         val senderPerson = Person.Builder()
             .setName(senderName)
