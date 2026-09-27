@@ -31,6 +31,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import dev.stade.backgroundFailures
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -64,7 +65,7 @@ internal class AndroidRadarSession(
 
     private val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
     private val adapter: BluetoothAdapter? get() = manager?.adapter
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + backgroundFailures)
 
     private val lock = Any()
     private val seen = LinkedHashMap<String, RadarPeer>()

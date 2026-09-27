@@ -8,6 +8,7 @@ import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
 import io.ktor.utils.io.readFully
 import io.ktor.utils.io.writeFully
+import dev.stade.backgroundFailures
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,7 +30,7 @@ class TorTransport(
     private val embedded: EmbeddedTorRuntime? = null
 ) : BaseTransport(TransportType.TOR, "Tor") {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + backgroundFailures)
     private val selector = SelectorManager(Dispatchers.IO)
     private val mutex = Mutex()
     @Volatile private var inboundOnion: String? = null

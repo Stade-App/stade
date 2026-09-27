@@ -28,6 +28,7 @@ import dev.stade.notification.getConversationShortcutsEnabled
 import dev.stade.notification.getNotificationPrivacyEnabled
 import dev.stade.notification.getNotificationsEnabled
 import dev.stade.sync.SyncEngine
+import dev.stade.backgroundFailures
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,7 +42,7 @@ class StadeService : Service() {
     private val msgChannelId = "stade.messages"
     private val notificationId = NotificationIds.FOREGROUND
     private val hiddenNotifId = NotificationIds.HIDDEN_MESSAGES
-    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob() + backgroundFailures)
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var shutdownReceiver: BroadcastReceiver? = null
 

@@ -5,6 +5,10 @@ import dev.stade.contact.Contact
 import dev.stade.identity.LocalIdentity
 import dev.stade.sync.SyncEngine
 import dev.stade.ui.i18n.I18n
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.withTimeoutOrNull
+import dev.stade.SHUTDOWN_GRACE_MS
+import dev.stade.backgroundFailures
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,7 +42,7 @@ class ConnectionManager(
     private val transportSettings: TransportSettings,
     private val isForeground: () -> Boolean = { true }
 ) {
-    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + backgroundFailures)
     private val mutex = Mutex()
     private var ownerRef: LocalIdentity? = null
     private val tasks = mutableListOf<Job>()
@@ -185,7 +189,7 @@ class ConnectionManager(
         if (ownerRef?.id == owner.id) return@withLock
         if (ownerRef != null) stopInternal()
         ownerRef = owner
-        if (!scope.isActive) scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        if (!scope.isActive) scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + backgroundFailures)
         for (plugin in registry.all()) {
             if (!isEnabled(plugin.type)) continue
             tasks += scope.launch {
@@ -236,7 +240,7 @@ class ConnectionManager(
         val plugin = registry.get(type) ?: return@withLock
         runCatching { plugin.stop() }
         if (!isEnabled(type)) return@withLock
-        if (!scope.isActive) scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        if (!scope.isActive) scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + backgroundFailures)
         tasks += scope.launch {
             runCatching {
                 plugin.start { connection -> sync.handleConnection(owner, connection) }
@@ -250,7 +254,7 @@ class ConnectionManager(
         if (enabled) {
             val owner = ownerRef ?: return@withLock
             if (plugin.info.value.running) return@withLock
-            if (!scope.isActive) scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+            if (!scope.isActive) scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + backgroundFailures)
             tasks += scope.launch {
                 runCatching {
                     plugin.start { connection -> sync.handleConnection(owner, connection) }
@@ -269,7 +273,10 @@ class ConnectionManager(
     private suspend fun stopInternal() {
         ownerRef = null
         tasks.forEach { it.cancel() }
+        for (plugin in registry.all()) runCatching { plugin.stop() }
+        val running = tasks.toList()
         tasks.clear()
+        runCatching { withTimeoutOrNull(SHUTDOWN_GRACE_MS) { running.joinAll() } }
         clearAllBackoff()
         clearAllFailCounts()
         clearDialing()
@@ -278,9 +285,10 @@ class ConnectionManager(
             pendingAttempts.clear()
         }
         _pendingDials.value = emptyMap()
-        for (plugin in registry.all()) runCatching { plugin.stop() }
+        val job = scope.coroutineContext[Job]
         scope.cancel()
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        runCatching { withTimeoutOrNull(SHUTDOWN_GRACE_MS) { job?.join() } }
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + backgroundFailures)
     }
 
     private suspend fun dialerLoop(owner: LocalIdentity) {

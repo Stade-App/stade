@@ -2,6 +2,7 @@ package dev.stade.transport.tor
 
 import java.io.File
 import java.net.ServerSocket
+import dev.stade.backgroundFailures
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,7 +24,7 @@ class EmbeddedTorManager(
     private val mutex = Mutex()
     private val status = MutableStateFlow<TorStatus>(TorStatus.Idle)
     override val statusFlow: StateFlow<TorStatus> = status.asStateFlow()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + backgroundFailures)
 
     @Volatile private var process: Process? = null
     @Volatile private var ready: TorReady? = null

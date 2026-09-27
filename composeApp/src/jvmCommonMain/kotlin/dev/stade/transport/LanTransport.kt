@@ -10,6 +10,7 @@ import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.readFully
 import io.ktor.utils.io.writeFully
+import dev.stade.backgroundFailures
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,7 +32,7 @@ class LanTransport(
     private val discoveryPort: Int = 5902
 ) : BaseTransport(TransportType.LAN, "LAN"), DiscoverableTransport {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + backgroundFailures)
     private val selector = SelectorManager(Dispatchers.IO)
     private var server: ServerSocket? = null
     @Volatile private var actualPort: Int = tcpPort
@@ -195,7 +196,7 @@ private class DiscoveryService(
     private val mutex = Mutex()
     private var rxJob: Job? = null
     private var txJob: Job? = null
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + backgroundFailures)
     private var receiver: DatagramSocket? = null
     private var sender: DatagramSocket? = null
 

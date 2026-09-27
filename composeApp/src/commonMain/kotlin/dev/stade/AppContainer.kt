@@ -40,6 +40,8 @@ import dev.stade.transport.ConnectionRegistry
 import dev.stade.transport.TransportPlugin
 import dev.stade.transport.TransportSettings
 import dev.stade.vanish.VanishManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -246,14 +248,14 @@ class AppContainer(
 
     val pendingGoHome = MutableStateFlow(false)
 
-    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + backgroundFailures)
 
     @Volatile var isClosed = false
         private set
 
     suspend fun wipeAllData() {
         isClosed = true
-        runCatching { connections.stop() }
+        quiesce()
         pendingInvite.value = null
         pendingOpenChat.value = null
         pendingGoHome.value = false
@@ -284,15 +286,19 @@ class AppContainer(
         runCatching { driver.close() }
         runCatching { dev.stade.security.clearBiometricUnlock() }
         runCatching { vault.wipe() }
-        runCatching { appScope.cancel() }
     }
 
-    fun close() {
+    suspend fun close() {
+        if (isClosed) return
         isClosed = true
-        appScope.launch {
-            runCatching { connections.stop() }
-            runCatching { appScope.cancel() }
-        }
+        quiesce()
         runCatching { driver.close() }
+    }
+
+    private suspend fun quiesce() {
+        runCatching { connections.stop() }
+        val job = appScope.coroutineContext[Job]
+        job?.cancel()
+        runCatching { withTimeoutOrNull(SHUTDOWN_GRACE_MS) { job?.join() } }
     }
 }

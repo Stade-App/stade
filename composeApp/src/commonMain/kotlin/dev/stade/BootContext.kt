@@ -57,9 +57,19 @@ class BootContext(
 
     fun buildContainer(): AppContainer = synchronized(lock) {
         active?.takeIf { !it.isClosed }?.let { return it }
+        val retired = active
         val container = AppContainer(driverFactory, vault, transportFactory)
+        if (retired != null) carryPendingIntents(retired, container)
         active = container
         onContainerCreated(container)
         container
+    }
+
+    private fun carryPendingIntents(from: AppContainer, to: AppContainer) {
+        from.pendingInvite.value?.let { to.pendingInvite.value = it }
+        from.pendingOpenChat.value?.let { to.pendingOpenChat.value = it }
+        from.pendingOpenStadium.value?.let { to.pendingOpenStadium.value = it }
+        from.pendingOpenGroup.value?.let { to.pendingOpenGroup.value = it }
+        if (from.pendingGoHome.value) to.pendingGoHome.value = true
     }
 }
