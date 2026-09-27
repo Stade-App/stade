@@ -12,6 +12,7 @@ interface Vault {
     fun isDuressPin(candidate: String): Boolean
     fun clearDuressPin()
     fun flushAndKeep()
+    fun <T> withFlushLock(block: () -> T): T
     fun flushAndClose()
     fun wipe()
     fun metaPath(): String

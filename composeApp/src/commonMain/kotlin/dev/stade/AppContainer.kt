@@ -282,6 +282,7 @@ class AppContainer(
             }
         }
         runCatching { driver.close() }
+        runCatching { dev.stade.security.clearBiometricUnlock() }
         runCatching { vault.wipe() }
         runCatching { appScope.cancel() }
     }

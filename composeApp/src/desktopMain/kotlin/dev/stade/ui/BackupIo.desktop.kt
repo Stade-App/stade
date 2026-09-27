@@ -49,16 +49,23 @@ actual fun rememberBackupIo(
                         val target = chooseFile(save = true, suggested = defaultBackupFileName())
                             ?: return@withContext BackupOutcome.Cancelled
                         runCatching {
-                            vault.flushAndKeep()
-                            target.outputStream().use { out ->
-                                StadeBackup.export(
-                                    out,
-                                    passphrase.toCharArray(),
-                                    StadeBackup.targetsFor(vault)
-                                )
+                            vault.withFlushLock {
+                                vault.flushAndKeep()
+                                target.outputStream().use { out ->
+                                    StadeBackup.export(
+                                        out,
+                                        passphrase.toCharArray(),
+                                        StadeBackup.targetsFor(vault)
+                                    )
+                                }
                             }
                         }.getOrDefault(false).let {
-                            if (it) BackupOutcome.Exported else BackupOutcome.Failed
+                            if (it) {
+                                BackupOutcome.Exported
+                            } else {
+                                runCatching { target.delete() }
+                                BackupOutcome.Failed
+                            }
                         }
                     }
                     callback(outcome)

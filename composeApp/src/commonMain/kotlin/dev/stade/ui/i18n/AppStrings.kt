@@ -328,6 +328,20 @@ abstract class AppStrings {
     abstract val duressPinInfoTitle: String
     abstract val duressPinInfoBody: String
     abstract val clearDuressPinAction: String
+    abstract val biometricUnlockTitle: String
+    abstract val biometricUnlockOnSubtitle: String
+    abstract val biometricUnlockOffSubtitle: String
+    abstract val biometricNotEnrolledSubtitle: String
+    abstract val biometricPromptTitle: String
+    abstract val biometricPromptSubtitle: String
+    abstract val biometricEnablePromptSubtitle: String
+    abstract val biometricUsePinAction: String
+    abstract val biometricUseFingerprintAction: String
+    abstract val biometricConfirmPinTitle: String
+    abstract val biometricConfirmPinBody: String
+    abstract val biometricEnabledNotice: String
+    abstract val biometricFailedNotice: String
+    abstract val biometricResetNotice: String
 
     abstract val transportsTitle: String
     abstract val notRegistered: String

@@ -376,6 +376,20 @@ object TurkishStrings : AppStrings() {
         "Uyarı ya da onay yoktur ve sonrasında hiçbir şey geri getirilemez. " +
         "Kişilerine bildirim gitmez."
     override val clearDuressPinAction = "Tehlike PIN'ini kaldır"
+    override val biometricUnlockTitle = "Parmak iziyle aç"
+    override val biometricUnlockOnSubtitle = "Parmak iziniz, PIN yerine Stade'in kilidini açabilir"
+    override val biometricUnlockOffSubtitle = "Her seferinde PIN gerekir"
+    override val biometricNotEnrolledSubtitle = "Önce cihaz ayarlarınızdan bir parmak izi ekleyin"
+    override val biometricPromptTitle = "Stade'in kilidini aç"
+    override val biometricPromptSubtitle = "Devam etmek için parmak izinizi doğrulayın"
+    override val biometricEnablePromptSubtitle = "Bunu açmak için parmak izinizi doğrulayın"
+    override val biometricUsePinAction = "PIN ile devam et"
+    override val biometricUseFingerprintAction = "Parmak izini kullan"
+    override val biometricConfirmPinTitle = "PIN'inizi doğrulayın"
+    override val biometricConfirmPinBody = "PIN'inizi bir kez girin. Parmak izinizin açtığı bir anahtarla mühürlenir ve bu cihazdan hiç çıkmaz."
+    override val biometricEnabledNotice = "Parmak iziyle açma etkin"
+    override val biometricFailedNotice = "Parmak izi doğrulanamadı. PIN'inizi kullanın."
+    override val biometricResetNotice = "Bu cihazdaki parmak izleri değiştiği için parmak iziyle açma kapatıldı. PIN'inizi girin."
 
     override val autoLockNeverInfoTitle = "«Asla» Seçeneği Hakkında"
     override val autoLockNeverInfoBody =

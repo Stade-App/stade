@@ -269,6 +269,8 @@ class FileVault(private val rootDir: File) : Vault {
         cached = meta
     }
 
+    override fun <T> withFlushLock(block: () -> T): T = synchronized(flushLock) { block() }
+
     override fun flushAndKeep() {
         synchronized(flushLock) {
             val key = dek ?: return
@@ -389,6 +391,7 @@ class FileVault(private val rootDir: File) : Vault {
             os.write(nonce)
             os.write(ct)
         }
+        if (tmp.renameTo(dest)) return
         if (dest.exists()) dest.delete()
         if (!tmp.renameTo(dest)) {
             tmp.copyTo(dest, overwrite = true)

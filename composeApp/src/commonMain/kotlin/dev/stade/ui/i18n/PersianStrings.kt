@@ -363,6 +363,20 @@ object PersianStrings : AppStrings() {
     override val duressPinInfoBody =
         "این پین را به‌جای پین واقعی در صفحهٔ قفل وارد کنید و Stade بلافاصله همه‌چیز را روی این دستگاه پاک می‌کند — هویت، مخاطبان، پیام‌ها، گروه‌ها و استادیوم‌های شما. سپس برنامه دقیقاً مثل یک نصب تازه به نظر می‌رسد، بدون هیچ نشانه‌ای از استفاده از پین اضطراری. هیچ هشدار و تأییدی در کار نیست و بعد از آن هیچ‌چیز قابل بازیابی نیست. به مخاطبان شما اطلاع داده نمی‌شود."
     override val clearDuressPinAction = "حذف پین اضطراری"
+    override val biometricUnlockTitle = "باز کردن با اثر انگشت"
+    override val biometricUnlockOnSubtitle = "اثر انگشت شما می‌تواند به‌جای پین، قفل Stade را باز کند"
+    override val biometricUnlockOffSubtitle = "هر بار پین لازم است"
+    override val biometricNotEnrolledSubtitle = "نخست از تنظیمات دستگاه خود یک اثر انگشت اضافه کنید"
+    override val biometricPromptTitle = "باز کردن قفل Stade"
+    override val biometricPromptSubtitle = "برای ادامه اثر انگشت خود را تأیید کنید"
+    override val biometricEnablePromptSubtitle = "برای روشن کردن این گزینه اثر انگشت خود را تأیید کنید"
+    override val biometricUsePinAction = "ادامه با پین"
+    override val biometricUseFingerprintAction = "استفاده از اثر انگشت"
+    override val biometricConfirmPinTitle = "پین خود را تأیید کنید"
+    override val biometricConfirmPinBody = "پین خود را یک بار وارد کنید. با کلیدی مهر و موم می‌شود که تنها اثر انگشت شما آن را آزاد می‌کند و هرگز از این دستگاه بیرون نمی‌رود."
+    override val biometricEnabledNotice = "باز کردن با اثر انگشت روشن است"
+    override val biometricFailedNotice = "اثر انگشت تأیید نشد. از پین خود استفاده کنید."
+    override val biometricResetNotice = "چون اثر انگشت‌های این دستگاه تغییر کرده، باز کردن با اثر انگشت خاموش شد. پین خود را وارد کنید."
 
     override val autoLockNeverInfoTitle = "دربارهٔ گزینهٔ «هرگز»"
     override val autoLockNeverInfoBody =

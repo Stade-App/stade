@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -53,6 +54,10 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import dev.stade.security.BiometricAvailability
+import dev.stade.security.BiometricOutcome
+import dev.stade.security.clearBiometricUnlock
+import dev.stade.security.rememberBiometricGate
 import dev.stade.security.UnlockOutcome
 import dev.stade.security.Vault
 import dev.stade.ui.components.BrandMark
@@ -100,6 +105,10 @@ fun LockScreen(
     val scrambleEnabled = remember { vault.isScrambleKeypadEnabled() }
     val strings = LocalStrings.current
     val keyFocusRequester = remember { FocusRequester() }
+    val biometrics = rememberBiometricGate()
+    var biometricPrompting by remember { mutableStateOf(false) }
+    var biometricOffered by remember { mutableStateOf(false) }
+    val biometricUsable = biometrics.enrolled && biometrics.availability == BiometricAvailability.Ready
 
     LaunchedEffect(Unit) {
         delay(80)
@@ -115,6 +124,44 @@ fun LockScreen(
     }
 
     val lockedNow = lockoutUntil > nowTick
+
+    fun unlockWith(candidate: String, onWrong: () -> Unit) {
+        isVerifying = true
+        scope.launch {
+            val outcome = withContext(Dispatchers.Default) { vault.unlock(candidate) }
+            isVerifying = false
+            if (outcome is UnlockOutcome.Success) onUnlocked() else onWrong()
+        }
+    }
+
+    fun promptBiometric() {
+        if (biometricPrompting || isVerifying || lockedNow || !biometricUsable) return
+        biometricPrompting = true
+        biometrics.authenticate(
+            title = strings.biometricPromptTitle,
+            subtitle = strings.biometricPromptSubtitle,
+            pinFallbackLabel = strings.biometricUsePinAction
+        ) { outcome ->
+            biometricPrompting = false
+            when (outcome) {
+                is BiometricOutcome.Unlocked -> unlockWith(outcome.pin) {
+                    clearBiometricUnlock()
+                    error = strings.biometricResetNotice
+                }
+                BiometricOutcome.Reset -> error = strings.biometricResetNotice
+                is BiometricOutcome.Failed -> error = outcome.message ?: strings.biometricFailedNotice
+                else -> Unit
+            }
+        }
+    }
+
+    LaunchedEffect(biometricUsable) {
+        if (biometricUsable && !biometricOffered && !lockedNow) {
+            biometricOffered = true
+            delay(220)
+            promptBiometric()
+        }
+    }
 
     fun tryUnlock() {
         if (pin.length < PIN_MIN || error != null || isVerifying || lockedNow) return
@@ -280,6 +327,20 @@ fun LockScreen(
                 )
             }
             Spacer(Modifier.height(16.dp))
+            if (biometricUsable) {
+                TextButton(
+                    onClick = { promptBiometric() },
+                    enabled = !wiping && !lockedNow && !isVerifying && !biometricPrompting
+                ) {
+                    Icon(
+                        Icons.Filled.Fingerprint,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(strings.biometricUseFingerprintAction)
+                }
+            }
             TextButton(onClick = { showForgotDialog = true }, enabled = !wiping) {
                 Text(strings.forgotPin)
             }
@@ -311,6 +372,7 @@ fun LockScreen(
                         scope.launch {
                             withContext(Dispatchers.Default) {
                                 runCatching { onPrepareWipe?.invoke() }
+                                runCatching { clearBiometricUnlock() }
                                 vault.wipe()
                             }
                             showForgotDialog = false
@@ -413,6 +475,7 @@ fun PinSetupScreen(
                 }
                 isVerifying = false
                 if (ok) {
+                    if (mode != PinSetupMode.Duress) clearBiometricUnlock()
                     onDone()
                 } else {
                     error = strings.pinChangeFailed

@@ -67,6 +67,7 @@ kotlin {
             dependencies {
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.androidx.core.ktx)
+                implementation(libs.androidx.biometric)
                 implementation(libs.kotlinx.coroutines.android)
                 implementation(libs.sqldelight.android.driver)
                 implementation("androidx.media3:media3-exoplayer:1.4.1")

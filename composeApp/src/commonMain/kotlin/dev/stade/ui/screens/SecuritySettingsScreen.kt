@@ -45,6 +45,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Button
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -72,8 +73,14 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.stade.AppContainer
+import dev.stade.security.BiometricAvailability
+import dev.stade.security.BiometricOutcome
+import dev.stade.security.clearBiometricUnlock
+import dev.stade.security.rememberBiometricGate
+import dev.stade.security.BiometricGate
 import dev.stade.security.SessionTimeout
 import dev.stade.security.getLockOnShutdownEnabled
 import dev.stade.security.isLockOnShutdownSupported
@@ -132,6 +139,11 @@ private fun SecuritySettingsContent(
     val linkPreviewsEnabled = remember(refreshTick) { dev.stade.link.getLinkPreviewsEnabled(container.db) }
     var timeoutMenuOpen by remember { mutableStateOf(false) }
     var showNeverInfoDialog by remember { mutableStateOf(false) }
+    val biometrics = rememberBiometricGate()
+    val biometricAvail = biometrics.availability
+    var biometricOn by remember(refreshTick) { mutableStateOf(biometrics.enrolled) }
+    var showBiometricPinDialog by remember { mutableStateOf(false) }
+    var biometricNotice by remember { mutableStateOf<String?>(null) }
     var showDuressInfoDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
@@ -168,6 +180,30 @@ private fun SecuritySettingsContent(
                             subtitle = strings.changePinSubtitle,
                             onClick = { onOpenPinSetup(true) }
                         )
+                        if (biometricAvail != BiometricAvailability.Unsupported) {
+                            SecurityDivider()
+                            val ready = biometricAvail == BiometricAvailability.Ready
+                            SecuritySwitchRow(
+                                icon = Icons.Default.Fingerprint,
+                                tint = MaterialTheme.colorScheme.primary,
+                                title = strings.biometricUnlockTitle,
+                                subtitle = when {
+                                    !ready -> strings.biometricNotEnrolledSubtitle
+                                    biometricOn -> strings.biometricUnlockOnSubtitle
+                                    else -> strings.biometricUnlockOffSubtitle
+                                },
+                                checked = biometricOn && ready,
+                                enabled = ready,
+                                onCheckedChange = { want ->
+                                    if (want) {
+                                        showBiometricPinDialog = true
+                                    } else {
+                                        biometrics.disable()
+                                        biometricOn = false
+                                    }
+                                }
+                            )
+                        }
                         if (isKeypadSupported) {
                             SecurityDivider()
                             SecuritySwitchRow(
@@ -356,6 +392,46 @@ private fun SecuritySettingsContent(
                     }
                 )
             }
+            if (showBiometricPinDialog) {
+                BiometricEnrollDialog(
+                    container = container,
+                    gate = biometrics,
+                    onDismiss = { showBiometricPinDialog = false },
+                    onEnabled = {
+                        showBiometricPinDialog = false
+                        biometricOn = true
+                        biometricNotice = strings.biometricEnabledNotice
+                    },
+                    onFailed = { message ->
+                        showBiometricPinDialog = false
+                        biometricOn = false
+                        biometricNotice = message
+                    }
+                )
+            }
+            biometricNotice?.let { notice ->
+                LaunchedEffect(notice) {
+                    delay(2600)
+                    biometricNotice = null
+                }
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.inverseSurface,
+                        shape = RoundedCornerShape(12.dp),
+                        tonalElevation = 6.dp
+                    ) {
+                        Text(
+                            notice,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.inverseOnSurface
+                        )
+                    }
+                }
+            }
             if (showNeverInfoDialog) {
                 AlertDialog(
                     onDismissRequest = { showNeverInfoDialog = false },
@@ -473,13 +549,14 @@ private fun SecuritySwitchRow(
     subtitle: String?,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .then(modifier)
-            .clickable { onCheckedChange(!checked) }
+            .clickable(enabled = enabled) { onCheckedChange(!checked) }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -493,7 +570,7 @@ private fun SecuritySwitchRow(
             }
         }
         Spacer(Modifier.width(8.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 
@@ -523,10 +600,54 @@ fun SecurityPinGate(
     var isVerifying by remember { mutableStateOf(false) }
     val shakeOffset = remember { androidx.compose.animation.core.Animatable(0f) }
     val keyFocusRequester = remember { FocusRequester() }
+    val biometrics = rememberBiometricGate()
+    var biometricPrompting by remember { mutableStateOf(false) }
+    var biometricOffered by remember { mutableStateOf(false) }
+    val biometricUsable = biometrics.enrolled && biometrics.availability == BiometricAvailability.Ready
 
     LaunchedEffect(Unit) {
         delay(80)
         runCatching { keyFocusRequester.requestFocus() }
+    }
+
+    fun promptBiometric() {
+        if (biometricPrompting || isVerifying || !biometricUsable) return
+        biometricPrompting = true
+        biometrics.authenticate(
+            title = strings.biometricPromptTitle,
+            subtitle = strings.biometricPromptSubtitle,
+            pinFallbackLabel = strings.biometricUsePinAction
+        ) { outcome ->
+            biometricPrompting = false
+            when (outcome) {
+                is BiometricOutcome.Unlocked -> {
+                    isVerifying = true
+                    scope.launch {
+                        val ok = withContext(Dispatchers.Default) {
+                            container.secrets.verifyPin(outcome.pin)
+                        }
+                        isVerifying = false
+                        if (ok) {
+                            onVerified()
+                        } else {
+                            clearBiometricUnlock()
+                            error = strings.biometricResetNotice
+                        }
+                    }
+                }
+                BiometricOutcome.Reset -> error = strings.biometricResetNotice
+                is BiometricOutcome.Failed -> error = outcome.message ?: strings.biometricFailedNotice
+                else -> Unit
+            }
+        }
+    }
+
+    LaunchedEffect(biometricUsable) {
+        if (biometricUsable && !biometricOffered) {
+            biometricOffered = true
+            delay(220)
+            promptBiometric()
+        }
     }
 
     fun tryVerify() {
@@ -734,14 +855,33 @@ fun SecurityPinGate(
                     }
                 }
             }
+            if (biometricUsable) {
+                Spacer(Modifier.height(16.dp))
+                TextButton(
+                    onClick = { promptBiometric() },
+                    enabled = !isVerifying && !biometricPrompting
+                ) {
+                    Icon(
+                        Icons.Default.Fingerprint,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(strings.biometricUseFingerprintAction)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun GatePadButton(onClick: () -> Unit, content: @Composable () -> Unit) {
+private fun GatePadButton(
+    onClick: () -> Unit,
+    size: Dp = 68.dp,
+    content: @Composable () -> Unit
+) {
     Surface(
-        modifier = Modifier.size(68.dp).clip(CircleShape).clickable(onClick = onClick),
+        modifier = Modifier.size(size).clip(CircleShape).clickable(onClick = onClick),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = CircleShape
     ) {
@@ -751,3 +891,129 @@ private fun GatePadButton(onClick: () -> Unit, content: @Composable () -> Unit) 
     }
 }
 
+@Composable
+private fun BiometricEnrollDialog(
+    container: AppContainer,
+    gate: BiometricGate,
+    onDismiss: () -> Unit,
+    onEnabled: () -> Unit,
+    onFailed: (String?) -> Unit
+) {
+    val strings = LocalStrings.current
+    val scope = rememberCoroutineScope()
+    var pin by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var wrong by remember { mutableStateOf(false) }
+
+    fun submit() {
+        if (busy || pin.length < 4) return
+        busy = true
+        wrong = false
+        val candidate = pin
+        scope.launch {
+            val ok = withContext(Dispatchers.Default) { container.secrets.verifyPin(candidate) }
+            if (!ok) {
+                busy = false
+                wrong = true
+                return@launch
+            }
+            gate.enable(
+                pin = candidate,
+                title = strings.biometricUnlockTitle,
+                subtitle = strings.biometricEnablePromptSubtitle,
+                cancelLabel = strings.cancel
+            ) { outcome ->
+                busy = false
+                when (outcome) {
+                    is BiometricOutcome.Unlocked -> onEnabled()
+                    BiometricOutcome.FellBackToPin -> onDismiss()
+                    is BiometricOutcome.Failed -> onFailed(outcome.message ?: strings.biometricFailedNotice)
+                    else -> onFailed(strings.biometricFailedNotice)
+                }
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        icon = {
+            Icon(
+                Icons.Default.Fingerprint,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        },
+        title = { Text(strings.biometricConfirmPinTitle) },
+        text = {
+            Column {
+                Text(strings.biometricConfirmPinBody, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(16.dp))
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(34.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    PinDots(filled = pin.length, shakeOffset = 0f, error = wrong)
+                }
+                if (wrong) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        strings.wrongCurrentPin,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                val haptic = LocalHapticFeedback.current
+                fun press(digit: String) {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    if (!busy && pin.length < 16) {
+                        pin += digit
+                        wrong = false
+                    }
+                }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9")).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            row.forEach { d ->
+                                GatePadButton(onClick = { press(d) }, size = 56.dp) {
+                                    Text(d, style = MaterialTheme.typography.titleMedium)
+                                }
+                            }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Spacer(Modifier.size(56.dp))
+                        GatePadButton(onClick = { press("0") }, size = 56.dp) {
+                            Text("0", style = MaterialTheme.typography.titleMedium)
+                        }
+                        GatePadButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                if (pin.isNotEmpty() && !busy) pin = pin.dropLast(1)
+                            },
+                            size = 56.dp
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Backspace,
+                                contentDescription = strings.backspaceAction,
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { submit() }, enabled = !busy && pin.length >= 4) {
+                Text(strings.continueAction)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) { Text(strings.cancel) }
+        }
+    )
+}

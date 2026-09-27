@@ -263,6 +263,7 @@ fun StadeApp(boot: BootContext) {
                             container = null
                             boot.markLocked()
                             unlocked = false
+                            runCatching { dev.stade.security.clearBiometricUnlock() }
                             runCatching { vault.wipe() }
                             initialized = vault.isInitialized()
                             autoUnlockTried = true

@@ -375,6 +375,20 @@ object EnglishStrings : AppStrings() {
         "There is no warning, no confirmation, and nothing can be recovered afterwards. " +
         "Your contacts are not notified."
     override val clearDuressPinAction = "Remove duress PIN"
+    override val biometricUnlockTitle = "Unlock with fingerprint"
+    override val biometricUnlockOnSubtitle = "Your fingerprint can unlock Stade instead of your PIN"
+    override val biometricUnlockOffSubtitle = "Your PIN is required every time"
+    override val biometricNotEnrolledSubtitle = "Add a fingerprint in your device settings first"
+    override val biometricPromptTitle = "Unlock Stade"
+    override val biometricPromptSubtitle = "Confirm your fingerprint to continue"
+    override val biometricEnablePromptSubtitle = "Confirm your fingerprint to turn this on"
+    override val biometricUsePinAction = "Continue with PIN"
+    override val biometricUseFingerprintAction = "Use fingerprint"
+    override val biometricConfirmPinTitle = "Confirm your PIN"
+    override val biometricConfirmPinBody = "Enter your PIN once. It is sealed with a key your fingerprint releases, and never leaves this device."
+    override val biometricEnabledNotice = "Fingerprint unlock is on"
+    override val biometricFailedNotice = "Fingerprint could not be verified. Use your PIN."
+    override val biometricResetNotice = "Fingerprint unlock was turned off because the fingerprints on this device changed. Enter your PIN."
 
     override val autoLockNeverInfoTitle = "About the 'Never' Option"
     override val autoLockNeverInfoBody =

@@ -363,6 +363,20 @@ object ArabicStrings : AppStrings() {
     override val duressPinInfoBody =
         "أدخل هذا الرمز في شاشة القفل بدلًا من رمزك الحقيقي، فيمحو Stade فورًا كل شيء على هذا الجهاز — هويتك وجهات اتصالك ورسائلك ومجموعاتك واستادياتك. عندها يبدو التطبيق تمامًا كتثبيت جديد، دون أي أثر يدل على استخدام رمز إكراه. لا تحذير ولا تأكيد، ولا شيء يمكن استرجاعه بعدها. ولا يُبلَّغ جهات اتصالك."
     override val clearDuressPinAction = "إزالة رمز الإكراه"
+    override val biometricUnlockTitle = "الفتح ببصمة الإصبع"
+    override val biometricUnlockOnSubtitle = "يمكن لبصمتك فتح Stade بدلًا من رمز PIN"
+    override val biometricUnlockOffSubtitle = "يلزم رمز PIN في كل مرة"
+    override val biometricNotEnrolledSubtitle = "أضف بصمة إصبع من إعدادات جهازك أولًا"
+    override val biometricPromptTitle = "فتح قفل Stade"
+    override val biometricPromptSubtitle = "أكّد بصمتك للمتابعة"
+    override val biometricEnablePromptSubtitle = "أكّد بصمتك لتفعيل هذا الخيار"
+    override val biometricUsePinAction = "المتابعة برمز PIN"
+    override val biometricUseFingerprintAction = "استخدام البصمة"
+    override val biometricConfirmPinTitle = "أكّد رمز PIN"
+    override val biometricConfirmPinBody = "أدخل رمز PIN مرة واحدة. يُختم بمفتاح لا تُطلقه إلا بصمتك، ولا يغادر هذا الجهاز أبدًا."
+    override val biometricEnabledNotice = "الفتح ببصمة الإصبع مُفعَّل"
+    override val biometricFailedNotice = "تعذّر التحقق من البصمة. استخدم رمز PIN."
+    override val biometricResetNotice = "أُوقف الفتح بالبصمة لأن بصمات هذا الجهاز تغيّرت. أدخل رمز PIN."
 
     override val autoLockNeverInfoTitle = "عن خيار «أبدًا»"
     override val autoLockNeverInfoBody =

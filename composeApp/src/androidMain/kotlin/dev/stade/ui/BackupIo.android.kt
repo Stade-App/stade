@@ -1,5 +1,6 @@
 package dev.stade.ui
 
+import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -47,11 +48,18 @@ actual fun rememberBackupIo(
         scope.launch {
             val ok = withContext(Dispatchers.IO) {
                 runCatching {
-                    vault.flushAndKeep()
-                    context.contentResolver.openOutputStream(uri)?.use { out ->
-                        StadeBackup.export(out, passphrase.toCharArray(), StadeBackup.targetsFor(vault))
-                    } ?: false
+                    vault.withFlushLock {
+                        vault.flushAndKeep()
+                        context.contentResolver.openOutputStream(uri)?.use { out ->
+                            StadeBackup.export(out, passphrase.toCharArray(), StadeBackup.targetsFor(vault))
+                        } ?: false
+                    }
                 }.getOrDefault(false)
+            }
+            if (!ok) {
+                withContext(Dispatchers.IO) {
+                    runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
+                }
             }
             callback(if (ok) BackupOutcome.Exported else BackupOutcome.Failed)
         }

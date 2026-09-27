@@ -363,6 +363,20 @@ object KoreanStrings : AppStrings() {
     override val duressPinInfoBody =
         "잠금 화면에서 실제 PIN 대신 이 PIN을 입력하면 Stade가 이 기기의 모든 것을 즉시 지웁니다 — 신원, 연락처, 메시지, 그룹, Stadium까지 전부입니다. 그 후 앱은 새로 설치한 것과 똑같아 보이며, 비상 PIN이 사용되었다는 흔적도 남지 않습니다. 경고도 확인 절차도 없고, 이후에는 아무것도 복구할 수 없습니다. 연락처에도 알림이 가지 않습니다."
     override val clearDuressPinAction = "비상 PIN 삭제"
+    override val biometricUnlockTitle = "지문으로 잠금 해제"
+    override val biometricUnlockOnSubtitle = "PIN 대신 지문으로 Stade 잠금을 해제할 수 있습니다"
+    override val biometricUnlockOffSubtitle = "매번 PIN이 필요합니다"
+    override val biometricNotEnrolledSubtitle = "먼저 기기 설정에서 지문을 등록하세요"
+    override val biometricPromptTitle = "Stade 잠금 해제"
+    override val biometricPromptSubtitle = "계속하려면 지문을 확인하세요"
+    override val biometricEnablePromptSubtitle = "이 기능을 켜려면 지문을 확인하세요"
+    override val biometricUsePinAction = "PIN으로 계속"
+    override val biometricUseFingerprintAction = "지문 사용"
+    override val biometricConfirmPinTitle = "PIN 확인"
+    override val biometricConfirmPinBody = "PIN을 한 번 입력하세요. 지문으로만 열리는 키로 봉인되며 이 기기를 벗어나지 않습니다."
+    override val biometricEnabledNotice = "지문 잠금 해제가 켜졌습니다"
+    override val biometricFailedNotice = "지문을 확인할 수 없습니다. PIN을 사용하세요."
+    override val biometricResetNotice = "이 기기의 지문이 변경되어 지문 잠금 해제가 꺼졌습니다. PIN을 입력하세요."
 
     override val autoLockNeverInfoTitle = "'안 함' 옵션에 대하여"
     override val autoLockNeverInfoBody =
