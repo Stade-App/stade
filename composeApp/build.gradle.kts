@@ -3,6 +3,23 @@ import java.util.Properties
 import java.net.URI
 import java.security.MessageDigest
 
+val appVersion = "0.3.3"
+val appVersionCode = 27
+
+val appVersionSource = file("src/commonMain/kotlin/dev/stade/AppVersion.kt")
+val declaredAppVersion = Regex("""APP_VERSION\s*=\s*"([^"]+)"""")
+    .find(appVersionSource.readText())?.groupValues?.get(1)
+check(declaredAppVersion == appVersion) {
+    "APP_VERSION in ${appVersionSource.name} is $declaredAppVersion but the build declares $appVersion. Update both."
+}
+
+val macAppVersion = appVersion.split(".").let { parts ->
+    val major = (parts.getOrNull(0)?.toIntOrNull() ?: 0) + 1
+    val minor = parts.getOrNull(1)?.toIntOrNull() ?: 0
+    val patch = parts.getOrNull(2)?.toIntOrNull() ?: 0
+    "$major.$minor.$patch"
+}
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.kotlinSerialization)
@@ -105,8 +122,8 @@ android {
         applicationId = "dev.stade"
         minSdk = 26
         targetSdk = 36
-        versionCode = 27
-        versionName = "0.3.3"
+        versionCode = appVersionCode
+        versionName = appVersion
     }
 
     val localProps = Properties().also { props ->
@@ -187,7 +204,7 @@ compose.desktop {
                 "java.desktop"
             )
             packageName = "Stade"
-            packageVersion = "0.3.3"
+            packageVersion = appVersion
             windows {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.ico"))
                 menuGroup = "Stade"
@@ -208,7 +225,8 @@ compose.desktop {
             macOS {
                 iconFile.set(project.file("src/desktopMain/resources/app_icon_desktop.icns"))
                 bundleID = "dev.stade.app"
-                packageVersion = "1.2.4"
+                packageVersion = macAppVersion
+                packageBuildVersion = appVersionCode.toString()
             }
         }
     }

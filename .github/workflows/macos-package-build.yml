@@ -41,6 +41,20 @@ jobs:
 
           echo "Dmg package: $DMG_FILE"
           hdiutil imageinfo "$DMG_FILE" >/dev/null
+
+          case "$GITHUB_REF" in
+            refs/tags/*)
+              VERSION="${GITHUB_REF#refs/tags/}"
+              VERSION="${VERSION#v}"
+              RENAMED="$(dirname "$DMG_FILE")/Stade-$VERSION.dmg"
+              if [ "$DMG_FILE" != "$RENAMED" ]; then
+                mv "$DMG_FILE" "$RENAMED"
+                DMG_FILE="$RENAMED"
+                echo "Renamed to match the release: $DMG_FILE"
+              fi
+              ;;
+          esac
+
           echo "DMG_FILE=$DMG_FILE" >> "$GITHUB_ENV"
 
       - name: Upload Dmg package
