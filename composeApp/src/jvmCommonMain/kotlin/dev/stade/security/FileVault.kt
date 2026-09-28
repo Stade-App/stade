@@ -492,6 +492,7 @@ class FileVault(private val rootDir: File) : Vault {
         buf.put(meta.duressVerifierCipher)
         val tmp = File(metaFile.parentFile, metaFile.name + ".tmp")
         tmp.writeBytes(out)
+        if (tmp.renameTo(metaFile)) return
         if (metaFile.exists()) metaFile.delete()
         if (!tmp.renameTo(metaFile)) {
             tmp.copyTo(metaFile, overwrite = true)
