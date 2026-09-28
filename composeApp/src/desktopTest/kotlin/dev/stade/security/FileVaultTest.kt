@@ -9,6 +9,24 @@ import kotlin.test.assertTrue
 class FileVaultTest {
 
     @Test
+    fun rewritesVaultMetaWithoutLeavingTemporaryFile() {
+        val root = Files.createTempDirectory("stade-vault-test")
+        try {
+            val vault = FileVault(root.toFile())
+            vault.setup("1234")
+            vault.setScrambleKeypadEnabled(true)
+
+            assertFalse(root.resolve("stade.vault.tmp").toFile().exists())
+
+            val reopened = FileVault(root.toFile())
+            assertTrue(reopened.unlock("1234") is UnlockOutcome.Success)
+            assertTrue(reopened.isScrambleKeypadEnabled())
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
     fun flushAndCloseEncryptsThenRemovesPlaintextDatabase() {
         val root = Files.createTempDirectory("stade-vault-test")
         try {
