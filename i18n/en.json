@@ -395,6 +395,7 @@
   "vlcNotFoundHint": "Install VLC to play videos in-app",
   "videoOpenFailed": "Couldn't open a video player for this file",
   "emojiPickerAction": "Emoji and stickers",
+  "showKeyboardAction": "Show keyboard",
   "stickerMessage": "🏷️ Sticker",
   "emojiTabLabel": "Emoji",
   "stickersTabLabel": "Stickers",

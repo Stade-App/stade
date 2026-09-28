@@ -1409,7 +1409,12 @@ fun ChatScreen(
                         keyboardController?.hide()
                         padOpen = false
                         showEmojiDrawer = true
-                    }
+                    },
+                    onCloseEmojiPicker = {
+                        showEmojiDrawer = false
+                        padOpen = false
+                    },
+                    drawerOpen = showEmojiDrawer || padOpen
                 )
 
                 val padContact = contact

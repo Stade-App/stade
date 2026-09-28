@@ -1220,7 +1220,12 @@ fun GroupChatScreen(
                         keyboardController?.hide()
                         padOpen = false
                         showEmojiDrawer = true
-                    }
+                    },
+                    onCloseEmojiPicker = {
+                        showEmojiDrawer = false
+                        padOpen = false
+                    },
+                    drawerOpen = showEmojiDrawer || padOpen
                 )
 
                                 BottomInsetPanel(visible = anyPanelOpen, state = panelState) {

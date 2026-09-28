@@ -395,6 +395,7 @@
   "vlcNotFoundHint": "앱에서 동영상을 재생하려면 VLC를 설치하세요",
   "videoOpenFailed": "이 파일을 재생할 동영상 플레이어를 열지 못했습니다",
   "emojiPickerAction": "이모지 및 스티커",
+  "showKeyboardAction": "키보드 표시",
   "stickerMessage": "🏷️ 스티커",
   "emojiTabLabel": "이모지",
   "stickersTabLabel": "스티커",

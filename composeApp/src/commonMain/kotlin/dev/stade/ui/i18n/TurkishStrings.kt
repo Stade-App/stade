@@ -476,6 +476,7 @@ object TurkishStrings : AppStrings() {
     override val videoOpenFailed = "Bu dosya için video oynatıcı açılamadı"
 
     override val emojiPickerAction = "Emoji ve çıkartmalar"
+    override val showKeyboardAction = "Klavyeyi göster"
     override val stickerMessage = "🏷️ Çıkartma"
     override val emojiTabLabel = "Emoji"
     override val stickersTabLabel = "Çıkartmalar"

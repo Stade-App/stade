@@ -395,6 +395,7 @@
   "vlcNotFoundHint": "Uygulama içinde oynatmak için VLC kurun",
   "videoOpenFailed": "Bu dosya için video oynatıcı açılamadı",
   "emojiPickerAction": "Emoji ve çıkartmalar",
+  "showKeyboardAction": "Klavyeyi göster",
   "stickerMessage": "🏷️ Çıkartma",
   "emojiTabLabel": "Emoji",
   "stickersTabLabel": "Çıkartmalar",

@@ -477,6 +477,7 @@ object EnglishStrings : AppStrings() {
     override val videoOpenFailed = "Couldn't open a video player for this file"
 
     override val emojiPickerAction = "Emoji and stickers"
+    override val showKeyboardAction = "Show keyboard"
     override val stickerMessage = "🏷️ Sticker"
     override val emojiTabLabel = "Emoji"
     override val stickersTabLabel = "Stickers"

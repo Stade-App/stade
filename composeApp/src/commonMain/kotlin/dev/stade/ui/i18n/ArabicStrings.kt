@@ -460,6 +460,7 @@ object ArabicStrings : AppStrings() {
     override val videoOpenFailed = "تعذّر فتح مشغّل فيديو لهذا الملف"
 
     override val emojiPickerAction = "الرموز والملصقات"
+    override val showKeyboardAction = "إظهار لوحة المفاتيح"
     override val stickerMessage = "🏷️ ملصق"
     override val emojiTabLabel = "رموز"
     override val stickersTabLabel = "ملصقات"

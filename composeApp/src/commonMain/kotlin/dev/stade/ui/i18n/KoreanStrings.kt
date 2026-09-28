@@ -460,6 +460,7 @@ object KoreanStrings : AppStrings() {
     override val videoOpenFailed = "이 파일을 재생할 동영상 플레이어를 열지 못했습니다"
 
     override val emojiPickerAction = "이모지 및 스티커"
+    override val showKeyboardAction = "키보드 표시"
     override val stickerMessage = "🏷️ 스티커"
     override val emojiTabLabel = "이모지"
     override val stickersTabLabel = "스티커"

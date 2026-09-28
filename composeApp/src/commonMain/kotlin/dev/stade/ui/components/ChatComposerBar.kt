@@ -32,6 +32,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -106,6 +110,8 @@ data class ChatComposerReplyPreview(val senderLabel: String, val snippet: String
 
 private enum class VoiceSendMode { MIC, STOP, SEND }
 
+private const val ICON_SWAP_MS = 220
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatComposerBar(
@@ -129,12 +135,16 @@ fun ChatComposerBar(
     onCancelRecording: () -> Unit = {},
     recordingElapsedMs: Long = 0L,
     onInputFocused: () -> Unit = {},
-    onOpenEmojiPicker: () -> Unit = {}
+    onOpenEmojiPicker: () -> Unit = {},
+    onCloseEmojiPicker: () -> Unit = {},
+    drawerOpen: Boolean = false
 ) {
     val strings = LocalStrings.current
     var plusOpen by remember { mutableStateOf(false) }
     val canSend = draft.text.isNotBlank() || pendingImages.isNotEmpty() || pendingVideo != null || pendingVoiceClip != null
     val interactionSource = remember { MutableInteractionSource() }
+    val composerFocus = remember { FocusRequester() }
+    val softKeyboard = LocalSoftwareKeyboardController.current
     val haptic = LocalHapticFeedback.current
     var cancelDragPx by remember { mutableStateOf(0f) }
     val cancelThresholdPx = with(LocalDensity.current) { CANCEL_SLIDE_DISTANCE.toPx() }
@@ -356,6 +366,7 @@ fun ChatComposerBar(
                 modifier = Modifier
                     .weight(1f)
                     .height(54.dp)
+                    .focusRequester(composerFocus)
                     .onPreviewKeyEvent { keyEvent ->
                         if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Enter) {
                             if (keyEvent.isShiftPressed) {
@@ -386,15 +397,18 @@ fun ChatComposerBar(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
-                            onClick = onOpenEmojiPicker,
+                            onClick = {
+                                if (drawerOpen) {
+                                    onCloseEmojiPicker()
+                                    runCatching { composerFocus.requestFocus() }
+                                    softKeyboard?.show()
+                                } else {
+                                    onOpenEmojiPicker()
+                                }
+                            },
                             modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(
-                                Icons.Default.InsertEmoticon,
-                                contentDescription = strings.emojiPickerAction,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            EmojiKeyboardToggleIcon(showKeyboard = drawerOpen)
                         }
                         Box(modifier = Modifier.weight(1f)) {
                             if (draft.text.isEmpty()) {
@@ -637,5 +651,50 @@ private fun RecordingStrip(
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 1f - cancelProgress),
             maxLines = 1
         )
+    }
+}
+
+@Composable
+private fun EmojiKeyboardToggleIcon(showKeyboard: Boolean) {
+    val strings = LocalStrings.current
+    val swap by animateFloatAsState(
+        targetValue = if (showKeyboard) 1f else 0f,
+        animationSpec = tween(ICON_SWAP_MS, easing = FastOutSlowInEasing),
+        label = "emojiKeyboardSwap"
+    )
+    val tint = MaterialTheme.colorScheme.primary
+    Box(contentAlignment = Alignment.Center) {
+        if (swap < 0.999f) {
+            Icon(
+                Icons.Default.InsertEmoticon,
+                contentDescription = if (showKeyboard) null else strings.emojiPickerAction,
+                tint = tint,
+                modifier = Modifier
+                    .size(24.dp)
+                    .graphicsLayer {
+                        alpha = 1f - swap
+                        rotationY = swap * -90f
+                        val shrink = 1f - 0.25f * swap
+                        scaleX = shrink
+                        scaleY = shrink
+                    }
+            )
+        }
+        if (swap > 0.001f) {
+            Icon(
+                Icons.Default.Keyboard,
+                contentDescription = if (showKeyboard) strings.showKeyboardAction else null,
+                tint = tint,
+                modifier = Modifier
+                    .size(24.dp)
+                    .graphicsLayer {
+                        alpha = swap
+                        rotationY = (1f - swap) * 90f
+                        val grow = 0.75f + 0.25f * swap
+                        scaleX = grow
+                        scaleY = grow
+                    }
+            )
+        }
     }
 }

@@ -395,6 +395,7 @@
   "vlcNotFoundHint": "ثبّت VLC لتشغيل الفيديو داخل التطبيق",
   "videoOpenFailed": "تعذّر فتح مشغّل فيديو لهذا الملف",
   "emojiPickerAction": "الرموز والملصقات",
+  "showKeyboardAction": "إظهار لوحة المفاتيح",
   "stickerMessage": "🏷️ ملصق",
   "emojiTabLabel": "رموز",
   "stickersTabLabel": "ملصقات",

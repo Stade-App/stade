@@ -460,6 +460,7 @@ object PersianStrings : AppStrings() {
     override val videoOpenFailed = "پخش‌کننده‌ای برای این فایل باز نشد"
 
     override val emojiPickerAction = "ایموجی و استیکر"
+    override val showKeyboardAction = "نمایش صفحه‌کلید"
     override val stickerMessage = "🏷️ استیکر"
     override val emojiTabLabel = "ایموجی"
     override val stickersTabLabel = "استیکرها"

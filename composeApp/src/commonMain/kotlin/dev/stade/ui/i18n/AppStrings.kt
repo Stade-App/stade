@@ -415,6 +415,7 @@ abstract class AppStrings {
     abstract val videoOpenFailed: String
 
     abstract val emojiPickerAction: String
+    abstract val showKeyboardAction: String
     abstract val stickerMessage: String
     abstract val emojiTabLabel: String
     abstract val stickersTabLabel: String

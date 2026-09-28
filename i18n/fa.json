@@ -395,6 +395,7 @@
   "vlcNotFoundHint": "برای پخش ویدیو در برنامه، VLC را نصب کنید",
   "videoOpenFailed": "پخش‌کننده‌ای برای این فایل باز نشد",
   "emojiPickerAction": "ایموجی و استیکر",
+  "showKeyboardAction": "نمایش صفحه‌کلید",
   "stickerMessage": "🏷️ استیکر",
   "emojiTabLabel": "ایموجی",
   "stickersTabLabel": "استیکرها",
