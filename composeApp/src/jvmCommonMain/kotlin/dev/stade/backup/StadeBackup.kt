@@ -127,6 +127,7 @@ object StadeBackup {
     }
 
     private fun promote(tmp: File, dest: File): Boolean {
+        if (tmp.renameTo(dest)) return true
         if (dest.exists() && !dest.delete()) return false
         if (tmp.renameTo(dest)) return true
         return runCatching {

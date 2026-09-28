@@ -81,6 +81,42 @@ class StadeBackupTest {
     }
 
     @Test
+    fun restoringOverAPopulatedInstallReplacesEveryFile() {
+        val f = Fixture()
+        f.seed()
+        val archive = f.export("a-long-enough-passphrase")
+
+        File(f.targets.vaultMetaPath).writeBytes(Random(41).nextBytes(180))
+        File(f.targets.encryptedDbPath).writeBytes(Random(42).nextBytes(9_000))
+        File(f.targets.onionKeyPath).writeBytes("ED25519-V3:SOMETHINGELSE==".encodeToByteArray())
+
+        val outcome = f.restore(archive, "a-long-enough-passphrase")
+        assertTrue(outcome is RestoreOutcome.Restored, "expected a restore, got $outcome")
+
+        assertContentEquals(f.meta, File(f.targets.vaultMetaPath).readBytes())
+        assertContentEquals(f.db, File(f.targets.encryptedDbPath).readBytes())
+        assertContentEquals(f.onion, File(f.targets.onionKeyPath).readBytes())
+    }
+
+    @Test
+    fun aRestoreLeavesNoHalfWrittenFilesBehind() {
+        val f = Fixture()
+        f.seed()
+        val archive = f.export("a-long-enough-passphrase")
+        f.clearInstall()
+
+        assertTrue(f.restore(archive, "a-long-enough-passphrase") is RestoreOutcome.Restored)
+
+        val leftovers = File(f.targets.vaultMetaPath).parentFile
+            .walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".restore") }
+            .toList()
+        assertTrue(leftovers.isEmpty(), "restore temporaries were left behind: $leftovers")
+        assertTrue(File(f.targets.vaultMetaPath).isFile)
+        assertTrue(File(f.targets.encryptedDbPath).isFile)
+    }
+
+    @Test
     fun theStalePlaintextDatabaseIsRemovedOnRestore() {
         val f = Fixture()
         f.seed()
