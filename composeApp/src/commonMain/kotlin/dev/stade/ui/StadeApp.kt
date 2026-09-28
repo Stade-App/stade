@@ -857,6 +857,21 @@ private fun UnlockedApp(
             }
         }
 
+        val pendingStickers by container.pendingStickerImport.collectAsState()
+        var stickerImportResult by remember { mutableStateOf<dev.stade.sticker.ImportResult?>(null) }
+        LaunchedEffect(pendingStickers, identity?.id) {
+            val files = pendingStickers
+            val who = identity
+            if (files.isEmpty() || who == null) return@LaunchedEffect
+            container.pendingStickerImport.value = emptyList()
+            stickerImportResult = withContext(Dispatchers.Default) {
+                dev.stade.sticker.StickerImporter.importFiles(container.stickers, who.id, files)
+            }
+        }
+        stickerImportResult?.let { outcome ->
+            dev.stade.ui.components.StickerImportResultDialog(outcome) { stickerImportResult = null }
+        }
+
         val pending = pendingInvite
         val owner = identity
         if (pending != null && owner != null &&

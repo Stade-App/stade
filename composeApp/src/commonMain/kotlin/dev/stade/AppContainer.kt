@@ -143,6 +143,21 @@ class AppContainer(
             runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxSticker ON Sticker(ownerId)", 0) }
         }
         runCatching {
+            createdDriver.executeQuery(null, "SELECT packId, contentHash FROM Sticker LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "ALTER TABLE Sticker ADD COLUMN packId TEXT", 0) }
+            runCatching { createdDriver.execute(null, "ALTER TABLE Sticker ADD COLUMN contentHash TEXT NOT NULL DEFAULT ''", 0) }
+            runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxStickerPackRef ON Sticker(packId)", 0) }
+        }
+        runCatching {
+            createdDriver.executeQuery(null, "SELECT id FROM StickerPack LIMIT 0",
+                { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
+        }.onFailure {
+            runCatching { createdDriver.execute(null, "CREATE TABLE IF NOT EXISTS StickerPack (id TEXT NOT NULL PRIMARY KEY, ownerId TEXT NOT NULL, title TEXT NOT NULL, author TEXT NOT NULL DEFAULT '', origin TEXT NOT NULL DEFAULT '', createdAt INTEGER NOT NULL)", 0) }
+            runCatching { createdDriver.execute(null, "CREATE INDEX IF NOT EXISTS idxStickerPack ON StickerPack(ownerId)", 0) }
+        }
+        runCatching {
             createdDriver.executeQuery(null, "SELECT sessionId FROM VanishSession LIMIT 0",
                 { _: SqlCursor -> QueryResult.Value(Unit) }, 0)
         }.onFailure {
@@ -248,6 +263,8 @@ class AppContainer(
 
     val pendingGoHome = MutableStateFlow(false)
 
+    val pendingStickerImport = MutableStateFlow<List<dev.stade.ui.PickedStickerFile>>(emptyList())
+
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + backgroundFailures)
 
     @Volatile var isClosed = false
@@ -259,6 +276,7 @@ class AppContainer(
         pendingInvite.value = null
         pendingOpenChat.value = null
         pendingGoHome.value = false
+        pendingStickerImport.value = emptyList()
         activeContactId = null
         runCatching {
             db.stadeDbQueries.transaction {
@@ -278,6 +296,7 @@ class AppContainer(
                 db.stadeDbQueries.wipeKeyValue()
                 db.stadeDbQueries.wipeProcessedEnvelope()
                 db.stadeDbQueries.wipeStickers()
+                db.stadeDbQueries.wipeStickerPacks()
                 db.stadeDbQueries.wipeReactions()
                 db.stadeDbQueries.wipeVanishSessions()
                 db.stadeDbQueries.wipeScheduledMessages()

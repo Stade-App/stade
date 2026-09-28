@@ -573,22 +573,59 @@ CREATE TABLE Sticker (
     id TEXT NOT NULL PRIMARY KEY,
     ownerId TEXT NOT NULL,
     imageBytes BLOB NOT NULL,
-    createdAt INTEGER NOT NULL
+    createdAt INTEGER NOT NULL,
+    packId TEXT,
+    contentHash TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX idxSticker ON Sticker(ownerId);
 
+CREATE INDEX idxStickerPackRef ON Sticker(packId);
+
+CREATE TABLE StickerPack (
+    id TEXT NOT NULL PRIMARY KEY,
+    ownerId TEXT NOT NULL,
+    title TEXT NOT NULL,
+    author TEXT NOT NULL DEFAULT '',
+    origin TEXT NOT NULL DEFAULT '',
+    createdAt INTEGER NOT NULL
+);
+
+CREATE INDEX idxStickerPack ON StickerPack(ownerId);
+
 insertSticker:
 INSERT INTO Sticker(id, ownerId, imageBytes, createdAt) VALUES (?, ?, ?, ?);
 
+insertPackSticker:
+INSERT INTO Sticker(id, ownerId, imageBytes, createdAt, packId, contentHash)
+VALUES (?, ?, ?, ?, ?, ?);
+
 selectStickers:
 SELECT * FROM Sticker WHERE ownerId = ? ORDER BY createdAt DESC;
+
+stickerHashCount:
+SELECT COUNT(*) FROM Sticker WHERE ownerId = ? AND contentHash = ? AND contentHash != '';
 
 deleteSticker:
 DELETE FROM Sticker WHERE id = ?;
 
 wipeStickers:
 DELETE FROM Sticker;
+
+insertStickerPack:
+INSERT INTO StickerPack(id, ownerId, title, author, origin, createdAt) VALUES (?, ?, ?, ?, ?, ?);
+
+selectStickerPacks:
+SELECT * FROM StickerPack WHERE ownerId = ? ORDER BY createdAt DESC;
+
+deleteStickerPack:
+DELETE FROM StickerPack WHERE id = ?;
+
+deleteStickersInPack:
+DELETE FROM Sticker WHERE packId = ?;
+
+wipeStickerPacks:
+DELETE FROM StickerPack;
 
 CREATE TABLE VanishSession (
     sessionId TEXT NOT NULL PRIMARY KEY,

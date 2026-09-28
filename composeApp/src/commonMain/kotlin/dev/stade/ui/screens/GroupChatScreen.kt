@@ -183,6 +183,10 @@ import dev.stade.ui.components.formatChatTime
 import dev.stade.ui.components.formatVoiceDuration
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
+import dev.stade.sticker.ImportResult
+import dev.stade.sticker.StickerImporter
+import dev.stade.ui.rememberStickerImportLauncher
+import dev.stade.ui.components.StickerImportResultDialog
 import dev.stade.ui.i18n.LocalStrings
 import dev.stade.ui.rememberMediaPickerLauncher
 import dev.stade.ui.saveImageToGallery
@@ -280,7 +284,22 @@ fun GroupChatScreen(
     val starredIds by remember(owner.id) { container.starredMessages.observeStarredIds(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.starredMessages.starredIds(owner.id) })
     var showStickerMaker by remember { mutableStateOf(false) }
+    var stickerImportResult by remember { mutableStateOf<ImportResult?>(null) }
     val stickers by remember(owner.id) { container.stickers.observeStickers(owner.id) }.collectAsState(initial = emptyList())
+    val stickerPacks by remember(owner.id) { container.stickers.observePacks(owner.id) }.collectAsState(initial = emptyList())
+    val stickerScope = rememberCoroutineScope()
+    val stickerImport = rememberStickerImportLauncher { picked ->
+        if (picked.isNotEmpty()) {
+            stickerScope.launch {
+                stickerImportResult = withContext(Dispatchers.Default) {
+                    StickerImporter.importFiles(container.stickers, owner.id, picked)
+                }
+            }
+        }
+    }
+    stickerImportResult?.let { outcome ->
+        StickerImportResultDialog(outcome) { stickerImportResult = null }
+    }
 
     var selectedMessageIds by remember(groupId) { mutableStateOf<Set<String>>(emptySet()) }
     val inSelectionMode by remember { derivedStateOf { selectedMessageIds.isNotEmpty() } }
@@ -1223,6 +1242,7 @@ fun GroupChatScreen(
                     } else if (showEmojiDrawer) {
                         EmojiStickerPanel(
                             stickers = stickers,
+                            packs = stickerPacks,
                             onDismiss = { showEmojiDrawer = false },
                             onSend = { bytes ->
                                 scope.launch { container.groupChat.sendSticker(owner, groupId, bytes) }
@@ -1231,7 +1251,9 @@ fun GroupChatScreen(
                                 showEmojiDrawer = false
                                 showStickerMaker = true
                             },
-                            onDeleteSticker = { id -> container.stickers.delete(id) }
+                            onDeleteSticker = { id -> container.stickers.delete(id) },
+                            onImportStickers = { stickerImport.pickFiles() },
+                            onDeletePack = { id -> container.stickers.deletePack(id) }
                         )
                     }
                 }

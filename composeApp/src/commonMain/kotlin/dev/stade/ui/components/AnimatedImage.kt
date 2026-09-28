@@ -23,6 +23,9 @@ fun isGifBytes(bytes: ByteArray): Boolean {
     return header == "GIF87a" || header == "GIF89a"
 }
 
+fun isAnimatedBytes(bytes: ByteArray): Boolean =
+    isGifBytes(bytes) || dev.stade.sticker.isAnimatedWebpBytes(bytes)
+
 @Composable
 expect fun AnimatedImage(
     bytes: ByteArray,

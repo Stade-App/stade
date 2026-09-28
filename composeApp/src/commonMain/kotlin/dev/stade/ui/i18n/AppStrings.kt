@@ -430,6 +430,16 @@ abstract class AppStrings {
     abstract val saveStickerAction: String
     abstract val stickerCreationFailed: String
     abstract val stickerGifTooLarge: String
+    abstract val importStickersAction: String
+    abstract val importStickersHint: String
+    abstract fun stickersImported(count: Int): String
+    abstract val stickersImportedNone: String
+    abstract fun stickersImportDuplicates(count: Int): String
+    abstract fun stickersImportUnreadable(count: Int): String
+    abstract val stickerPackDeleteAction: String
+    abstract val stickerPackDeleteTitle: String
+    abstract val stickerPackDeleteBody: String
+    abstract val stickerPackLoose: String
     abstract val backupSection: String
     abstract val backupExportTitle: String
     abstract val backupExportSubtitle: String

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -68,6 +69,10 @@ class MainActivity : FragmentActivity() {
 
     private fun handleInviteFileIntent(intent: Intent?) {
         intent ?: return
+        if (intent.action == Intent.ACTION_SEND_MULTIPLE) {
+            handleSharedStickers(extractStreamUris(intent))
+            return
+        }
         val uri: Uri? = when (intent.action) {
             Intent.ACTION_VIEW -> intent.data
             Intent.ACTION_SEND -> extractStreamUri(intent)
@@ -95,9 +100,47 @@ class MainActivity : FragmentActivity() {
             }
             if (!text.isNullOrBlank() && text.startsWith("STADE2-")) {
                 app.handleOpenInviteIntent(text)
+            } else {
+                handleSharedStickers(listOf(uri))
             }
         }
     }
+
+    private fun handleSharedStickers(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        val app = application as StadeApplication
+        lifecycleScope.launch(Dispatchers.IO) {
+            val files = uris.mapNotNull { readSharedSticker(it) }
+            if (files.isNotEmpty()) app.handleStickerFilesIntent(files)
+        }
+    }
+
+    private fun readSharedSticker(uri: Uri): dev.stade.ui.PickedStickerFile? = runCatching {
+        val name = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+            ?: uri.lastPathSegment ?: "sticker"
+        val bytes = contentResolver.openInputStream(uri)?.use { input ->
+            val out = ByteArrayOutputStream()
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                if (out.size() + read > dev.stade.sticker.MAX_IMPORT_ARCHIVE_BYTES) return@use null
+                out.write(buffer, 0, read)
+            }
+            out.toByteArray()
+        } ?: return null
+        if (!dev.stade.sticker.looksLikeSticker(bytes) && !dev.stade.sticker.isZipArchive(bytes)) return null
+        dev.stade.ui.PickedStickerFile(name, bytes)
+    }.getOrNull()
+
+    @Suppress("DEPRECATION")
+    private fun extractStreamUris(intent: Intent): List<Uri> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)
+        }.orEmpty()
 
     @Suppress("DEPRECATION")
     private fun extractStreamUri(intent: Intent): Uri? =

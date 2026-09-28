@@ -55,7 +55,7 @@ actual fun AnimatedImage(
     modifier: Modifier,
     contentScale: ContentScale
 ) {
-    if (!isGifBytes(bytes)) {
+    if (!isAnimatedBytes(bytes)) {
         StaticImageBytes(bytes, contentDescription, modifier, contentScale)
         return
     }

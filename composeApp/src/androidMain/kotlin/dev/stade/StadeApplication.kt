@@ -31,6 +31,7 @@ class StadeApplication : Application() {
     private var pendingGroupAtBoot: String? = null
     private var pendingGoHomeAtBoot: Boolean = false
     private var pendingInviteAtBoot: String? = null
+    private var pendingStickersAtBoot: List<dev.stade.ui.PickedStickerFile> = emptyList()
 
     fun handleOpenChatIntent(contactId: String) {
         val c = activeContainer
@@ -40,6 +41,12 @@ class StadeApplication : Application() {
     fun handleOpenInviteIntent(inviteText: String) {
         val c = activeContainer
         if (c != null) c.pendingInvite.value = inviteText else pendingInviteAtBoot = inviteText
+    }
+
+    fun handleStickerFilesIntent(files: List<dev.stade.ui.PickedStickerFile>) {
+        if (files.isEmpty()) return
+        val c = activeContainer
+        if (c != null) c.pendingStickerImport.value = files else pendingStickersAtBoot = files
     }
 
     fun handleOpenStadiumIntent(stadiumId: String) {
@@ -98,6 +105,10 @@ class StadeApplication : Application() {
                 }
                 pendingInviteAtBoot?.let { c.pendingInvite.value = it }
                 pendingInviteAtBoot = null
+                if (pendingStickersAtBoot.isNotEmpty()) {
+                    c.pendingStickerImport.value = pendingStickersAtBoot
+                    pendingStickersAtBoot = emptyList()
+                }
             }
         )
         var startedCount = 0

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,13 +18,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
@@ -40,7 +45,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import dev.stade.sticker.StickerPack
 import dev.stade.sticker.Sticker
 import dev.stade.emoji.CustomEmojiCatalog
 import dev.stade.ui.i18n.LocalStrings
@@ -57,16 +64,20 @@ private enum class EmojiStickerTab { Emoji, Stickers }
 @Composable
 fun EmojiStickerPanel(
     stickers: List<Sticker>,
+    packs: List<StickerPack>,
     onDismiss: () -> Unit,
     onSend: (ByteArray) -> Unit,
     onCreateSticker: () -> Unit,
-    onDeleteSticker: (String) -> Unit
+    onImportStickers: () -> Unit,
+    onDeleteSticker: (String) -> Unit,
+    onDeletePack: (String) -> Unit
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
     val environment = rememberResourceEnvironment()
     var tab by remember { mutableStateOf(EmojiStickerTab.Emoji) }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+    var pendingDeletePackId by remember { mutableStateOf<String?>(null) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TabRow(selectedTabIndex = tab.ordinal) {
@@ -139,8 +150,31 @@ fun EmojiStickerPanel(
                             Spacer(Modifier.width(6.dp))
                             Text(strings.createStickerAction)
                         }
+                        Spacer(Modifier.height(8.dp))
+                        TextButton(onClick = onImportStickers) {
+                            Icon(
+                                Icons.Default.FileDownload,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(strings.importStickersAction)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            strings.importStickersHint,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 32.dp)
+                        )
                     }
                 } else {
+                    val loose = remember(stickers) { stickers.filter { it.packId == null } }
+                    val grouped = remember(stickers, packs) {
+                        packs.map { pack -> pack to stickers.filter { it.packId == pack.id } }
+                            .filter { it.second.isNotEmpty() }
+                    }
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(4),
                         contentPadding = PaddingValues(12.dp),
@@ -163,26 +197,63 @@ fun EmojiStickerPanel(
                                 )
                             }
                         }
-                        items(stickers, key = { it.id }) { sticker ->
+                        item(key = "import") {
                             Box(
                                 modifier = Modifier
                                     .padding(4.dp)
                                     .aspectRatio(1f)
-                                    .pointerInput(sticker.id) {
-                                        detectTapGestures(
-                                            onTap = {
-                                                onSend(sticker.imageBytes)
-                                                onDismiss()
-                                            },
-                                            onLongPress = { pendingDeleteId = sticker.id }
-                                        )
-                                    },
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .border(1.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+                                    .clickable(onClick = onImportStickers),
                                 contentAlignment = Alignment.Center
                             ) {
-                                AnimatedImage(
-                                    bytes = sticker.imageBytes,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize()
+                                Icon(
+                                    Icons.Default.FileDownload,
+                                    contentDescription = strings.importStickersAction,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        items(loose, key = { it.id }) { sticker ->
+                            StickerCell(
+                                sticker = sticker,
+                                onSend = { onSend(sticker.imageBytes); onDismiss() },
+                                onLongPress = { pendingDeleteId = sticker.id }
+                            )
+                        }
+                        grouped.forEach { (pack, packStickers) ->
+                            item(
+                                key = "pack_${pack.id}",
+                                span = { GridItemSpan(maxLineSpan) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        pack.title,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    IconButton(
+                                        onClick = { pendingDeletePackId = pack.id },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = strings.stickerPackDeleteAction,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            items(packStickers, key = { it.id }) { sticker ->
+                                StickerCell(
+                                    sticker = sticker,
+                                    onSend = { onSend(sticker.imageBytes); onDismiss() },
+                                    onLongPress = { pendingDeleteId = sticker.id }
                                 )
                             }
                         }
@@ -191,6 +262,24 @@ fun EmojiStickerPanel(
             }
         }
 
+    }
+
+    val deletePackId = pendingDeletePackId
+    if (deletePackId != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDeletePackId = null },
+            title = { Text(strings.stickerPackDeleteTitle) },
+            text = { Text(strings.stickerPackDeleteBody) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeletePack(deletePackId)
+                    pendingDeletePackId = null
+                }) { Text(strings.delete, color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeletePackId = null }) { Text(strings.cancel) }
+            }
+        )
     }
 
     val deleteId = pendingDeleteId
@@ -219,5 +308,31 @@ private fun DrawerEmptyState(text: String, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center
     ) {
         Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun StickerCell(
+    sticker: Sticker,
+    onSend: () -> Unit,
+    onLongPress: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .padding(4.dp)
+            .aspectRatio(1f)
+            .pointerInput(sticker.id) {
+                detectTapGestures(
+                    onTap = { onSend() },
+                    onLongPress = { onLongPress() }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        AnimatedImage(
+            bytes = sticker.imageBytes,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }

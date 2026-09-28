@@ -27,7 +27,7 @@ actual fun AnimatedImage(
     contentScale: ContentScale
 ) {
     val playable = remember(bytes) {
-        isGifBytes(bytes) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+        isAnimatedBytes(bytes) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
     }
     if (!playable) {
         StaticImageBytes(bytes, contentDescription, modifier, contentScale)

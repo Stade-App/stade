@@ -71,5 +71,8 @@ class BootContext(
         from.pendingOpenStadium.value?.let { to.pendingOpenStadium.value = it }
         from.pendingOpenGroup.value?.let { to.pendingOpenGroup.value = it }
         if (from.pendingGoHome.value) to.pendingGoHome.value = true
+        if (from.pendingStickerImport.value.isNotEmpty()) {
+            to.pendingStickerImport.value = from.pendingStickerImport.value
+        }
     }
 }
