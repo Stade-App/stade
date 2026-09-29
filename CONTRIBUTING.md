@@ -10,9 +10,15 @@ Stade is developed in English. That means **code, identifiers, commit messages, 
 request titles and descriptions, and issues** — all of it in English, regardless of the
 language you and the maintainers happen to share.
 
-The exceptions are the obvious ones: translated interface strings live in the locale
-files, a language's own name stays in its own language, and test fixtures may contain
-whatever text the test is actually about.
+**Names that belong to Stade are never translated.** Stade, Stadium, Stadey, Paddy and
+Radar are product names rather than descriptions, so they stay in Latin script in every
+locale — neither translated nor transliterated. A Turkish reader sees `Stadium'a Katıl`
+and an Arabic reader sees `الانضمام إلى Stadium`. Treat them the way you would treat any
+other brand name inside a sentence.
+
+The exceptions to English are the obvious ones: translated interface strings live in
+the locale files, a language's own name stays in its own language, and test fixtures
+may contain whatever text the test is actually about.
 
 ## Getting it building
 
