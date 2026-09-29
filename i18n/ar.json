@@ -163,6 +163,7 @@
   "hsMldsaInvalid": "توقيع ML-DSA غير صالح (فشل التحقق ما بعد الكمّي)",
   "hsMlkemDecapFailed": "فشل فك تغليف ML-KEM",
   "unknownNickname": "غير معروف",
+  "unknownError": "خطأ غير معروف",
   "contactNameFallback": "جهة اتصال-{last4}",
   "backgroundRunningNotice": "يستمر التطبيق في العمل في الخلفية",
   "trayOpen": "فتح",

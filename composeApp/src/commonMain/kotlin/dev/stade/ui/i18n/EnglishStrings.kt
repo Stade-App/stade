@@ -188,6 +188,7 @@ object EnglishStrings : AppStrings() {
     override val hsMldsaInvalid = "ML-DSA signature invalid (post-quantum verification failed)"
     override val hsMlkemDecapFailed = "ML-KEM decapsulation failed"
     override val unknownNickname = "Unknown"
+    override val unknownError = "Unknown error"
     override fun contactNameFallback(last4: String) = "Contact-$last4"
 
     override val backgroundRunningNotice = "The app keeps running in the background"

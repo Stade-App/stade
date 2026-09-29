@@ -163,6 +163,7 @@
   "hsMldsaInvalid": "ML-DSA signature invalid (post-quantum verification failed)",
   "hsMlkemDecapFailed": "ML-KEM decapsulation failed",
   "unknownNickname": "Unknown",
+  "unknownError": "Unknown error",
   "contactNameFallback": "Contact-{last4}",
   "backgroundRunningNotice": "The app keeps running in the background",
   "trayOpen": "Open",

@@ -185,6 +185,7 @@ object KoreanStrings : AppStrings() {
     override val hsMldsaInvalid = "ML-DSA 서명이 올바르지 않습니다(양자 내성 검증 실패)"
     override val hsMlkemDecapFailed = "ML-KEM 디캡슐화에 실패했습니다"
     override val unknownNickname = "알 수 없음"
+    override val unknownError = "알 수 없는 오류"
     override fun contactNameFallback(last4: String) = "연락처-$last4"
 
     override val backgroundRunningNotice = "앱이 백그라운드에서 계속 실행됩니다"

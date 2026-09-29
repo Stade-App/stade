@@ -45,9 +45,9 @@ Built with Kotlin Multiplatform and Compose Multiplatform, Stade runs natively o
 - One-on-one chats and multi-member **group chats**.
 - **Stadiums** — a broadcast channel primitive: one owner posts, everyone who joins receives. Perfect for announcements or one-to-many updates without turning it into a group chat. Owners can rename, mute, or remove members and delete individual broadcasts or the whole stadium — all changes propagate peer-to-peer to every subscriber.
 - **Voice messages** — record and send Opus-encoded voice clips directly in a conversation.
-- **Stickers** — create your own stickers from photos, with built-in AI background removal.
+- **Stickers** — create your own from photos with built-in AI background removal, or bring over the packs you already have from other messaging apps.
 - **Reactions** — react to any message with an emoji.
-- **Receipts & delivery status** for every message.
+- **Delivery status** for every message.
 - **Local full-text search** across your conversations.
 - **Media attachments** with an in-app editor.
 
@@ -84,8 +84,16 @@ If the fingerprint differs, or the APK is unsigned, do not install it.
 
 ## Localization
 
-Stade is available in **English** and **Turkish**, switchable from Settings.
+Stade is available in **English**, **Turkish**, **Korean**, **Persian**, and **Arabic**,
+switchable from Settings. The interface lays itself out right-to-left for Persian and
+Arabic.
 
 ## What Stade deliberately doesn't do
 
 - **No accounts, no phone numbers, no central directory.** Every identity is self-issued and every message path is peer-to-peer.
+- **No read receipts, no "last seen", no presence.** Whether and when you read a message is nobody else's business.
+- **No analytics, telemetry, or crash reporting.** Nothing about how you use Stade leaves your device.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to build the project, what we expect in a pull request, and which changes need a discussion first.

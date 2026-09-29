@@ -185,6 +185,7 @@ object ArabicStrings : AppStrings() {
     override val hsMldsaInvalid = "توقيع ML-DSA غير صالح (فشل التحقق ما بعد الكمّي)"
     override val hsMlkemDecapFailed = "فشل فك تغليف ML-KEM"
     override val unknownNickname = "غير معروف"
+    override val unknownError = "خطأ غير معروف"
     override fun contactNameFallback(last4: String) = "جهة اتصال-$last4"
 
     override val backgroundRunningNotice = "يستمر التطبيق في العمل في الخلفية"

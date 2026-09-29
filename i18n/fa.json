@@ -163,6 +163,7 @@
   "hsMldsaInvalid": "امضای ML-DSA نامعتبر است (تأیید پساکوانتومی ناموفق بود)",
   "hsMlkemDecapFailed": "کپسول‌زدایی ML-KEM ناموفق بود",
   "unknownNickname": "ناشناس",
+  "unknownError": "خطای ناشناخته",
   "contactNameFallback": "مخاطب-{last4}",
   "backgroundRunningNotice": "برنامه در پس‌زمینه در حال اجرا می‌ماند",
   "trayOpen": "باز کردن",

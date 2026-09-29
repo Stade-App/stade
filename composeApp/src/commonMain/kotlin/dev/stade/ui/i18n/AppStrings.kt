@@ -175,6 +175,7 @@ abstract class AppStrings {
     abstract val hsMldsaInvalid: String
     abstract val hsMlkemDecapFailed: String
     abstract val unknownNickname: String
+    abstract val unknownError: String
     abstract fun contactNameFallback(last4: String): String
 
     abstract val backgroundRunningNotice: String

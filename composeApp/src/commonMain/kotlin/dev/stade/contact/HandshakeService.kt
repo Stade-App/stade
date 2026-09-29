@@ -227,13 +227,13 @@ class HandshakeService(
         addresses: List<String>
     ): ByteArray {
         val nick = nickname.encodeToByteArray()
-        require(nick.size <= 1024) { "nickname çok uzun" }
-        require(edPub.size == 32) { "Ed25519 pub yanlış boyutta" }
-        require(xPub.size == 32) { "X25519 pub yanlış boyutta" }
-        require(kemPub.size == 1184) { "ML-KEM pub yanlış boyutta: ${kemPub.size}" }
-        require(dsaPub.size == 1952) { "ML-DSA pub yanlış boyutta: ${dsaPub.size}" }
+        require(nick.size <= 1024) { "nickname too long" }
+        require(edPub.size == 32) { "Ed25519 public key has the wrong size" }
+        require(xPub.size == 32) { "X25519 public key has the wrong size" }
+        require(kemPub.size == 1184) { "ML-KEM public key has the wrong size: ${kemPub.size}" }
+        require(dsaPub.size == 1952) { "ML-DSA public key has the wrong size: ${dsaPub.size}" }
         val addrBytes = addresses.joinToString("\n").encodeToByteArray()
-        require(addrBytes.size <= 64 * 1024) { "addresses çok uzun" }
+        require(addrBytes.size <= 64 * 1024) { "addresses too long" }
 
         val total = 4 + 1 + 1 + 2 + nick.size + 32 + 32 + 1184 + 1952 + 2 + addrBytes.size
         val out = ByteArray(total)

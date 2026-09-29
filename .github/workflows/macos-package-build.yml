@@ -86,19 +86,19 @@ jobs:
           set -euo pipefail
           TAG="${GITHUB_REF#refs/tags/}"
 
-          # Release Notes iş akışı sürümü paralel olarak oluşturur; hazır olmasını bekle
+          # The release notes workflow creates the release in parallel; wait for it
           for attempt in $(seq 1 20); do
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
               break
             fi
-            echo "Release $TAG henüz yok; bekleniyor ($attempt/20)"
+            echo "Release $TAG does not exist yet; waiting ($attempt/20)"
             sleep 15
           done
 
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "::error::$TAG için bir sürüm bulunamadı, kurulum dosyası eklenemedi"
+            echo "::error::No release found for $TAG, the installer could not be attached"
             exit 1
           fi
 
           gh release upload "$TAG" "$DMG_FILE" ${DMG_FILE}.sig --repo "$GITHUB_REPOSITORY" --clobber 2>/dev/null || gh release upload "$TAG" "$DMG_FILE" --repo "$GITHUB_REPOSITORY" --clobber
-          echo "Eklendi: $DMG_FILE -> $TAG"
+          echo "Attached: $DMG_FILE -> $TAG"

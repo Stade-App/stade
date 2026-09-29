@@ -163,6 +163,7 @@
   "hsMldsaInvalid": "ML-DSA imzası geçersiz (post-quantum doğrulama başarısız)",
   "hsMlkemDecapFailed": "ML-KEM decapsulate başarısız",
   "unknownNickname": "Bilinmeyen",
+  "unknownError": "Bilinmeyen hata",
   "contactNameFallback": "Kişi-{last4}",
   "backgroundRunningNotice": "Uygulama arka planda çalışmaya devam ediyor",
   "trayOpen": "Aç",

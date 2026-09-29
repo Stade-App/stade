@@ -185,6 +185,7 @@ object PersianStrings : AppStrings() {
     override val hsMldsaInvalid = "امضای ML-DSA نامعتبر است (تأیید پساکوانتومی ناموفق بود)"
     override val hsMlkemDecapFailed = "کپسول‌زدایی ML-KEM ناموفق بود"
     override val unknownNickname = "ناشناس"
+    override val unknownError = "خطای ناشناخته"
     override fun contactNameFallback(last4: String) = "مخاطب-$last4"
 
     override val backgroundRunningNotice = "برنامه در پس‌زمینه در حال اجرا می‌ماند"

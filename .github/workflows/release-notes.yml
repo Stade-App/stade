@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       target_tag:
-        description: 'Açıklaması güncellenecek Tag (Örn: v1.0.0). Otomatik akış için boş bırakın.'
+        description: 'Tag whose notes should be rebuilt (e.g. v1.0.0). Leave empty for the automatic run.'
         required: false
         type: string
 
@@ -31,8 +31,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Eğer manuel tetikleme ile bir tag girildiyse onu kullan, yoksa push edilen
-          # ya da release olayından gelen tag'i al
+          # Use the tag given on a manual run, otherwise take the pushed tag
+          # or the one carried by the release event
           INPUT_TAG="${{ inputs.target_tag }}"
           EVENT_TAG="${{ github.event.release.tag_name }}"
           if [ -n "$INPUT_TAG" ]; then
@@ -44,19 +44,19 @@ jobs:
           fi
 
           if [ -z "$CURRENT_TAG" ]; then
-            echo "::error::Hangi sürüm için not üretileceği belirlenemedi."
+            echo "::error::Could not work out which release to write notes for."
             exit 1
           fi
 
-          # Taslak sürümlerde tag henüz oluşmaz; o durumda kontrol edilen commit'i kullan
+          # A draft release has no tag yet, so fall back to the checked out commit
           if git rev-parse -q --verify "refs/tags/${CURRENT_TAG}^{commit}" >/dev/null; then
             END_REF="$CURRENT_TAG"
           else
             END_REF="HEAD"
-            echo "Tag ${CURRENT_TAG} henüz yok; ${END_REF} üzerinden hesaplanıyor."
+            echo "Tag ${CURRENT_TAG} does not exist yet; working from ${END_REF}."
           fi
 
-          # Önceki sürümü oluşturma tarihine göre değil, geçmişteki konumuna göre bul
+          # Find the previous release by its place in history, not by its creation date
           PREV_TAG="$(git describe --tags --abbrev=0 --exclude="$CURRENT_TAG" "$END_REF" 2>/dev/null || true)"
 
           if [ -n "$PREV_TAG" ]; then
@@ -148,7 +148,7 @@ jobs:
           TAG="${{ steps.notes.outputs.current_tag }}"
           NOTES_FILE="${{ steps.notes.outputs.notes_file }}"
 
-          # Pre-release kontrolü (alpha, beta, rc içeriyorsa bayrak ekler)
+          # Flag pre-releases (anything carrying alpha, beta or rc)
           EXTRA_FLAGS=""
           if [[ "$TAG" =~ -(alpha|beta|rc) ]]; then
             EXTRA_FLAGS="--prerelease"

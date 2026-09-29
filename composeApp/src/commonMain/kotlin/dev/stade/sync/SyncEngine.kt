@@ -132,7 +132,7 @@ class SyncEngine(
         val sealed = try {
             ratchet.seal(owner, contact, body.encodeToByteArray())
         } catch (e: Throwable) {
-            _events.tryEmit(SyncEvent.SendFailed(contact.id, e.message ?: e::class.simpleName ?: "bilinmeyen hata"))
+            _events.tryEmit(SyncEvent.SendFailed(contact.id, e.message ?: e::class.simpleName ?: I18n.current.unknownError))
             return
         }
         val payload = MessagePayload(messageId, timestamp, sealed)

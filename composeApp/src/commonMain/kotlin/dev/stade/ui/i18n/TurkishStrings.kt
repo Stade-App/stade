@@ -188,6 +188,7 @@ object TurkishStrings : AppStrings() {
     override val hsMldsaInvalid = "ML-DSA imzası geçersiz (post-quantum doğrulama başarısız)"
     override val hsMlkemDecapFailed = "ML-KEM decapsulate başarısız"
     override val unknownNickname = "Bilinmeyen"
+    override val unknownError = "Bilinmeyen hata"
     override fun contactNameFallback(last4: String) = "Kişi-$last4"
 
     override val backgroundRunningNotice = "Uygulama arka planda çalışmaya devam ediyor"

@@ -77,7 +77,7 @@ class FileVaultTest {
             val vault = FileVault(root.toFile())
             vault.setup("1234")
             val plaintext = root.resolve("stade.db").toFile()
-            plaintext.writeText("bu bir SQLite veritabanı değil")
+            plaintext.writeText("this is not a SQLite database")
             vault.flushAndClose()
 
             val encrypted = root.resolve("stade.db.enc").toFile()
