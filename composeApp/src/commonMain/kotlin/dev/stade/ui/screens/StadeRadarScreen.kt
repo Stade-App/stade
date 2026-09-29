@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -78,6 +80,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import dev.stade.ui.components.HomeIdentityHeader
@@ -268,7 +271,18 @@ fun StadeRadarScreen(
             )
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).padding(top = LocalHomeTopBarClearance.current, bottom = LocalHomeBarClearance.current)) {
+        val layoutDirection = LocalLayoutDirection.current
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(
+                    start = padding.calculateStartPadding(layoutDirection),
+                    end = padding.calculateEndPadding(layoutDirection),
+                    top = if (hideTopBar) LocalHomeTopBarClearance.current else padding.calculateTopPadding(),
+                    bottom = padding.calculateBottomPadding()
+                )
+                .padding(bottom = LocalHomeBarClearance.current)
+        ) {
             if (session.status == RadarStatus.Scanning) {
                 Column(Modifier.fillMaxSize()) {
                     RadarStage(
