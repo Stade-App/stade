@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -39,13 +38,13 @@ import dev.stade.ui.components.OnionIndicator
 import dev.stade.ui.components.onionStateLabel
 import dev.stade.ui.components.onionStateOf
 import dev.stade.ui.rememberNetworkOnline
+import dev.stade.ui.components.HomeTopBarState
+import dev.stade.ui.components.rememberHomeTopBarState
+import dev.stade.ui.components.LocalHomeTopBarClearance
 import dev.stade.ui.components.LocalHomeBarClearance
 import dev.stade.stadium.isOfficial
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.BotBadge
-import dev.stade.ui.components.TOP_PILL_GAP
-import dev.stade.ui.components.TOP_PILL_SIZE
-import dev.stade.ui.components.TopBarPill
 import dev.stade.ui.components.UpdateRequiredBanner
 import org.jetbrains.compose.resources.painterResource
 import stade.composeapp.generated.resources.Res
@@ -64,7 +63,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.alpha
@@ -112,10 +110,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -169,110 +164,8 @@ private sealed class ChatListItem {
     }
 }
 
-private const val SEARCH_FOCUS_DELAY_MS = 80L
-private const val SEARCH_UNMOUNT_DELAY_MS = 180L
 
-@Composable
-private fun SearchPill(
-    expanded: Boolean,
-    query: String,
-    expandedWidth: Dp,
-    focusRequester: FocusRequester,
-    onQueryChange: (String) -> Unit,
-    onToggle: () -> Unit
-) {
-    val strings = LocalStrings.current
-    val target = expandedWidth.coerceAtLeast(TOP_PILL_SIZE)
-    val progress = animateFloatAsState(
-        targetValue = if (expanded) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "searchExpand"
-    )
 
-    var fieldMounted by remember { mutableStateOf(expanded) }
-    LaunchedEffect(expanded) {
-        if (expanded) {
-            fieldMounted = true
-            delay(SEARCH_FOCUS_DELAY_MS)
-            runCatching { focusRequester.requestFocus() }
-        } else {
-            delay(SEARCH_UNMOUNT_DELAY_MS)
-            fieldMounted = false
-        }
-    }
-
-    Surface(
-        modifier = Modifier
-            .height(TOP_PILL_SIZE)
-            .layout { measurable, constraints ->
-                val w = lerp(TOP_PILL_SIZE, target, progress.value)
-                    .roundToPx()
-                    .coerceIn(0, constraints.maxWidth)
-                val placeable = measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
-                layout(placeable.width, placeable.height) { placeable.place(0, 0) }
-            },
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        shadowElevation = 2.dp
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (fieldMounted) {
-                BasicTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 18.dp)
-                        .graphicsLayer {
-                            alpha = ((progress.value - 0.35f) / 0.45f).coerceIn(0f, 1f)
-                        }
-                        .focusRequester(focusRequester),
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        color = MaterialTheme.colorScheme.onSurface
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    decorationBox = { inner ->
-                        Box(contentAlignment = Alignment.CenterStart) {
-                            if (query.isEmpty()) {
-                                Text(
-                                    strings.searchContactsPlaceholder,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            inner()
-                        }
-                    }
-                )
-            }
-            IconButton(onClick = onToggle, modifier = Modifier.size(TOP_PILL_SIZE)) {
-                Box(
-                    modifier = Modifier.graphicsLayer { rotationZ = progress.value * 90f },
-                    contentAlignment = Alignment.Center
-                ) {
-                    AnimatedContent(
-                        targetState = expanded,
-                        transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(220)) },
-                        label = "searchIcon"
-                    ) { open ->
-                        Icon(
-                            imageVector = if (open) Icons.Default.Close else Icons.Default.Search,
-                            contentDescription = if (open) strings.closeSearch else strings.searchAction,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -297,8 +190,10 @@ fun ContactsScreen(
     onLongPressVerify: (String) -> Unit,
     onOpenChatMessage: (String, String) -> Unit = { _, _ -> },
     onOpenGroupMessage: (String, String) -> Unit = { _, _ -> },
-    onOpenStadiumMessage: (String, String) -> Unit = { _, _ -> }
+    onOpenStadiumMessage: (String, String) -> Unit = { _, _ -> },
+    homeBar: HomeTopBarState? = null
 ) {
+    val bar = homeBar ?: rememberHomeTopBarState()
     val allContacts by remember(owner.id) { container.contacts.observeContacts(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.contacts.contacts(owner.id) })
     val contacts by remember(allContacts) { derivedStateOf { allContacts.filter { it.kind == 0 } } }
@@ -314,7 +209,6 @@ fun ContactsScreen(
     val archivedKeys by remember(owner.id) { container.archivedChats.observeArchived(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.archivedChats.archived(owner.id) })
     var archiveMenuOpen by remember { mutableStateOf(false) }
-    var starPillCenter by remember { mutableStateOf<Offset?>(null) }
     val torInfo by remember {
         container.transports.get(TransportType.TOR)?.info ?: MutableStateFlow(null)
     }.collectAsState()
@@ -333,7 +227,8 @@ fun ContactsScreen(
         }
     }
     var starIntroRunning by remember { mutableStateOf(starIntroPending(container.db)) }
-    var starPlaced by remember { mutableStateOf(!starIntroRunning) }
+    LaunchedEffect(Unit) { bar.starPlaced = !starIntroRunning }
+    LaunchedEffect(starIntroRunning) { if (!starIntroRunning) bar.starPlaced = true }
     val autoUnarchive by remember { container.archivedChats.observeAutoUnarchive() }
         .collectAsState(initial = remember { container.archivedChats.autoUnarchiveOnMessage() })
     val unreadContactIds by remember {
@@ -376,9 +271,6 @@ fun ContactsScreen(
         ) { it.toList() }
     }.collectAsState(initial = stadiums.map { container.stadiums.lastMessage(it.id) }.ifEmpty { listOf(null) })
 
-    var searchActive by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
-    val focusRequester = remember { FocusRequester() }
 
     var actionItem by remember { mutableStateOf<ChatListItem?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -664,28 +556,28 @@ fun ContactsScreen(
     }
 
     LaunchedEffect(contacts.size) {
-        if (contacts.isEmpty() && searchActive) {
-            searchActive = false
-            query = ""
+        if (contacts.isEmpty() && bar.searchActive) {
+            bar.searchActive = false
+            bar.query = ""
         }
     }
 
-    PlatformBackHandler(enabled = searchActive) {
-        searchActive = false
-        query = ""
+    PlatformBackHandler(enabled = bar.searchActive) {
+        bar.searchActive = false
+        bar.query = ""
     }
 
     val filtered by remember {
         derivedStateOf {
-            if (!searchActive || query.isBlank()) contacts
-            else contacts.filter { it.nickname.contains(query.trim(), ignoreCase = true) }
+            if (!bar.searchActive || bar.query.isBlank()) contacts
+            else contacts.filter { it.nickname.contains(bar.query.trim(), ignoreCase = true) }
         }
     }
 
     var messageResults by remember { mutableStateOf(emptyList<SearchResult>()) }
-    LaunchedEffect(query, searchActive) {
-        val q = query.trim()
-        if (!searchActive || q.isBlank()) {
+    LaunchedEffect(bar.query, bar.searchActive) {
+        val q = bar.query.trim()
+        if (!bar.searchActive || q.isBlank()) {
             messageResults = emptyList()
             return@LaunchedEffect
         }
@@ -698,17 +590,17 @@ fun ContactsScreen(
         messageResults = results
     }
 
-    val combinedItems by remember(filtered, groups, stadiums, searchActive, query, contactLastMessages, groupLastMessages, stadiumLastMessages, pinned, archivedKeys, showArchived) {
+    val combinedItems by remember(filtered, groups, stadiums, bar.searchActive, bar.query, contactLastMessages, groupLastMessages, stadiumLastMessages, pinned, archivedKeys, showArchived) {
         derivedStateOf {
-            val q = query.trim()
+            val q = bar.query.trim()
             val result = mutableListOf<ChatListItem>()
             groups
-                .filter { !searchActive || q.isBlank() || it.name.contains(q, ignoreCase = true) }
+                .filter { !bar.searchActive || q.isBlank() || it.name.contains(q, ignoreCase = true) }
                 .forEachIndexed { i, g ->
                     result.add(ChatListItem.GroupItem(g, groupLastMessages.getOrNull(i)?.timestamp, pinned["grp_${g.id}"]))
                 }
             stadiums
-                .filter { !searchActive || q.isBlank() || it.name.contains(q, ignoreCase = true) }
+                .filter { !bar.searchActive || q.isBlank() || it.name.contains(q, ignoreCase = true) }
                 .forEachIndexed { i, s ->
                     result.add(ChatListItem.StadiumItem(s, stadiumLastMessages.getOrNull(i)?.timestamp, pinned["std_${s.id}"]))
                 }
@@ -716,7 +608,7 @@ fun ContactsScreen(
                 val origIdx = contacts.indexOf(c)
                 result.add(ChatListItem.ContactItem(c, contactLastMessages.getOrNull(origIdx)?.timestamp, pinned[c.id]))
             }
-            if (!searchActive || q.isBlank()) {
+            if (!bar.searchActive || q.isBlank()) {
                 result.retainAll { archivedKeys.contains(it.key) == showArchived }
             }
             result.sortWith(
@@ -767,101 +659,15 @@ fun ContactsScreen(
                             }
                         }
                     )
-                } else {
-                TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface,
-                        actionIconContentColor = MaterialTheme.colorScheme.onSurface,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    title = {
-                        BoxWithConstraints(
-                            modifier = Modifier.fillMaxWidth().padding(end = 24.dp),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            val barWidth = maxWidth
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(
-                                    name = owner.nickname,
-                                    size = 38.dp,
-                                    keySeed = owner.publicSigningKey,
-                                    avatarBytes = owner.avatar
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        strings.appTitle,
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            owner.nickname,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        OnionIndicator(
-                                            state = onionState,
-                                            contentDescription = onionStateLabel(onionState),
-                                            size = 14.dp
-                                        )
-                                    }
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.align(Alignment.CenterEnd),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(TOP_PILL_GAP)
-                            ) {
-                                if (contacts.isNotEmpty()) {
-                                    SearchPill(
-                                        expanded = searchActive,
-                                        query = query,
-                                        expandedWidth = barWidth - TOP_PILL_SIZE - TOP_PILL_GAP,
-                                        focusRequester = focusRequester,
-                                        onQueryChange = { query = it },
-                                        onToggle = {
-                                            if (searchActive) {
-                                                searchActive = false
-                                                query = ""
-                                            } else {
-                                                searchActive = true
-                                            }
-                                        }
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier.onGloballyPositioned { coords ->
-                                        val bounds = coords.boundsInRoot()
-                                        starPillCenter = Offset(bounds.center.x, bounds.center.y)
-                                    }
-                                ) {
-                                    Box(Modifier.alpha(if (starPlaced) 1f else 0f)) {
-                                        TopBarPill(
-                                            icon = Icons.Default.Star,
-                                            contentDescription = strings.starredMessagesTitle,
-                                            sparkleOnClick = true,
-                                            onClick = onOpenStarred
-                                        )
-                                    }
-                                }
-                                TopBarPill(
-                                    icon = Icons.Default.Settings,
-                                    contentDescription = strings.settingsAction,
-                                    spinOnClick = true,
-                                    onClick = onOpenSettings
-                                )
-                            }
-                        }
-                    }
-                )
                 }
             },
         ) { padding ->
-            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(top = if (showArchived) 0.dp else LocalHomeTopBarClearance.current)
+            ) {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     if (torCardShown) {
                     item(key = "torBootstrap") {
@@ -902,7 +708,7 @@ fun ContactsScreen(
                             }
                         }
                     } else {
-                        if (!searchActive && archivedKeys.isNotEmpty()) {
+                        if (!bar.searchActive && archivedKeys.isNotEmpty()) {
                             item(key = "archived-entry") {
                                 ArchivedEntryRow(
                                     unreadCount = archivedUnreadCount,
@@ -910,7 +716,7 @@ fun ContactsScreen(
                                 )
                             }
                         }
-                        if (stadeyVisible && !(searchActive && query.isNotBlank())) {
+                        if (stadeyVisible && !(bar.searchActive && bar.query.isNotBlank())) {
                             item(key = "stadey") {
                                 StadeyRow(
                                     onClick = onOpenStadey,
@@ -975,7 +781,7 @@ fun ContactsScreen(
                                 }
                             }
                         }
-                        if (searchActive && query.isNotBlank() && messageResults.isNotEmpty()) {
+                        if (bar.searchActive && bar.query.isNotBlank() && messageResults.isNotEmpty()) {
                             item {
                                 Text(
                                     strings.searchResultsSectionMessages,
@@ -997,7 +803,7 @@ fun ContactsScreen(
                                 )
                             }
                         }
-                        if (searchActive && query.isNotBlank() && combinedItems.isEmpty() && messageResults.isEmpty()) {
+                        if (bar.searchActive && bar.query.isNotBlank() && combinedItems.isEmpty() && messageResults.isEmpty()) {
                             item {
                                 Box(
                                     modifier = Modifier.fillMaxWidth().padding(32.dp),
@@ -1021,8 +827,8 @@ fun ContactsScreen(
 
     if (starIntroRunning) {
         StarIntroOverlay(
-            targetCenter = starPillCenter,
-            onStarPlaced = { starPlaced = true },
+            targetCenter = bar.starPillCenter,
+            onStarPlaced = { bar.starPlaced = true },
             onFinished = {
                 markStarIntroSeen(container.db)
                 starIntroRunning = false

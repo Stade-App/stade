@@ -77,6 +77,11 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import dev.stade.ui.components.HOME_BAR_HEIGHT
+import dev.stade.ui.components.HomeProfileActions
+import dev.stade.ui.components.HomeTopBar
+import dev.stade.ui.components.HomeTopBarActions
+import dev.stade.ui.components.LocalHomeTopBarClearance
+import dev.stade.ui.components.rememberHomeTopBarState
 import dev.stade.ui.components.LocalHomeBarClearance
 import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
@@ -562,6 +567,19 @@ private fun UnlockedApp(
         }
 
         val density = LocalDensity.current
+        val homeBar = rememberHomeTopBarState()
+        var radarSettingsTicket by remember { mutableStateOf(0) }
+        val homeOwnerId = identity?.id
+        var homeContactsPresent by remember(homeOwnerId) { mutableStateOf(false) }
+        LaunchedEffect(homeOwnerId) {
+            val id = homeOwnerId ?: return@LaunchedEffect
+            container.contacts.observeContacts(id).collect { list ->
+                homeContactsPresent = list.isNotEmpty()
+            }
+        }
+        var measuredTopBarHeight by remember { mutableStateOf(0.dp) }
+        val homeTopBarScreen = homeProfileScreen(screen)
+        val homeTopBarVisible = !showTwoPanel && identity != null && homeTopBarScreen != null
         Box(
             Modifier
                 .fillMaxSize()
@@ -601,7 +619,16 @@ private fun UnlockedApp(
                     } else {
                         0.dp
                     }
-                CompositionLocalProvider(LocalHomeBarClearance provides pageBarClearance) {
+                val pageTopClearance =
+                    if (!showTwoPanel && identity != null && homeProfileScreen(target) != null) {
+                        measuredTopBarHeight
+                    } else {
+                        0.dp
+                    }
+                CompositionLocalProvider(
+                    LocalHomeBarClearance provides pageBarClearance,
+                    LocalHomeTopBarClearance provides pageTopClearance
+                ) {
                 Box(Modifier.fillMaxSize()) {
                 val twoPanelNow = isWideScreen && identity != null &&
                         target != Screen.Onboarding &&
@@ -697,7 +724,9 @@ private fun UnlockedApp(
                     target == Screen.Radar -> StadeRadarScreen(
                         container = container,
                         owner = identity!!,
-                        onBack = { screen = Screen.Contacts }
+                        onBack = { screen = Screen.Contacts },
+                        hideTopBar = true,
+                        openSettingsTicket = radarSettingsTicket
                     )
                     target is Screen.Verify -> VerifyContactScreen(
                         container = container,
@@ -792,6 +821,7 @@ private fun UnlockedApp(
                         ContactsScreen(
                             container = container,
                             owner = identity!!,
+                            homeBar = homeBar,
                             onOpenChat = { screen = Screen.Chat(it) },
                             onOpenGroupChat = { screen = Screen.GroupChat(it) },
                             onOpenStadium = { screen = Screen.Stadium(it) },
@@ -823,6 +853,36 @@ private fun UnlockedApp(
                     }
                 }
                 }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = homeTopBarVisible,
+                modifier = Modifier.align(Alignment.TopCenter),
+                enter = slideInVertically(tween(NAV_SLIDE_MS, easing = NavEnterEasing)) { -it },
+                exit = slideOutVertically(tween(NAV_SLIDE_MS, easing = NavExitEasing)) { -it }
+            ) {
+                val owner = identity
+                if (owner != null) {
+                    HomeTopBar(
+                        container = container,
+                        owner = owner,
+                        actionsKey = homeTopBarScreen ?: HomeProfileActions.Chats,
+                        modifier = Modifier.onSizeChanged { size ->
+                            val height = with(density) { size.height.toDp() }
+                            if (height > 0.dp) measuredTopBarHeight = height
+                        }
+                    ) { barWidth ->
+                        HomeTopBarActions(
+                            screen = homeTopBarScreen ?: HomeProfileActions.Chats,
+                            state = homeBar,
+                            barWidth = barWidth,
+                            showSearch = homeContactsPresent,
+                            onOpenStarred = { screen = Screen.Starred },
+                            onOpenSettings = { screen = Screen.Settings },
+                            onOpenRadarSettings = { radarSettingsTicket++ }
+                        )
+                    }
                 }
             }
 
@@ -901,5 +961,11 @@ private fun homeBarDestination(screen: Screen): HomeDestination? = when (screen)
     Screen.AddContact, Screen.CreateGroup, Screen.CreateStadium, Screen.JoinStadium ->
         HomeDestination.CREATE
     Screen.Radar -> HomeDestination.RADAR
+    else -> null
+}
+
+private fun homeProfileScreen(screen: Screen): HomeProfileActions? = when (screen) {
+    Screen.Contacts -> HomeProfileActions.Chats
+    Screen.Radar -> HomeProfileActions.Radar
     else -> null
 }

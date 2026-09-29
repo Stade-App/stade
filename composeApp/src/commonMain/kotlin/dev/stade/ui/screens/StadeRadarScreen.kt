@@ -81,6 +81,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import dev.stade.ui.components.HomeIdentityHeader
+import dev.stade.ui.components.LocalHomeTopBarClearance
 import dev.stade.ui.components.LocalHomeBarClearance
 import dev.stade.AppContainer
 import dev.stade.contact.InviteParseResult
@@ -136,7 +137,9 @@ private val PEER_DOT_SIZE = 44.dp
 fun StadeRadarScreen(
     container: AppContainer,
     owner: LocalIdentity,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    hideTopBar: Boolean = false,
+    openSettingsTicket: Int = 0
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
@@ -162,6 +165,9 @@ fun StadeRadarScreen(
 
     var showIntro by remember { mutableStateOf(!introSuppressed) }
     var showSettings by remember { mutableStateOf(false) }
+    LaunchedEffect(openSettingsTicket) {
+        if (openSettingsTicket > 0) showSettings = true
+    }
 
     val contacts by remember(owner.id) { container.contacts.observeContacts(owner.id) }
         .collectAsState(initial = remember(owner.id) { container.contacts.contacts(owner.id) })
@@ -238,6 +244,7 @@ fun StadeRadarScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
+            if (hideTopBar) return@Scaffold
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -261,7 +268,7 @@ fun StadeRadarScreen(
             )
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding).padding(bottom = LocalHomeBarClearance.current)) {
+        Box(Modifier.fillMaxSize().padding(padding).padding(top = LocalHomeTopBarClearance.current, bottom = LocalHomeBarClearance.current)) {
             if (session.status == RadarStatus.Scanning) {
                 Column(Modifier.fillMaxSize()) {
                     RadarStage(
