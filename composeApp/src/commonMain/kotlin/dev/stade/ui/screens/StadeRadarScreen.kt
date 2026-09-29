@@ -35,7 +35,7 @@ import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NoAccounts
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WifiTethering
 import androidx.compose.material3.AlertDialog
@@ -101,6 +101,7 @@ import dev.stade.transport.TransportType
 import dev.stade.ui.ACCEPT_INVITE_TIMEOUT_MS
 import dev.stade.ui.BeginAcceptResult
 import dev.stade.ui.beginAcceptInvite
+import dev.stade.ui.components.TopBarPill
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.avatarPaletteIndex
 import dev.stade.ui.components.StadeIdCard
@@ -246,8 +247,15 @@ fun StadeRadarScreen(
                 ),
                 title = { HomeIdentityHeader(container = container, owner = owner) },
                 actions = {
-                    IconButton(onClick = { showSettings = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = strings.radarSettingsTitle)
+                    Row(
+                        modifier = Modifier.padding(end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TopBarPill(
+                            icon = Icons.Default.Tune,
+                            contentDescription = strings.radarSettingsTitle,
+                            onClick = { showSettings = true }
+                        )
                     }
                 }
             )

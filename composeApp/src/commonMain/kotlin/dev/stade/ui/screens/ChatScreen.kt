@@ -57,6 +57,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
@@ -168,6 +169,9 @@ import dev.stade.ui.components.QrCodeView
 import dev.stade.transport.DialAttempt
 import dev.stade.ui.PlatformBackHandler
 import dev.stade.ui.isTouchPrimaryInput
+import dev.stade.ui.components.ChatSearchBar
+import dev.stade.ui.components.ChatSearchRunner
+import dev.stade.ui.components.rememberChatSearchState
 import dev.stade.ui.components.Avatar
 import dev.stade.ui.components.ChatComposerBar
 import dev.stade.ui.components.FullScreenImageViewer
@@ -545,6 +549,19 @@ fun ChatScreen(
         }
     }
 
+    val chatSearch = rememberChatSearchState(contactId)
+    ChatSearchRunner(chatSearch) { text ->
+        container.messages.searchInChat(contactId, text)
+    }
+    LaunchedEffect(chatSearch.current, messages.size) {
+        val target = chatSearch.current ?: return@LaunchedEffect
+        val index = messages.indexOfFirst { it.id == target }
+        if (index >= 0) {
+            listState.centerOnChatMessage(index, messages.size, if (peerTyping) 1 else 0)
+            flashedMessageId = target
+        }
+    }
+
     var pendingImages by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
     var editingImageIndex by remember { mutableStateOf<Int?>(null) }
     var pendingVideo by remember { mutableStateOf<ByteArray?>(null) }
@@ -851,7 +868,25 @@ fun ChatScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            if (inSelectionMode) {
+            if (chatSearch.active) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    title = { ChatSearchBar(chatSearch) },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            chatSearch.close()
+                            flashedMessageId = null
+                        }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = strings.closeSearch
+                            )
+                        }
+                    }
+                )
+            } else if (inSelectionMode) {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface
@@ -989,6 +1024,12 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { chatSearch.open() }) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = strings.searchInChatAction
+                            )
+                        }
                         IconButton(
                             onClick = { showDeleteDialog = true },
                             enabled = !deleting

@@ -78,6 +78,12 @@ abstract class AppStrings {
     abstract val noContactsHint: String
     abstract val noSearchResults: String
     abstract val searchResultsSectionMessages: String
+    abstract val searchInChatAction: String
+    abstract val searchInChatPlaceholder: String
+    abstract fun searchInChatCount(index: Int, total: Int): String
+    abstract val searchInChatNoResults: String
+    abstract val searchInChatPrevious: String
+    abstract val searchInChatNext: String
     abstract val showVerificationCode: String
     abstract val viewProfileAction: String
     abstract val deleteContact: String

@@ -25,6 +25,9 @@ data class SearchResult(
 
 class MessageManager(private val db: StadeDb, private val crypto: CryptoApi) {
 
+    fun searchInChat(contactId: String, query: String, limit: Long = 500): List<String> =
+        db.stadeDbQueries.searchMessagesInChat(contactId, query, limit).executeAsList()
+
     fun searchMessages(ownerId: String, query: String, limit: Long = 50): List<SearchResult> =
         db.stadeDbQueries.searchMessages(ownerId, query, limit).executeAsList().map {
             SearchResult(it.id, it.contactId, false, it.contactNickname, previewBody(it.body, ""), it.timestamp)

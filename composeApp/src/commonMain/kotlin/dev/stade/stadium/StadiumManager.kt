@@ -276,6 +276,9 @@ class StadiumManager(private val db: StadeDb, private val crypto: CryptoApi) {
         return StadiumInviteData(parts[0], parts[1], parts[2], parts[3])
     }
 
+    fun searchInChat(stadiumId: String, query: String, limit: Long = 500): List<String> =
+        db.stadeDbQueries.searchStadiumMessagesInChat(stadiumId, query, limit).executeAsList()
+
     fun searchMessages(ownerId: String, query: String, limit: Long = 50): List<SearchResult> =
         db.stadeDbQueries.searchStadiumMessages(ownerId, query, limit).executeAsList().map {
             SearchResult(it.id, it.stadiumId, false, it.stadiumName, previewBody(it.body, ""), it.timestamp, isStadium = true)

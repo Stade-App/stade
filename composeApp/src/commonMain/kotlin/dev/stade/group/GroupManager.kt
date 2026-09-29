@@ -515,6 +515,9 @@ class GroupManager(
     fun groupsForContact(contactId: String): List<String> =
         db.stadeDbQueries.memberGroupIds(contactId).executeAsList()
 
+    fun searchInChat(groupId: String, query: String, limit: Long = 500): List<String> =
+        db.stadeDbQueries.searchGroupMessagesInChat(groupId, query, limit).executeAsList()
+
     fun searchMessages(ownerId: String, query: String, limit: Long = 50): List<SearchResult> =
         db.stadeDbQueries.searchGroupMessages(ownerId, query, limit).executeAsList().map {
             SearchResult(it.id, it.groupId, true, it.groupName, previewBody(it.body, ""), it.timestamp)

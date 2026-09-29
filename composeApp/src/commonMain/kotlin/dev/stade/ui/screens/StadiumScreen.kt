@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Podcasts
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Videocam
@@ -109,6 +110,9 @@ import dev.stade.stadium.isOfficial
 import dev.stade.ui.copyImageToClipboard
 import dev.stade.ui.decodeToImageBitmap
 import dev.stade.ui.components.LinkifiedText
+import dev.stade.ui.components.ChatSearchBar
+import dev.stade.ui.components.ChatSearchRunner
+import dev.stade.ui.components.rememberChatSearchState
 import dev.stade.ui.components.centerOnChatMessage
 import dev.stade.ui.components.animateToChatBottom
 import dev.stade.ui.components.jumpToChatBottom
@@ -376,6 +380,17 @@ fun StadiumScreen(
         }
     }
 
+    val chatSearch = rememberChatSearchState(stadiumId)
+    ChatSearchRunner(chatSearch) { text -> container.stadiums.searchInChat(stadiumId, text) }
+    LaunchedEffect(chatSearch.current, messages.size) {
+        val target = chatSearch.current ?: return@LaunchedEffect
+        val index = messages.indexOfFirst { it.id == target }
+        if (index >= 0) {
+            listState.centerOnChatMessage(index, messages.size)
+            flashedMessageId = target
+        }
+    }
+
     LaunchedEffect(highlightMessageId, messages.size) {
         val target = highlightMessageId ?: return@LaunchedEffect
         val index = messages.indexOfFirst { it.id == target }
@@ -454,7 +469,25 @@ fun StadiumScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            if (inSelectionMode) {
+            if (chatSearch.active) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    title = { ChatSearchBar(chatSearch) },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            chatSearch.close()
+                            flashedMessageId = null
+                        }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = strings.closeSearch
+                            )
+                        }
+                    }
+                )
+            } else if (inSelectionMode) {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface
@@ -567,6 +600,12 @@ fun StadiumScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { chatSearch.open() }) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = strings.searchInChatAction
+                            )
+                        }
                         if (current?.isOwner == true) {
                             IconButton(onClick = { showInviteDialog = true }) {
                                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = strings.inviteAction)

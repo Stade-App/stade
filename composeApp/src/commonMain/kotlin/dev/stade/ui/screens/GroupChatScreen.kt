@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PersonAdd
@@ -131,6 +132,9 @@ import dev.stade.group.GroupMessage
 import dev.stade.identity.LocalIdentity
 import dev.stade.ui.components.LinkifiedText
 import dev.stade.ui.components.HIGHLIGHT_FLASH_MS
+import dev.stade.ui.components.ChatSearchBar
+import dev.stade.ui.components.ChatSearchRunner
+import dev.stade.ui.components.rememberChatSearchState
 import dev.stade.ui.components.centerOnChatMessage
 import dev.stade.ui.components.animateToChatBottom
 import dev.stade.ui.components.jumpToChatBottom
@@ -412,6 +416,17 @@ fun GroupChatScreen(
             flashedMessageId = null
         }
     }
+    val chatSearch = rememberChatSearchState(groupId)
+    ChatSearchRunner(chatSearch) { text -> container.groups.searchInChat(groupId, text) }
+    LaunchedEffect(chatSearch.current, messages.size) {
+        val target = chatSearch.current ?: return@LaunchedEffect
+        val index = messages.indexOfFirst { it.id == target }
+        if (index >= 0) {
+            listState.centerOnChatMessage(index, messages.size)
+            flashedMessageId = target
+        }
+    }
+
     LaunchedEffect(highlightMessageId, messages.size) {
         val target = highlightMessageId ?: return@LaunchedEffect
         val index = messages.indexOfFirst { it.id == target }
@@ -702,7 +717,25 @@ fun GroupChatScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            if (inSelectionMode) {
+            if (chatSearch.active) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    title = { ChatSearchBar(chatSearch) },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            chatSearch.close()
+                            flashedMessageId = null
+                        }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = strings.closeSearch
+                            )
+                        }
+                    }
+                )
+            } else if (inSelectionMode) {
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface
@@ -816,6 +849,12 @@ fun GroupChatScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { chatSearch.open() }) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = strings.searchInChatAction
+                            )
+                        }
                         Box {
                             IconButton(onClick = { menuOpen = true }) {
                                 Icon(Icons.Default.MoreVert, contentDescription = null)
